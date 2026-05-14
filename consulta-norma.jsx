@@ -1,25 +1,21 @@
 // ═══════════════════════════════════════════════════════════════
-// v6/consulta-norma.jsx — Consulta norma POT con Google Maps
+// v6/consulta-norma.jsx — Consulta norma POT con Google Maps Satellite
 //
-// Geocoding: Google Maps Geocoder (browser-side, sin pasar por AS)
-// Mapa: Leaflet + OpenStreetMap (sin quota)
+// Geocoding: Google Maps Geocoder (browser-side)
+// Mapa: Google Maps (satellite)
+// GPS: Geolocation API para capturar coordenadas
 // POT: turf.js + GeoJSONs en GitHub (controlurbano9/pot-bello)
-//
-// Resultados: polígono uso suelo, suelo protección, amenaza,
-//   retiro corrientes, barrio, clasificación suelo (urbano/rural),
-//   tratamiento urbanístico, franja de intensidad.
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateCN, useEffect: useEffectCN, useRef: useRefCN } = React;
 
 const BELLO_BBOX = { latMin: 6.18, latMax: 6.55, lonMin: -75.75, lonMax: -75.40 };
-const BELLO_CENTRO = [6.337, -75.557];
+const BELLO_CENTRO = { lat: 6.337, lng: -75.557 };
 
 function dentroDeBello(lat, lon) {
   return lat >= BELLO_BBOX.latMin && lat <= BELLO_BBOX.latMax &&
          lon >= BELLO_BBOX.lonMin && lon <= BELLO_BBOX.lonMax;
 }
 
-// Geocoding directo con Google Maps JS API (sin pasar por AS)
 function geocodeConGoogle(direccion) {
   return new Promise(function(resolve, reject) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.Geocoder) {
@@ -58,6 +54,7 @@ function ConsultaNormaScreen() {
   const [punto, setPunto] = useStateCN(null);
   const [resultado, setResultado] = useStateCN(null);
   const [busyGeo, setBusyGeo] = useStateCN(false);
+  const [busyGPS, setBusyGPS] = useStateCN(false);
   const [busyPOT, setBusyPOT] = useStateCN(false);
   const [error, setError] = useStateCN('');
 
@@ -65,26 +62,32 @@ function ConsultaNormaScreen() {
   const mapRef = useRefCN(null);
   const markerRef = useRefCN(null);
 
+  // Montar Google Maps (satellite)
   useEffectCN(() => {
-    if (typeof L === 'undefined') {
-      setError('Leaflet no cargó.');
+    if (typeof google === 'undefined' || !google.maps) {
+      setError('Google Maps no cargó. Recarga la página.');
       return;
     }
     if (mapRef.current || !mapDivRef.current) return;
-    var map = L.map(mapDivRef.current, {
-      center: BELLO_CENTRO, zoom: 13,
-      maxBounds: [
-        [BELLO_BBOX.latMin - 0.05, BELLO_BBOX.lonMin - 0.05],
-        [BELLO_BBOX.latMax + 0.05, BELLO_BBOX.lonMax + 0.05],
-      ],
-      minZoom: 11,
-    });
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap', maxZoom: 19,
-    }).addTo(map);
 
-    map.on('click', function(e) {
-      var lat = e.latlng.lat, lon = e.latlng.lng;
+    var map = new google.maps.Map(mapDivRef.current, {
+      center: BELLO_CENTRO,
+      zoom: 13,
+      mapTypeId: 'hybrid',
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+        position: google.maps.ControlPosition.TOP_RIGHT,
+        mapTypeIds: ['hybrid', 'roadmap'],
+      },
+      streetViewControl: false,
+      fullscreenControl: false,
+      zoomControl: true,
+      gestureHandling: 'greedy',
+    });
+
+    map.addListener('click', function(e) {
+      var lat = e.latLng.lat(), lon = e.latLng.lng();
       if (!dentroDeBello(lat, lon)) {
         setError('El punto está fuera del municipio de Bello.');
         return;
@@ -94,7 +97,6 @@ function ConsultaNormaScreen() {
 
     mapRef.current = map;
     return () => {
-      try { map.remove(); } catch (e) {}
       mapRef.current = null;
       markerRef.current = null;
     };
@@ -106,24 +108,56 @@ function ConsultaNormaScreen() {
     var map = mapRef.current;
     if (!map) return;
     if (markerRef.current) {
-      markerRef.current.setLatLng([lat, lon]);
+      markerRef.current.setPosition({ lat, lng: lon });
     } else {
-      var m = L.marker([lat, lon], { draggable: true }).addTo(map);
-      m.on('dragend', function(ev) {
-        var ll = ev.target.getLatLng();
-        if (!dentroDeBello(ll.lat, ll.lng)) {
+      var m = new google.maps.Marker({
+        position: { lat, lng: lon },
+        map: map,
+        draggable: true,
+      });
+      m.addListener('dragend', function() {
+        var pos = m.getPosition();
+        var lt = pos.lat(), ln = pos.lng();
+        if (!dentroDeBello(lt, ln)) {
           setError('Punto fuera de Bello.');
-          m.setLatLng(BELLO_CENTRO);
-          setPunto({ lat: BELLO_CENTRO[0], lon: BELLO_CENTRO[1] });
+          m.setPosition(BELLO_CENTRO);
+          setPunto({ lat: BELLO_CENTRO.lat, lon: BELLO_CENTRO.lng });
           return;
         }
-        setPunto({ lat: ll.lat, lon: ll.lng });
-        consultarNorma(ll.lat, ll.lng);
+        setPunto({ lat: lt, lon: ln });
+        consultarNorma(lt, ln);
       });
       markerRef.current = m;
     }
-    map.setView([lat, lon], Math.max(map.getZoom(), 17));
+    map.setCenter({ lat, lng: lon });
+    if (map.getZoom() < 17) map.setZoom(17);
     if (consultar) consultarNorma(lat, lon);
+  }
+
+  // Capturar coordenadas GPS del dispositivo
+  async function capturarGPS() {
+    if (!navigator.geolocation) {
+      setError('Tu dispositivo no soporta geolocalización.');
+      return;
+    }
+    setBusyGPS(true); setError('');
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        var lat = pos.coords.latitude, lon = pos.coords.longitude;
+        if (!dentroDeBello(lat, lon)) {
+          setError('Tu ubicación actual está fuera de Bello.');
+          setBusyGPS(false);
+          return;
+        }
+        colocarPin(lat, lon, true);
+        setBusyGPS(false);
+      },
+      function(err) {
+        setError('No se pudo obtener la ubicación: ' + err.message);
+        setBusyGPS(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   }
 
   async function buscarPorDireccion() {
@@ -132,11 +166,9 @@ function ConsultaNormaScreen() {
     if (!dir) { setError('Ingresa una dirección.'); return; }
     setBusyGeo(true);
     try {
-      // Intenta Google Maps Geocoder (browser-side)
       var res = await geocodeConGoogle(dir);
       colocarPin(res.lat, res.lon, true);
     } catch (e1) {
-      // Fallback: AS geocode
       try {
         var variantes = [
           normalizarDireccionGoogle(dir) + ', Bello, Antioquia, Colombia',
@@ -178,21 +210,24 @@ function ConsultaNormaScreen() {
   function limpiar() {
     setDireccion(''); setError('');
     setPunto(null); setResultado(null);
-    if (markerRef.current && mapRef.current) {
-      try { mapRef.current.removeLayer(markerRef.current); } catch (e) {}
+    if (markerRef.current) {
+      markerRef.current.setMap(null);
       markerRef.current = null;
     }
-    if (mapRef.current) mapRef.current.setView(BELLO_CENTRO, 13);
+    if (mapRef.current) {
+      mapRef.current.setCenter(BELLO_CENTRO);
+      mapRef.current.setZoom(13);
+    }
   }
 
   return (
     <div className="pantalla activa pad-bottom">
       <div className="page-title" style={{ marginBottom: 6 }}>Consultar norma POT</div>
       <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 14 }}>
-        Solo predios dentro del municipio de Bello. Ingresa la dirección o
-        coloca el pin haciendo click en el mapa.
+        Ingresa la dirección, captura tus coordenadas o toca el mapa.
       </div>
 
+      {/* Dirección + GPS */}
       <div className="card" style={{ marginBottom: 12 }}>
         <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
           Dirección
@@ -211,13 +246,23 @@ function ConsultaNormaScreen() {
           />
           <button onClick={buscarPorDireccion} disabled={busyGeo} className="btn-principal"
             style={{ padding: '0 18px', fontSize: 13, width: 'auto' }}>
-            {busyGeo ? 'Buscando...' : 'Buscar'}
+            {busyGeo ? '...' : 'Buscar'}
           </button>
         </div>
+        <button onClick={capturarGPS} disabled={busyGPS} style={{
+          marginTop: 8, width: '100%', padding: '10px 14px', borderRadius: 8,
+          border: '1.5px solid var(--brand-accent)', background: 'var(--superficie)',
+          color: 'var(--brand-accent)', fontSize: 13, fontWeight: 600,
+          fontFamily: 'inherit', cursor: busyGPS ? 'wait' : 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          {busyGPS ? 'Obteniendo ubicación...' : '📍 Capturar mis coordenadas'}
+        </button>
       </div>
 
+      {/* Mapa Google Maps */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-        <div ref={mapDivRef} style={{ width: '100%', height: 360 }}></div>
+        <div ref={mapDivRef} style={{ width: '100%', height: 380 }}></div>
         {punto && (
           <div style={{
             padding: '8px 12px', borderTop: '1px solid var(--borde)',
@@ -243,6 +288,7 @@ function ConsultaNormaScreen() {
         </div>
       )}
 
+      {/* Resultado POT */}
       <div className="card">
         <div className="card-titulo" style={{ marginBottom: 12 }}>Norma POT</div>
         {!resultado && !busyPOT && (

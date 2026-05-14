@@ -578,11 +578,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
   return (
     <div className="pantalla activa pad-bottom">
-      {/* Dirección sticky cuando ya hay dirección */}
+      {/* Panel sticky con dirección y radicado */}
       {d.direccion && (
         <div id="acordeon-sticky-dir" className="visible">
           <span className="dir-label">Visita en</span>
           <span className="dir-valor">{d.direccion}{d.barrio ? ' · ' + d.barrio : ''}</span>
+          {d.radicado && <div className="dir-radicado">RAD {d.radicado}</div>}
         </div>
       )}
 

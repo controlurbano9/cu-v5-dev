@@ -122,13 +122,18 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
     return { pendientes, mes, asigHoy, realHoy };
   }, [datos]);
 
-  // ── Mis visitas (asignadas al inspector logueado) ──
+  // ── Mis visitas (asignadas al inspector logueado): asignadas, iniciadas, completadas ──
   const misVisitas = useMemoH(() => {
     const miNombre = usuario.usuario.toUpperCase();
+    const orden = { ASIGNADO: 0, INICIADO: 1, COMPLETADO: 2 };
     return datos.filter(f => {
       const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
       const e = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-      return vis.includes(miNombre) && (e === 'ASIGNADO' || e === 'INICIADO');
+      return vis.includes(miNombre) && (e === 'ASIGNADO' || e === 'INICIADO' || e === 'COMPLETADO');
+    }).sort((a, b) => {
+      const ea = normalizarEstado(a['ESTADO VISITA'] || a[13] || '');
+      const eb = normalizarEstado(b['ESTADO VISITA'] || b[13] || '');
+      return (orden[ea] ?? 9) - (orden[eb] ?? 9);
     });
   }, [datos, usuario]);
 
@@ -394,10 +399,11 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
 // ── Tarjeta de "Mis visitas" — compacta con acción directa ──
 function MiVisitaCard({ f, onContinuar }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-  const esIniciado = est === 'INICIADO';
-  const tono = esIniciado
-    ? { bg: 'rgba(74,108,140,0.14)', fg: '#3F5C78', label: 'En campo' }
-    : { bg: 'rgba(184,135,58,0.14)', fg: '#8A6628', label: 'Asignada' };
+  const tono = {
+    INICIADO:   { bg: 'rgba(74,108,140,0.14)',  fg: '#3F5C78', label: 'En campo' },
+    ASIGNADO:   { bg: 'rgba(184,135,58,0.14)',  fg: '#8A6628', label: 'Asignada' },
+    COMPLETADO: { bg: 'rgba(107,122,58,0.14)',  fg: '#516028', label: 'Completada' },
+  }[est] || { bg: 'var(--gris-bg)', fg: 'var(--texto-suave)', label: est };
 
   return (
     <div className="card" style={{ padding: 14 }}>
@@ -419,14 +425,14 @@ function MiVisitaCard({ f, onContinuar }) {
           padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap',
         }}>{tono.label}</span>
       </div>
-      {onContinuar && (
+      {est !== 'COMPLETADO' && onContinuar && (
         <div style={{ marginTop: 12 }}>
           <button
             type="button"
             onClick={() => onContinuar(f._idx, f)}
             className="btn-principal verde"
             style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
-            {esIniciado ? '▶ Continuar visita' : '▶ Iniciar visita'}
+            {est === 'INICIADO' ? '▶ Continuar visita' : '▶ Iniciar visita'}
           </button>
         </div>
       )}

@@ -102,7 +102,6 @@ function AppV6() {
         {isDesktop && (
           <div id="sidebar-desktop" style={{ display: 'flex' }}>
             <NavBtn pantalla={pantalla} setPantalla={setPantalla} k="home" label="Inicio" />
-            <NavBtn pantalla={pantalla} setPantalla={setPantalla} k="buscar" label="Visitas" />
             <NavBtn pantalla={pantalla} setPantalla={setPantalla} k="consulta-norma" label="Consultar norma" />
             {esAdmin && <NavBtn pantalla={pantalla} setPantalla={setPantalla} k="agenda" label="Agenda" />}
             {esAdmin && <NavBtn pantalla={pantalla} setPantalla={setPantalla} k="gestion" label="Gestión" />}
@@ -117,8 +116,6 @@ function AppV6() {
         <div id="content-desktop">
           {pantalla === 'home'  && <HomeScreen usuario={usuario}
             onNueva={() => { setContextoNueva(null); setPantalla('nueva-visita'); }}
-            onIrAgenda={() => setPantalla('agenda')} />}
-          {pantalla === 'buscar'  && <BuscarScreen usuario={usuario}
             onContinuar={(fila, datos) => { setContextoNueva({ fila, datos }); setPantalla('nueva-visita'); }} />}
           {pantalla === 'agenda'  && <AgendaScreen usuario={usuario} />}
           {pantalla === 'gestion' && <GestionScreen usuario={usuario}
@@ -136,7 +133,6 @@ function AppV6() {
         {!isDesktop && (
           <div id="nav-inferior" style={{ display: 'flex' }}>
             <BotomNav pantalla={pantalla} setPantalla={setPantalla} k="home" label="Inicio" />
-            <BotomNav pantalla={pantalla} setPantalla={setPantalla} k="buscar" label="Visitas" />
             <BotomNav pantalla={pantalla} setPantalla={setPantalla} k="consulta-norma" label="Norma" />
             {esAdmin && <BotomNav pantalla={pantalla} setPantalla={setPantalla} k="agenda" label="Agenda" />}
             {esAdmin && <BotomNav pantalla={pantalla} setPantalla={setPantalla} k="gestion" label="Gestión" />}

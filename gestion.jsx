@@ -246,7 +246,6 @@ function FilaGestion({ f, busy, inspectores, abierto, onAbrirAsignar, onAsignar,
             </button>
           </>
         )}
-        <BtnInformeF43 f={f} />
       </div>
 
       {abierto && (

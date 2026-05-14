@@ -412,48 +412,17 @@ function FilaVisitaBase({ f, usuario, onContinuar }) {
         }}>{est || '—'}</span>
       </div>
 
-      {est === 'INICIADO' && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {onContinuar && (
-            <button
-              type="button"
-              onClick={() => onContinuar(f._idx, f)}
-              className="btn-principal verde"
-              style={{ margin: 0, padding: '6px 14px', fontSize: 12 }}
-              title="Continuar el diligenciamiento de esta visita"
-            >
-              ▶ Continuar visita
-            </button>
-          )}
+      {est === 'INICIADO' && onContinuar && (
+        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
           <button
             type="button"
-            onClick={() => window.abrirInformeF43(paramsInformeF43(f, usuario))}
-            style={{
-              background: 'var(--brand-bg)', color: 'var(--brand-ink)',
-              border: '1px solid var(--brand-accent)', borderRadius: 8,
-              padding: '6px 12px', fontSize: 12, fontWeight: 600,
-              fontFamily: 'inherit', cursor: 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}
-            title="Generar informe técnico — abre en ventana modal (escritorio) o pestaña nueva (móvil)"
+            onClick={() => onContinuar(f._idx, f)}
+            className="btn-principal verde"
+            style={{ margin: 0, padding: '6px 14px', fontSize: 12 }}
+            title="Continuar el diligenciamiento de esta visita"
           >
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>F-43</span>
-            Generar informe técnico
+            ▶ Continuar visita
           </button>
-          {f['LINK_DOCX_INFORME'] && (
-            <a
-              href={f['LINK_DOCX_INFORME']}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                fontSize: 11, color: 'var(--verde-dark)', textDecoration: 'none',
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}
-              title="Abrir el informe ya generado en Drive"
-            >
-              ✓ Ver informe en Drive
-            </a>
-          )}
         </div>
       )}
       {(est === 'PENDIENTE' || est === 'ASIGNADO') && onContinuar && (

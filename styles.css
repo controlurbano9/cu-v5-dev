@@ -289,9 +289,83 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
-  /* Variante semántica del stat — el "pendientes" en terracotta */
   .stat-num.acento { color: var(--brand-accent); }
   .stat-label { font-size: 10px; color: var(--texto-3); margin-top: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* ── STATS V2 (Home unificado — grid 2×2) ──────────────────── */
+  .stats-grid-2x2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .stat-box-v2 {
+    background: var(--superficie);
+    border-radius: var(--r-md);
+    padding: 16px 14px;
+    box-shadow: var(--sombra-sm);
+    border: 0.5px solid var(--borde);
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-box-v2::before {
+    content: '';
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--slate-300);
+    border-radius: 0 2px 2px 0;
+  }
+  .stat-box-v2.acento::before { background: var(--brand-accent); }
+  .stat-box-v2.verde::before { background: var(--verde); }
+  .stat-num-v2 {
+    font-family: var(--font-serif);
+    font-size: 36px; font-weight: 700;
+    color: var(--texto); letter-spacing: -1.5px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .stat-box-v2.acento .stat-num-v2 { color: var(--brand-accent); }
+  .stat-box-v2.verde .stat-num-v2 { color: var(--verde); }
+  .stat-label-v2 {
+    font-size: 12px; font-weight: 600; color: var(--texto-2);
+    margin-top: 6px; letter-spacing: -0.1px;
+  }
+  .stat-sub-v2 {
+    font-size: 10px; color: var(--texto-suave);
+    margin-top: 2px; font-weight: 400;
+  }
+
+  /* ── HOME TABS (Mis visitas / Todas) ───────────────────────── */
+  .home-tabs {
+    display: flex; gap: 4px; margin-bottom: 14px;
+    background: var(--slate-100);
+    border-radius: var(--r-sm);
+    padding: 3px;
+  }
+  .home-tab {
+    flex: 1; padding: 9px 8px;
+    font-size: 13px; font-weight: 600;
+    border: none; border-radius: 6px;
+    background: transparent;
+    color: var(--texto-suave);
+    cursor: pointer; font-family: inherit;
+    transition: all 0.18s;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .home-tab.activo {
+    background: var(--superficie);
+    color: var(--texto);
+    box-shadow: var(--sombra-xs);
+  }
+  .home-tab:hover:not(.activo) { color: var(--texto-2); }
+  .home-tab-count {
+    font-size: 11px; font-weight: 700;
+    background: var(--brand-bg); color: var(--brand-accent);
+    padding: 1px 7px; border-radius: var(--r-full);
+  }
+  .home-tab.activo .home-tab-count {
+    background: var(--brand-accent); color: #FFFBF5;
+  }
 
   /* ── BOTONES PRINCIPALES — terracotta unificado ─────────────── */
   .btn-principal {

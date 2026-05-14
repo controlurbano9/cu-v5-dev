@@ -1,49 +1,77 @@
 // ═══════════════════════════════════════════════════════════════
-// v6/consulta-norma.jsx — Consulta autónoma de norma POT.
+// v6/consulta-norma.jsx — Consulta norma POT con Google Maps
 //
-// Permite consultar la norma de un predio sin estar dentro de una visita.
-// Modos:
-//   - Dirección: geocodifica (Google Maps vía AS) y valida bbox Bello.
-//   - Pin en mapa: arrastrable, dispara POT en cada drag.
+// Geocoding: Google Maps Geocoder (browser-side, sin pasar por AS)
+// Mapa: Leaflet + OpenStreetMap (sin quota)
+// POT: turf.js + GeoJSONs en GitHub (controlurbano9/pot-bello)
 //
-// Restricción explícita al municipio de Bello (bounding box):
-//   lat ∈ [6.18, 6.55], lng ∈ [-75.75, -75.40]
-// Si el punto cae fuera, se rechaza con mensaje claro.
-//
-// Mapa: Leaflet + OpenStreetMap (sin API key, sin quota).
-// POT: api.js#consultarPOT (turf.js + GeoJSONs en GitHub).
+// Resultados: polígono uso suelo, suelo protección, amenaza,
+//   retiro corrientes, barrio, clasificación suelo (urbano/rural),
+//   tratamiento urbanístico, franja de intensidad.
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateCN, useEffect: useEffectCN, useRef: useRefCN } = React;
 
-// Bbox Bello — mismo que producción V2.
 const BELLO_BBOX = { latMin: 6.18, latMax: 6.55, lonMin: -75.75, lonMax: -75.40 };
-const BELLO_CENTRO = [6.337, -75.557]; // [lat, lng]
+const BELLO_CENTRO = [6.337, -75.557];
 
 function dentroDeBello(lat, lon) {
   return lat >= BELLO_BBOX.latMin && lat <= BELLO_BBOX.latMax &&
          lon >= BELLO_BBOX.lonMin && lon <= BELLO_BBOX.lonMax;
 }
 
+// Geocoding directo con Google Maps JS API (sin pasar por AS)
+function geocodeConGoogle(direccion) {
+  return new Promise(function(resolve, reject) {
+    if (typeof google === 'undefined' || !google.maps || !google.maps.Geocoder) {
+      reject(new Error('Google Maps no cargó'));
+      return;
+    }
+    var geocoder = new google.maps.Geocoder();
+    var variantes = [
+      direccion + ', Bello, Antioquia, Colombia',
+      normalizarDireccionGoogle(direccion) + ', Bello, Antioquia, Colombia',
+      direccion + ', Bello, Colombia',
+    ];
+    var intentar = function(idx) {
+      if (idx >= variantes.length) {
+        reject(new Error('No se encontró la dirección'));
+        return;
+      }
+      geocoder.geocode({ address: variantes[idx] }, function(results, status) {
+        if (status === 'OK' && results && results.length > 0) {
+          var loc = results[0].geometry.location;
+          var lat = loc.lat(), lon = loc.lng();
+          if (dentroDeBello(lat, lon)) {
+            resolve({ lat: lat, lon: lon, formatted: results[0].formatted_address });
+            return;
+          }
+        }
+        intentar(idx + 1);
+      });
+    };
+    intentar(0);
+  });
+}
+
 function ConsultaNormaScreen() {
-  const [direccion, setDireccion]   = useStateCN('');
-  const [punto, setPunto]           = useStateCN(null);   // { lat, lon } | null
-  const [resultado, setResultado]   = useStateCN(null);   // POT response | null
-  const [busyGeo, setBusyGeo]       = useStateCN(false);
-  const [busyPOT, setBusyPOT]       = useStateCN(false);
-  const [error, setError]           = useStateCN('');
+  const [direccion, setDireccion] = useStateCN('');
+  const [punto, setPunto] = useStateCN(null);
+  const [resultado, setResultado] = useStateCN(null);
+  const [busyGeo, setBusyGeo] = useStateCN(false);
+  const [busyPOT, setBusyPOT] = useStateCN(false);
+  const [error, setError] = useStateCN('');
 
-  const mapDivRef     = useRefCN(null);
-  const mapRef        = useRefCN(null);  // instancia Leaflet
-  const markerRef     = useRefCN(null);
+  const mapDivRef = useRefCN(null);
+  const mapRef = useRefCN(null);
+  const markerRef = useRefCN(null);
 
-  // Montar mapa Leaflet una sola vez
   useEffectCN(() => {
     if (typeof L === 'undefined') {
-      setError('Leaflet no cargó. Verifica VERSION_6_REACT.html.');
+      setError('Leaflet no cargó.');
       return;
     }
     if (mapRef.current || !mapDivRef.current) return;
-    const map = L.map(mapDivRef.current, {
+    var map = L.map(mapDivRef.current, {
       center: BELLO_CENTRO, zoom: 13,
       maxBounds: [
         [BELLO_BBOX.latMin - 0.05, BELLO_BBOX.lonMin - 0.05],
@@ -52,13 +80,11 @@ function ConsultaNormaScreen() {
       minZoom: 11,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap',
-      maxZoom: 19,
+      attribution: '© OpenStreetMap', maxZoom: 19,
     }).addTo(map);
 
-    // Click en el mapa: coloca/mueve el pin y dispara POT
     map.on('click', function(e) {
-      const lat = e.latlng.lat, lon = e.latlng.lng;
+      var lat = e.latlng.lat, lon = e.latlng.lng;
       if (!dentroDeBello(lat, lon)) {
         setError('El punto está fuera del municipio de Bello.');
         return;
@@ -74,21 +100,19 @@ function ConsultaNormaScreen() {
     };
   }, []);
 
-  // Coloca/mueve el marcador y opcionalmente consulta POT.
   function colocarPin(lat, lon, consultar) {
     setError('');
     setPunto({ lat, lon });
-    const map = mapRef.current;
+    var map = mapRef.current;
     if (!map) return;
     if (markerRef.current) {
       markerRef.current.setLatLng([lat, lon]);
     } else {
-      const m = L.marker([lat, lon], { draggable: true }).addTo(map);
+      var m = L.marker([lat, lon], { draggable: true }).addTo(map);
       m.on('dragend', function(ev) {
-        const ll = ev.target.getLatLng();
+        var ll = ev.target.getLatLng();
         if (!dentroDeBello(ll.lat, ll.lng)) {
-          setError('Punto fuera de Bello. Arrastra de vuelta al municipio.');
-          // Devolver al centro de Bello para no quedar fuera
+          setError('Punto fuera de Bello.');
           m.setLatLng(BELLO_CENTRO);
           setPunto({ lat: BELLO_CENTRO[0], lon: BELLO_CENTRO[1] });
           return;
@@ -102,47 +126,48 @@ function ConsultaNormaScreen() {
     if (consultar) consultarNorma(lat, lon);
   }
 
-  // Geocoding por dirección (Google Maps vía AS), restringido a Bello.
   async function buscarPorDireccion() {
-    setError('');
-    setResultado(null);
-    const dir = direccion.trim();
+    setError(''); setResultado(null);
+    var dir = direccion.trim();
     if (!dir) { setError('Ingresa una dirección.'); return; }
     setBusyGeo(true);
     try {
-      // Varias variantes — mismo enfoque que producción
-      const variantes = [
-        normalizarDireccionGoogle(dir) + ', Bello, Antioquia, Colombia',
-        dir + ', Bello, Antioquia, Colombia',
-        normalizarDireccionGoogle(dir) + ', Bello, Colombia',
-        dir + ', Bello',
-      ];
-      let encontrado = null;
-      for (const q of variantes) {
-        const r = await geocodeDireccion(q);
-        const c = r.data || r;
-        if (c && c.lat && c.lng && dentroDeBello(c.lat, c.lng)) {
-          encontrado = { lat: c.lat, lon: c.lng, query: q };
-          break;
+      // Intenta Google Maps Geocoder (browser-side)
+      var res = await geocodeConGoogle(dir);
+      colocarPin(res.lat, res.lon, true);
+    } catch (e1) {
+      // Fallback: AS geocode
+      try {
+        var variantes = [
+          normalizarDireccionGoogle(dir) + ', Bello, Antioquia, Colombia',
+          dir + ', Bello, Antioquia, Colombia',
+          dir + ', Bello',
+        ];
+        var encontrado = null;
+        for (var q of variantes) {
+          var r = await geocodeDireccion(q);
+          var c = r.data || r;
+          if (c && c.lat && c.lng && dentroDeBello(c.lat, c.lng)) {
+            encontrado = { lat: c.lat, lon: c.lng };
+            break;
+          }
         }
+        if (encontrado) {
+          colocarPin(encontrado.lat, encontrado.lon, true);
+        } else {
+          setError('No se encontró la dirección dentro de Bello. Verifica el formato (ej: CL 50 32-10) o coloca el pin en el mapa.');
+        }
+      } catch (e2) {
+        setError('Error geocodificando: ' + (e1.message || e2.message));
       }
-      if (!encontrado) {
-        setError('No se encontró la dirección dentro de Bello. Verifica el formato (ej: CL 50 32-10) o coloca el pin manualmente.');
-      } else {
-        colocarPin(encontrado.lat, encontrado.lon, true);
-      }
-    } catch (e) {
-      setError('Error geocodificando: ' + e.message);
     }
     setBusyGeo(false);
   }
 
-  // Llama al POT cliente (turf + GeoJSONs).
   async function consultarNorma(lat, lon) {
-    setBusyPOT(true);
-    setResultado(null);
+    setBusyPOT(true); setResultado(null);
     try {
-      const r = await consultarPOT(lat, lon);
+      var r = await consultarPOT(lat, lon);
       setResultado(r);
     } catch (e) {
       setError('Error consultando POT: ' + e.message);
@@ -168,7 +193,6 @@ function ConsultaNormaScreen() {
         coloca el pin haciendo click en el mapa.
       </div>
 
-      {/* Dirección */}
       <div className="card" style={{ marginBottom: 12 }}>
         <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
           Dirección
@@ -186,13 +210,12 @@ function ConsultaNormaScreen() {
             }}
           />
           <button onClick={buscarPorDireccion} disabled={busyGeo} className="btn-principal"
-            style={{ padding: '0 18px', fontSize: 13 }}>
+            style={{ padding: '0 18px', fontSize: 13, width: 'auto' }}>
             {busyGeo ? 'Buscando...' : 'Buscar'}
           </button>
         </div>
       </div>
 
-      {/* Mapa */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
         <div ref={mapDivRef} style={{ width: '100%', height: 360 }}></div>
         {punto && (
@@ -213,14 +236,13 @@ function ConsultaNormaScreen() {
 
       {error && (
         <div className="card" style={{
-          color: 'var(--rojo)', background: 'var(--rojo-bg, rgba(180,58,46,0.08))',
+          color: 'var(--rojo)', background: 'var(--rojo-bg)',
           borderColor: 'rgba(180,58,46,0.3)', marginBottom: 12, fontSize: 13,
         }}>
           {error}
         </div>
       )}
 
-      {/* Resultado */}
       <div className="card">
         <div className="card-titulo" style={{ marginBottom: 12 }}>Norma POT</div>
         {!resultado && !busyPOT && (
@@ -235,17 +257,20 @@ function ConsultaNormaScreen() {
         )}
         {resultado && !busyPOT && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
+            <CampoResultado label="Clasificación del suelo" valor={resultado.clasificacion || '—'} />
             <CampoResultado label="Polígono uso suelo" valor={resultado.poligono || '—'} />
+            <CampoResultado label="Tratamiento urbanístico" valor={resultado.tratamiento || '—'} />
+            <CampoResultado label="Franja de intensidad" valor={resultado.intensidad || '—'} />
             <CampoResultado label="Suelo de protección" valor={resultado.sueloProt || 'NO'} />
-            <CampoResultado label="Amenaza natural"     valor={resultado.amenaza || 'NO'} />
-            <CampoResultado label="Retiro corrientes"   valor={resultado.enRetiro || 'NO'} />
-            <CampoResultado label="Barrio / Vereda"     valor={resultado.barrioSugerido || '—'} span={2} />
+            <CampoResultado label="Amenaza natural" valor={resultado.amenaza || 'NO'} />
+            <CampoResultado label="Retiro corrientes" valor={resultado.enRetiro || 'NO'} />
+            <CampoResultado label="Barrio / Vereda" valor={resultado.barrioSugerido || '—'} span={2} />
           </div>
         )}
 
         <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={limpiar} style={{
-            background: 'var(--gris-bg, #F5F1EB)', border: '1px solid var(--borde)',
+            background: 'var(--gris-bg)', border: '1px solid var(--borde)',
             borderRadius: 8, padding: '8px 14px', fontSize: 12, cursor: 'pointer',
             fontFamily: 'inherit',
           }}>Limpiar</button>
@@ -256,11 +281,11 @@ function ConsultaNormaScreen() {
 }
 
 function CampoResultado({ label, valor, span }) {
-  const positivo = valor === 'SI';
-  const negativo = valor === 'NO';
+  var positivo = valor === 'SI';
+  var negativo = valor === 'NO';
   return (
     <div style={{
-      padding: '10px 12px', borderRadius: 8, background: 'var(--gris-bg, #F5F1EB)',
+      padding: '10px 12px', borderRadius: 8, background: 'var(--gris-bg)',
       border: '1px solid var(--borde)', gridColumn: span === 2 ? 'span 2' : undefined,
     }}>
       <div style={{ fontSize: 10, color: 'var(--texto-suave)', textTransform: 'uppercase',
@@ -277,9 +302,8 @@ function CampoResultado({ label, valor, span }) {
   );
 }
 
-// Normalización de dirección colombiana → formato Google (igual que producción V2).
 function normalizarDireccionGoogle(dir) {
-  let d = String(dir || '').trim().toUpperCase();
+  var d = String(dir || '').trim().toUpperCase();
   d = d.replace(/^CL\s+/i, 'Calle ')
        .replace(/^CR\s+/i, 'Carrera ')
        .replace(/^KR\s+/i, 'Carrera ')
@@ -287,7 +311,6 @@ function normalizarDireccionGoogle(dir) {
        .replace(/^AV\s+/i, 'Avenida ')
        .replace(/^DG\s+/i, 'Diagonal ')
        .replace(/^CQ\s+/i, 'Circular ');
-  // "50 32-10" → "50 #32-10"
   d = d.replace(/(\d+[A-Z]?)\s+(\d+[A-Z]?-\d+)/, '$1 #$2');
   return d;
 }

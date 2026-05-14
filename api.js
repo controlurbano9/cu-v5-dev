@@ -282,7 +282,7 @@ async function consultarPOT(lat, lon) {
       .catch(() => null),
   ]);
 
-  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', barrioSugerido: '', enRetiro: 'NO' };
+  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '' };
 
   // 1. Polígono uso del suelo
   if (usoSuelo) {
@@ -363,6 +363,54 @@ async function consultarPOT(lat, lon) {
           if (turf.pointToLineDistance(punto, linea, { units: 'meters' }) < 30) {
             result.enRetiro = 'SI'; break;
           }
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 6. Clasificación del suelo (urbano / rural / expansión)
+  const [clasifSuelo, tratUrb, franjaInt] = await Promise.all([
+    _cargarGeoJSON('ClasificacionSuelo.geojson').catch(() => null),
+    _cargarGeoJSON('TratamientoUrbanistico.geojson').catch(() => null),
+    _cargarGeoJSON('FranjaIntensidad.geojson').catch(() => null),
+  ]);
+
+  if (clasifSuelo) {
+    for (const feat of clasifSuelo.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          result.clasificacion = p.CLASIFICAC || p.clasificac || p.CLASE || p.clase ||
+            p.TIPO || p.tipo || p.NOMBRE || p.nombre || '';
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 7. Tratamiento urbanístico
+  if (tratUrb) {
+    for (const feat of tratUrb.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          result.tratamiento = p.TRATAMIENT || p.tratamient || p.NOMBRE || p.nombre ||
+            p.TIPO || p.tipo || '';
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 8. Franja de intensidad
+  if (franjaInt) {
+    for (const feat of franjaInt.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          result.intensidad = p.FRANJA || p.franja || p.INTENSIDAD || p.intensidad ||
+            p.NOMBRE || p.nombre || '';
+          break;
         }
       } catch (e) {}
     }

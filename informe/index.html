@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control Urbano · Generador F-GGO-43</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   Tokens V6 — terracotta sobre crema (alineado con styles.css)
+═══════════════════════════════════════════════════════════════ */
+:root{
+  --brand:#1F1B16; --brand-med:#2A2520; --brand-light:#3F362B;
+  --brand-bg:#FBE9E0; --brand-accent:#C96442; --brand-ink:#8A3F26;
+  --brand-glow:rgba(201,100,66,0.30);
+  --verde:#6B7A3A; --verde-bg:#EFF1E1; --verde-dark:#565E2E;
+  --rojo:#B43A2E; --rojo-bg:#F8E4DF;
+  --azul:#4A6B7C; --azul-bg:#E0E8EC;
+  --amarillo:#B8873A; --amarillo-bg:#FAF1DD;
+  --texto:#1F1B16; --texto-2:#2A2520; --texto-suave:#5C5142; --texto-3:#806F5A;
+  --superficie:#FFFBF5; --fondo:#F5F1EB;
+  --borde:rgba(31,27,22,0.08); --borde-med:rgba(31,27,22,0.16);
+  --sombra-sm:0 1px 3px rgba(31,27,22,0.06),0 1px 2px rgba(31,27,22,0.04);
+  --sombra:0 4px 6px rgba(31,27,22,0.06),0 2px 4px rgba(31,27,22,0.04);
+  --font-sans:'Inter',-apple-system,system-ui,'Helvetica Neue',sans-serif;
+  --font-serif:'Source Serif 4','Source Serif Pro',Georgia,serif;
+  --font-mono:'JetBrains Mono','SF Mono',Monaco,Consolas,monospace;
+  --r-sm:8px; --r:12px; --r-md:14px; --r-lg:18px;
+  --sidebar-w:248px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:var(--font-sans); background:var(--fondo); color:var(--texto);
+  font-size:13px; line-height:1.55; min-height:100vh;
+  font-feature-settings:'cv11','ss01','ss03';
+}
+
+/* Shell: sidebar fijo + main amplio (escritorio) */
+.shell{display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:100vh}
+
+/* ── Sidebar V6 ───────────────────────────────────────────── */
+.sb{
+  background:var(--superficie); border-right:0.5px solid var(--borde);
+  padding:22px 16px; display:flex; flex-direction:column; gap:4px;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.sb-logo{
+  font-family:var(--font-serif); color:var(--texto); font-size:15px; font-weight:600;
+  padding:0 8px 16px; border-bottom:0.5px solid var(--borde); margin-bottom:10px;
+  letter-spacing:-0.3px;
+}
+.sb-logo span{
+  display:block; font-family:var(--font-sans); font-size:10px; font-weight:500;
+  color:var(--texto-3); margin-top:3px; letter-spacing:.04em; text-transform:uppercase;
+}
+.sbt{
+  display:flex; align-items:center; gap:10px; background:transparent; border:none;
+  color:var(--texto-suave); font-family:inherit; font-size:13px; font-weight:500;
+  padding:9px 12px; border-radius:var(--r-sm); cursor:pointer; text-align:left;
+  transition:all .15s; width:100%;
+}
+.sbt:hover{background:var(--brand-bg); color:var(--brand-ink)}
+.sbt.active{background:var(--brand-bg); color:var(--brand-ink); font-weight:600}
+.sbt.done{color:var(--texto-3)}
+.sbn{
+  width:22px; height:22px; border-radius:50%; border:1.5px solid currentColor;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:600; font-family:var(--font-mono); flex-shrink:0;
+}
+.sbt.active .sbn{background:var(--brand-accent); border-color:var(--brand-accent); color:#fff}
+.sbt.done .sbn{background:var(--verde); border-color:var(--verde); color:#fff}
+.sbt.done .sbn::before{content:'✓'; font-family:var(--font-sans)}
+.sbt.done .sbn{font-size:0}
+.sbt.done .sbn::before{font-size:12px}
+
+.sb-info{
+  margin-top:12px; padding:10px 12px; background:var(--fondo);
+  border:0.5px solid var(--borde); border-radius:var(--r-sm);
+  font-size:11px; color:var(--texto-suave); line-height:1.5;
+}
+.sb-info b{color:var(--texto); font-weight:600}
+
+.btn-nuevo{
+  display:flex; align-items:center; gap:8px; background:transparent;
+  border:1px solid var(--rojo); color:var(--rojo);
+  font-family:inherit; font-size:12px; font-weight:500;
+  padding:9px 12px; border-radius:var(--r-sm); cursor:pointer;
+  width:100%; margin-top:8px; transition:all .15s;
+}
+.btn-nuevo:hover{background:var(--rojo-bg)}
+.btn-nuevo svg{width:13px; height:13px; flex-shrink:0}
+
+/* ── Main amplio ──────────────────────────────────────────── */
+.mn{padding:36px 48px; max-width:1180px; margin:0 auto; width:100%}
+
+.ptitle{
+  font-family:var(--font-serif); font-size:32px; font-weight:600;
+  color:var(--texto); letter-spacing:-0.8px; margin-bottom:4px; line-height:1.15;
+}
+.psub{color:var(--texto-3); font-size:13px; margin-bottom:28px; font-weight:400}
+
+.card{
+  background:var(--superficie); border:0.5px solid var(--borde);
+  border-radius:var(--r-md); padding:24px 28px; margin-bottom:14px;
+  box-shadow:var(--sombra-sm);
+}
+.ch{
+  display:flex; align-items:center; gap:11px; margin-bottom:18px;
+  padding-bottom:14px; border-bottom:0.5px solid var(--borde);
+}
+.ci{
+  width:34px; height:34px; border-radius:var(--r-sm); background:var(--brand-bg);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.ci svg{width:16px; height:16px; fill:var(--brand-ink)}
+.ct{font-size:14px; font-weight:600; color:var(--texto); letter-spacing:-0.1px}
+.cst{font-size:11px; color:var(--texto-3); margin-top:2px}
+
+/* Grid de formulario: aprovecha el ancho del escritorio */
+.fg{display:grid; grid-template-columns:repeat(3,1fr); gap:14px 18px}
+.ff{grid-column:1/-1}
+.fc2{grid-column:span 2}
+@media (max-width:1200px){.fg{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:760px){.fg{grid-template-columns:1fr}}
+
+.f{display:flex; flex-direction:column; gap:5px}
+.f label{
+  font-size:11px; font-weight:600; color:var(--texto-suave);
+  letter-spacing:.02em;
+}
+.f input,.f select,.f textarea{
+  background:var(--fondo); border:1px solid var(--borde-med); border-radius:var(--r-sm);
+  padding:9px 12px; font-family:inherit; font-size:13px; color:var(--texto);
+  width:100%; transition:border-color .15s, box-shadow .15s; resize:vertical;
+}
+.f input:focus,.f select:focus,.f textarea:focus{
+  outline:none; border-color:var(--brand-accent);
+  box-shadow:0 0 0 3px var(--brand-glow); background:var(--superficie);
+}
+.f textarea{min-height:120px; line-height:1.6}
+.f input::placeholder,.f textarea::placeholder{color:var(--texto-3); font-weight:400}
+
+/* Nota destacada (alerta suave) */
+.nota{
+  background:var(--amarillo-bg); border:0.5px solid var(--amarillo);
+  border-left:3px solid var(--amarillo); border-radius:var(--r-sm);
+  padding:12px 16px; font-size:12px; color:var(--texto-2); margin-bottom:14px; line-height:1.55;
+}
+.nota b{color:var(--texto); font-weight:600}
+
+/* Barra inferior con botones de navegación entre pasos */
+.br{display:flex; gap:10px; margin-top:22px; align-items:center}
+
+/* Botones */
+.btn{
+  padding:10px 22px; border-radius:var(--r-sm); font-family:inherit;
+  font-size:13px; font-weight:600; cursor:pointer; border:none; transition:all .15s;
+  letter-spacing:-0.1px;
+}
+.btn-p{background:var(--brand-accent); color:#fff}
+.btn-p:hover{background:var(--brand-ink)}
+.btn-p:disabled{opacity:.45; cursor:not-allowed}
+.btn-o{background:transparent; border:1px solid var(--borde-med); color:var(--texto-suave)}
+.btn-o:hover{border-color:var(--brand-accent); color:var(--brand-accent); background:var(--brand-bg)}
+.btn-g{background:var(--verde); color:#fff}
+.btn-g:hover{background:var(--verde-dark)}
+.btn-gd{background:var(--brand-ink); color:#fff}
+.btn-gd:hover{background:var(--brand)}
+
+/* Caja de estado (loading/ok/error) */
+.stbox{
+  border-radius:var(--r-sm); padding:14px 18px; display:flex;
+  align-items:flex-start; gap:11px; margin-top:14px; border:0.5px solid var(--borde);
+}
+.hidden{display:none !important}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{
+  width:16px; height:16px; border:2px solid var(--brand-bg);
+  border-top-color:var(--brand-accent); border-radius:50%;
+  animation:spin .7s linear infinite; flex-shrink:0; margin-top:2px;
+}
+
+/* Tabla Art. 135 */
+.tv{width:100%; border-collapse:collapse; font-size:12px; margin-top:10px}
+.tv th{
+  background:var(--brand); color:#fff; padding:8px 10px;
+  text-align:left; font-weight:600; font-size:11px; letter-spacing:0.02em;
+}
+.tv td{border:0.5px solid var(--borde-med); padding:7px 9px; vertical-align:top}
+.tv tr:nth-child(even) td{background:var(--fondo)}
+.tv .cbrow td{
+  background:var(--brand-bg); font-weight:600; font-size:11px;
+  color:var(--brand-ink); text-transform:uppercase; letter-spacing:.03em;
+}
+.tv select,.tv input[type=text]{
+  background:var(--superficie); border:1px solid var(--borde-med);
+  border-radius:6px; padding:4px 7px; font-size:11px; font-family:inherit;
+  width:100%; color:var(--texto);
+}
+.tv select:focus,.tv input[type=text]:focus{outline:none; border-color:var(--brand-accent)}
+
+/* Checkboxes con caja completa */
+.chkblock{
+  display:flex; align-items:center; gap:10px; padding:11px 14px;
+  border-radius:var(--r-sm); border:1px solid var(--borde-med);
+  cursor:pointer; background:var(--fondo); transition:all .15s;
+  font-size:13px; margin-bottom:12px;
+}
+.chkblock:hover{border-color:var(--brand-accent); background:var(--brand-bg)}
+.chkblock input{accent-color:var(--brand-accent); width:15px; height:15px; flex-shrink:0}
+
+/* Hallazgos: lista clickeable */
+.hlist{display:grid; grid-template-columns:repeat(2,1fr); gap:8px}
+@media (max-width:900px){.hlist{grid-template-columns:1fr}}
+.hitem{
+  display:flex; align-items:center; gap:10px; padding:10px 13px;
+  border-radius:var(--r-sm); border:1px solid var(--borde-med);
+  cursor:pointer; background:var(--fondo); transition:all .15s; font-size:12px;
+}
+.hitem:hover{border-color:var(--brand-accent); background:var(--brand-bg)}
+.hitem input{accent-color:var(--brand-accent); width:14px; height:14px; flex-shrink:0}
+.hitem:has(input:checked){border-color:var(--brand-accent); background:var(--brand-bg); color:var(--brand-ink)}
+
+/* Modalidad chips */
+.mod-chk-wrap{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+.mod-chk-wrap label{
+  display:flex; align-items:center; gap:7px; font-size:12px;
+  padding:6px 12px; border:1px solid var(--borde-med); border-radius:var(--r-sm);
+  cursor:pointer; background:var(--fondo); transition:all .15s;
+}
+.mod-chk-wrap label:hover{border-color:var(--brand-accent); background:var(--brand-bg)}
+.mod-chk-wrap label:has(input:checked){border-color:var(--brand-accent); background:var(--brand-bg); color:var(--brand-ink); font-weight:500}
+.mod-chk-wrap input{accent-color:var(--brand-accent)}
+
+/* Vista previa de texto IA */
+.prev-box{
+  background:var(--fondo); border:0.5px solid var(--borde);
+  border-radius:var(--r-sm); padding:16px 18px;
+  font-family:var(--font-mono); font-size:11px; line-height:1.75;
+  color:var(--texto-2); white-space:pre-wrap; max-height:360px;
+  overflow-y:auto; margin-top:10px;
+}
+.sep{height:0.5px; background:var(--borde); margin:20px 0}
+
+/* Tarjeta prefill (cuando entra desde V6 con datos) */
+.prefill-pill{
+  background:var(--verde-bg); border:0.5px solid var(--verde);
+  border-radius:var(--r-sm); padding:10px 14px; font-size:12px;
+  color:var(--verde-dark); margin-bottom:16px; display:flex;
+  align-items:center; gap:8px;
+}
+.prefill-pill b{color:var(--verde-dark); font-weight:600}
+
+/* Foto card */
+.foto-card{
+  border:0.5px solid var(--borde-med); border-radius:var(--r-sm);
+  padding:14px 16px; margin-bottom:10px; background:var(--fondo);
+  display:flex; gap:14px; align-items:flex-start;
+}
+.foto-card .thumb{
+  flex-shrink:0; width:90px; height:68px; background:var(--slate-200, #DED5C8);
+  border-radius:var(--r-sm); overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
+}
+.foto-card .thumb img{width:100%; height:100%; object-fit:cover}
+
+/* Indicador "Guardado" flotante */
+#save-ind{
+  position:fixed; bottom:18px; right:20px; background:var(--verde); color:#fff;
+  font-size:11px; font-family:inherit; font-weight:500;
+  padding:6px 14px; border-radius:var(--r-lg);
+  opacity:0; transition:opacity .4s; pointer-events:none; z-index:999;
+  box-shadow:var(--sombra);
+}
+
+/* Resumen final del paso 5 (tarjeta más espaciosa) */
+.res-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-top:14px}
+@media (max-width:900px){.res-grid{grid-template-columns:repeat(2,1fr)}}
+.res-grid small{
+  color:var(--texto-3); font-size:10px; text-transform:uppercase;
+  letter-spacing:.04em; font-weight:600;
+}
+.res-grid b{display:block; margin-top:3px; font-size:14px; color:var(--texto); font-weight:500}
+
+.res-chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+.res-chips span{
+  background:var(--brand-bg); color:var(--brand-ink); font-size:11px;
+  padding:3px 10px; border-radius:var(--r-lg); font-weight:500;
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="sb">
+  <div class="sb-logo">Control Urbano <span>Informe F-GGO-43</span></div>
+  <button class="sbt active" id="sb1" onclick="ir(1)"><span class="sbn">1</span>Datos del caso</button>
+  <button class="sbt" id="sb2" onclick="ir(2)"><span class="sbn">2</span>Licencia</button>
+  <button class="sbt" id="sb3" onclick="ir(3)"><span class="sbn">3</span>Observaciones</button>
+  <button class="sbt" id="sb4" onclick="ir(4)"><span class="sbn">4</span>Art. 135 / POT</button>
+  <button class="sbt" id="sb5" onclick="ir(5)"><span class="sbn">5</span>Generar informe</button>
+  <div id="sb-visita-info" class="sb-info hidden">
+    <div style="font-size:10px;color:var(--texto-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Visita asociada</div>
+    <div id="sb-visita-rad" style="font-family:var(--font-mono);font-size:12px"></div>
+    <div id="sb-visita-dir" style="margin-top:3px"></div>
+  </div>
+  <div style="flex:1"></div>
+  <button class="btn-nuevo" onclick="nuevoInforme()">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+    Limpiar y empezar nuevo
+  </button>
+</aside>
+<main class="mn">
+<div id="p1">
+  <h1 class="ptitle">Datos del caso</h1>
+  <p class="psub">Informacion de la visita y ubicacion del inmueble</p>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg></div><div><div class="ct">Expediente y visita</div><div class="cst">Datos de radicacion</div></div></div>
+    <div class="fg">
+      <div class="f"><label>Fecha de la visita</label><input type="date" id="fechaVisita"></div>
+      <div class="f"><label>Fecha emision del informe</label><input type="date" id="fechaInforme"></div>
+      <div class="f"><label>Quien realiza informe</label>
+        <select id="inspector" onchange="onInspectorChange(this)">
+          <option value="">Cargando inspectores...</option>
+        </select>
+      </div>
+      <div class="f"><label>Cargo</label><input type="text" id="cargo" placeholder="Se completa al elegir inspector" readonly></div>
+      <div class="f"><label>Numero de radicado</label><input type="text" id="numRadicado" placeholder="Numero de radicado"></div>
+      <label class="chkblock ff" style="margin-bottom:0">
+        <input type="checkbox" id="esDiligencia">
+        <span>Visita realizada en razon a diligencia de inspeccion al lugar decretada en audiencia por el inspector de convivencia</span>
+      </label>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><div><div class="ct">Ubicacion del inmueble</div><div class="cst">Direccion y datos catastrales</div></div></div>
+    <div class="fg">
+      <div class="f ff"><label>Direccion completa</label><input type="text" id="direccion" placeholder="Carrera 50 # 32-15"></div>
+      <div class="f"><label>Barrio o vereda</label>
+        <select id="barrio" onchange="autoComuna(this)">
+          <option value="">Seleccione barrio o vereda</option>
+<optgroup label="Barrios urbanos">
+<option value="Acevedo">Acevedo</option>
+<option value="Alcala">Alcala</option>
+<option value="Alpes del Norte">Alpes del Norte</option>
+<option value="Altavista">Altavista</option>
+<option value="Altos de Niquía">Altos de Niquía</option>
+<option value="Altos de Quitasol">Altos de Quitasol</option>
+<option value="Amazonia">Amazonia</option>
+<option value="Andalucia">Andalucia</option>
+<option value="Aralias">Aralias</option>
+<option value="Barrio Nuevo">Barrio Nuevo</option>
+<option value="Bellavista">Bellavista</option>
+<option value="Belvedere">Belvedere</option>
+<option value="Briceno">Briceno</option>
+<option value="Buenos Aires">Buenos Aires</option>
+<option value="Central">Central</option>
+<option value="Centro">Centro</option>
+<option value="Cinco Estrellas">Cinco Estrellas</option>
+<option value="Ciudad Niquía">Ciudad Niquía</option>
+<option value="Ciudadela del Norte">Ciudadela del Norte</option>
+<option value="El Cafetal">El Cafetal</option>
+<option value="El Cairo">El Cairo</option>
+<option value="El Carmelo">El Carmelo</option>
+<option value="El Congolo">El Congolo</option>
+<option value="El Ducado">El Ducado</option>
+<option value="El Mirador">El Mirador</option>
+<option value="El Paraiso">El Paraiso</option>
+<option value="El Porvenir">El Porvenir</option>
+<option value="El Rosario">El Rosario</option>
+<option value="El Trapiche">El Trapiche</option>
+<option value="El Trebol">El Trebol</option>
+<option value="Espiritu Santo">Espiritu Santo</option>
+<option value="Estacion Primera">Estacion Primera</option>
+<option value="Fontidueno">Fontidueno</option>
+<option value="Girasoles">Girasoles</option>
+<option value="Gran Avenida">Gran Avenida</option>
+<option value="Guasimalito">Guasimalito</option>
+<option value="Hato Viejo">Hato Viejo</option>
+<option value="Hermosa Provincia">Hermosa Provincia</option>
+<option value="Jose Antonio Galan">Jose Antonio Galan</option>
+<option value="La Aldea">La Aldea</option>
+<option value="La Cabana">La Cabana</option>
+<option value="La Cabanita">La Cabanita</option>
+<option value="La Camila">La Camila</option>
+<option value="La Cumbre">La Cumbre</option>
+<option value="La Esmeralda">La Esmeralda</option>
+<option value="La Estacion">La Estacion</option>
+<option value="La Florida">La Florida</option>
+<option value="La Gabriela">La Gabriela</option>
+<option value="La Madera">La Madera</option>
+<option value="La Maruchenga">La Maruchenga</option>
+<option value="La Meseta">La Meseta</option>
+<option value="La Milagrosa">La Milagrosa</option>
+<option value="La Mina">La Mina</option>
+<option value="La Navarra">La Navarra</option>
+<option value="La Pradera">La Pradera</option>
+<option value="La Primavera">La Primavera</option>
+<option value="La Selva">La Selva</option>
+<option value="La Virginia">La Virginia</option>
+<option value="Las Granjas">Las Granjas</option>
+<option value="Las Vegas">Las Vegas</option>
+<option value="Lopez de Mesa">Lopez de Mesa</option>
+<option value="Los Alpes">Los Alpes</option>
+<option value="Los Bucaros">Los Bucaros</option>
+<option value="Los Ciruelos">Los Ciruelos</option>
+<option value="Los Sauces">Los Sauces</option>
+<option value="Manchester">Manchester</option>
+<option value="Marco Fidel Suarez">Marco Fidel Suarez</option>
+<option value="Molinares">Molinares</option>
+<option value="Nazaret">Nazaret</option>
+<option value="Niquía Bifamiliares">Niquía Bifamiliares</option>
+<option value="Pachelly">Pachelly</option>
+<option value="Panamericano">Panamericano</option>
+<option value="Paris">Paris</option>
+<option value="Perez">Perez</option>
+<option value="Playa Rica">Playa Rica</option>
+<option value="Prado">Prado</option>
+<option value="Puerto Bello">Puerto Bello</option>
+<option value="Riachuelos">Riachuelos</option>
+<option value="Rincon Santos">Rincon Santos</option>
+<option value="Salento">Salento</option>
+<option value="Salvador Allende">Salvador Allende</option>
+<option value="San Gabriel">San Gabriel</option>
+<option value="San Jose Obrero">San Jose Obrero</option>
+<option value="San Martin">San Martin</option>
+<option value="San Simon">San Simon</option>
+<option value="Santa Ana">Santa Ana</option>
+<option value="Santa Rita">Santa Rita</option>
+<option value="Serramonte">Serramonte</option>
+<option value="Suarez">Suarez</option>
+<option value="Terranova">Terranova</option>
+<option value="Tierradentro">Tierradentro</option>
+<option value="Urapanes">Urapanes</option>
+<option value="Valadares">Valadares</option>
+<option value="Vda. Croacia">Vda. Croacia</option>
+<option value="Vda. El Pinar">Vda. El Pinar</option>
+<option value="Villa Linda">Villa Linda</option>
+<option value="Villa Maria">Villa Maria</option>
+<option value="Villas de Comfenalco">Villas de Comfenalco</option>
+<option value="Villas de Occidente">Villas de Occidente</option>
+<option value="Villas del Sol">Villas del Sol</option>
+<option value="Zamora">Zamora</option>
+<option value="Zona Industrial #1">Zona Industrial #1</option>
+<option value="Zona Industrial #2">Zona Industrial #2</option>
+<option value="Zona Industrial #3">Zona Industrial #3</option>
+<option value="Zona Industrial #4">Zona Industrial #4</option>
+<option value="Zona Industrial #5">Zona Industrial #5</option>
+<option value="Zona Industrial #6">Zona Industrial #6</option>
+<option value="Zona Industrial #7">Zona Industrial #7</option>
+</optgroup>
+<optgroup label="Veredas (rural)">
+<option value="Vda. Buenavista">Vda. Buenavista</option>
+<option value="Vda. Charco Verde">Vda. Charco Verde</option>
+<option value="Vda. Croacia">Vda. Croacia</option>
+<option value="Vda. Cuartas">Vda. Cuartas</option>
+<option value="Vda. El Carmelo">Vda. El Carmelo</option>
+<option value="Vda. El Tambo">Vda. El Tambo</option>
+<option value="Vda. Granizal">Vda. Granizal</option>
+<option value="Vda. Hatoviejo">Vda. Hatoviejo</option>
+<option value="Vda. Jalisco">Vda. Jalisco</option>
+<option value="Vda. La China">Vda. La China</option>
+<option value="Vda. La Meneses">Vda. La Meneses</option>
+<option value="Vda. La Palma">Vda. La Palma</option>
+<option value="Vda. La Primavera">Vda. La Primavera</option>
+<option value="Vda. La Union">Vda. La Union</option>
+<option value="Vda. Los Espejos">Vda. Los Espejos</option>
+<option value="Vda. Potrerito">Vda. Potrerito</option>
+<option value="Vda. Quitasol">Vda. Quitasol</option>
+<option value="Vda. Sabanalarga">Vda. Sabanalarga</option>
+<option value="Vda. Tierradentro">Vda. Tierradentro</option>
+</optgroup>
+        </select>
+      </div>
+      <div class="f"><label>Comuna</label><input type="text" id="comuna" placeholder="Se asigna automaticamente"></div>
+      <div class="f"><label>Codigo catastral</label><input type="text" id="catastral" placeholder="Codigo catastral"></div>
+    </div>
+  </div>
+  <div class="br"><button class="btn btn-p" onclick="ir(2)">Continuar &rarr;</button></div>
+</div>
+<div id="p2" class="hidden">
+  <h1 class="ptitle">Licencia urbanistica</h1>
+  <p class="psub">Complete los datos de la licencia aportada</p>
+  <div class="card">
+    <label class="chkblock"><input type="checkbox" id="sinLic" onchange="toggleSinLic(this)"><span>No se aporto documentacion urbanistica</span></label>
+    <div id="lic-fields">
+      <div class="fg">
+        <div class="f"><label>N de resolucion</label><input type="text" id="numRes" placeholder="0234 de 15/03/2020"></div>
+        <div class="f"><label>Fecha de ejecutoria</label><input type="text" id="fechaEjec" placeholder="DD/MM/AAAA"></div>
+        <div class="f ff"><label>Tipo de tramite (puede seleccionar varios)</label>
+          <div id="tipo-tramite-checks" class="mod-chk-wrap">
+            <label><input type="checkbox" class="tt-chk" value="Licencia de construccion" onchange="toggleModalidades()"> Licencia de construccion</label>
+            <label><input type="checkbox" class="tt-chk" value="Reconocimiento" onchange="toggleModalidades()"> Reconocimiento</label>
+            <label><input type="checkbox" class="tt-chk" value="Modificacion de licencia" onchange="toggleModalidades()"> Modificacion de licencia</label>
+            <label><input type="checkbox" class="tt-chk" value="Licencia de urbanizacion" onchange="toggleModalidades()"> Licencia de urbanizacion</label>
+          </div>
+        </div>
+        <div class="f ff hidden" id="modalidad-wrap"><label>Modalidad (puede seleccionar varias)</label>
+          <div id="modalidad-checks" class="mod-chk-wrap">
+            <label><input type="checkbox" class="mod-chk" value="Obra nueva"> Obra nueva</label>
+            <label><input type="checkbox" class="mod-chk" value="Ampliacion"> Ampliacion</label>
+            <label><input type="checkbox" class="mod-chk" value="Modificacion"> Modificacion</label>
+            <label><input type="checkbox" class="mod-chk" value="Demolicion total"> Demolicion total</label>
+            <label><input type="checkbox" class="mod-chk" value="Demolicion parcial"> Demolicion parcial</label>
+            <label><input type="checkbox" class="mod-chk" value="Cerramiento"> Cerramiento</label>
+          </div>
+        </div>
+        <div class="f"><label>Titular de la licencia</label><input type="text" id="titular" placeholder="Nombre completo"></div>
+        <div class="f"><label>N de pisos aprobados</label><input type="number" id="pisos" min="1" max="60" placeholder="3"></div>
+        <div class="f"><label>Area aprobada (m2)</label><input type="number" id="areaApro" placeholder="245.50"></div>
+        <div class="f"><label>Sistema estructural aprobado</label>
+          <select id="sist">
+            <option value="">Seleccione</option>
+            <option>Muros de carga no estructurales</option>
+            <option>Porticos de concreto reforzado</option>
+            <option>Porticos de acero</option>
+            <option>Porticos mixtos acero-concreto</option>
+            <option>Muros de concreto reforzado</option>
+            <option>Mamposteria estructural reforzada</option>
+            <option>Mamposteria confinada</option>
+          </select>
+        </div>
+        <div class="f ff"><label>Destinaciones aprobadas</label><input type="text" id="dest" placeholder="Piso 1: comercio; Pisos 2-4: 8 aptos"></div>
+        <div class="f"><label>Cubierta aprobada</label><input type="text" id="cubierta" placeholder="Losa de concreto"></div>
+        <div class="f"><label>Curaduria urbana</label>
+          <select id="curaduria">
+            <option value="">Seleccione</option>
+            <option>Curaduria Urbana Primera de Bello</option>
+            <option>Curaduria Urbana Segunda de Bello</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="br">
+    <button class="btn btn-o" onclick="ir(1)">&larr; Atras</button>
+    <button class="btn btn-p" onclick="ir(3)">Continuar &rarr;</button>
+  </div>
+</div>
+<div id="p3" class="hidden">
+  <h1 class="ptitle">Observaciones de campo</h1>
+  <p class="psub">Ingrese el texto tal como lo tomo en campo</p>
+  <div class="nota"><b>Que incluir en las observaciones (segun la plantilla F-GGO-43):</b><br>
+  &bull; <b>Verificacion integral:</b> estado actual del proyecto vs lo aprobado en licencia<br>
+  &bull; <b>Distribucion arquitectonica:</b> cantidad de destinaciones, usos, volumetria, niveles<br>
+  &bull; <b>Sistema estructural:</b> fundaciones, elementos verticales (columnas/muros), cantidad, dimensiones, materialidad y tipo de losa<br>
+  &bull; <b>Patios:</b> cantidad, dimensiones, ventanas hacia vacios<br>
+  &bull; <b>Cubierta:</b> tipo y materiales, muros de cerramiento en cubierta, muros medianeros (compartidos o independientes), vanos en dichos muros<br>
+  &bull; <b>Escaleras:</b> ubicacion respecto al paramento<br>
+  &bull; <b>Voladizos y balcones:</b> dimensiones<br>
+  &bull; <b>Parqueaderos:</b> presencia y conformacion de celdas<br>
+  &bull; <b>Antejardín:</b> materiales, usos, dimensiones, cerramientos, cubiertas, elementos verticales de apoyo<br>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg></div><div><div class="ct">Texto en bruto</div><div class="cst">Lo que encontro en campo</div></div></div>
+    <div class="f">
+      <label>Observaciones (texto libre)</label>
+      <textarea id="obs" style="min-height:220px" placeholder="Ej: Al llegar al predio me atendio [nombre]. Se verifico la licencia [numero]. En el 1er piso se observa [destinacion] que coincide/difiere con lo aprobado. Sistema estructural: columnas de [dim] en concreto/metalico, vigas de [dim], losa de entrepiso en [material]. Patio de [dim x dim] con ventana hacia vacio. 2do piso: [descripcion]. Cubierta en [teja/losa], muro de cerramiento en cubierta de [material], muro medianero [compartido/independiente] con/sin vanos. Escalera [sobre/separada del paramento], voladizos de [dim]. Celdas de parqueo: [presentes/ausentes/modificadas]. Antejardín: [libre/ocupado - materiales, dimensiones, cerramiento, cubierta]. Otros hallazgos: [descripcion]."></textarea>
+    </div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-o" id="btn-mejorar" onclick="mejorarObservaciones()">
+        ✨ Mejorar redacción con IA
+      </button>
+      <span id="mejorar-status" style="font-size:11px;color:var(--texto-suave)"></span>
+    </div>
+  </div>
+
+  <div class="card hidden" id="card-obs-mejorada" style="border-left:3px solid var(--brand-accent)">
+    <div class="ch" style="margin-bottom:10px;padding-bottom:10px">
+      <div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4L2 9.4h7.6z"/></svg></div>
+      <div>
+        <div class="ct">Versión mejorada (sugerencia IA)</div>
+        <div class="cst">Puede editarla antes de aplicarla. El texto original se conserva arriba hasta que decida.</div>
+      </div>
+    </div>
+    <div class="f">
+      <textarea id="obs-mejorada" style="min-height:220px"></textarea>
+    </div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="usarVersionMejorada()">Usar esta versión</button>
+      <button class="btn btn-o" onclick="descartarVersionMejorada()">Descartar</button>
+      <span style="font-size:11px;color:var(--texto-3);margin-left:auto">Al usarla, reemplaza el texto en bruto.</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div><div><div class="ct">Area en contravencion</div><div class="cst">Discriminada por concepto y nivel</div></div></div>
+    <div class="f">
+      <label>Detalle de areas (m2)</label>
+      <textarea id="areas" style="min-height:60px" placeholder="Antejardín: 10 m2 / Piso adicional sin licencia: 65 m2 / Total: 75 m2"></textarea>
+    </div>
+  </div>
+  <div class="br">
+    <button class="btn btn-o" onclick="ir(2)">&larr; Atras</button>
+    <button class="btn btn-p" onclick="ir(4)">Continuar &rarr;</button>
+  </div>
+</div>
+<div id="p4" class="hidden">
+  <h1 class="ptitle">Art. 135 y datos POT</h1>
+  <p class="psub">Tabla de verificacion y normativa del predio</p>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div><div><div class="ct">Verificacion Art. 135 Ley 1801/2016</div><div class="cst">Literales C y D. Incluir en proyectos mayores de 2.000 m2</div></div></div>
+    <label class="chkblock"><input type="checkbox" id="incluirArt" onchange="toggleArt(this)"><span>Incluir tabla de verificacion en el informe</span></label>
+    <div id="art-table" class="hidden">
+      <table class="tv">
+        <thead><tr>
+          <th style="width:51%">Obligacion / uso</th>
+          <th style="width:11%;text-align:center">Cumple</th>
+          <th style="width:11%;text-align:center">No cumple</th>
+          <th>Observaciones</th>
+        </tr></thead>
+        <tbody><tr class="cbrow"><td colspan="4">Usar o destinar un inmueble a:</td></tr>
+<tr><td>Uso diferente al senalado en la licencia de construccion.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Ubicacion diferente a la senalada en la licencia de construccion.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Contravenir los usos especificos del suelo.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Facilitar el desarrollo de usos no autorizados en licencia o con desconocimiento de normas urbanisticas.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr class="cbrow"><td colspan="4">Incumplir cualquiera de las siguientes obligaciones:</td></tr>
+<tr><td>Destinar lugar interior para guardar materiales y no ocupar el espacio publico.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Proveer unidades sanitarias provisionales para el personal que labora y visita la obra.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Instalar protecciones y senalizacion en frentes y costados de la obra.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Limpiar llantas de vehiculos que salen para evitar barro en el espacio publico.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Limpiar material, cemento y residuos de la obra cuando caigan en el espacio publico.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Retirar andamios, escombros y residuos al terminar o suspender la obra por mas de dos meses.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Exigir el uso de cascos e implementos de seguridad industrial.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Evitar emision de particulas en suspension de materiales de construccion.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Aislar obras aledanas a canales o fuentes de agua para evitar contaminacion.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Reparar danos en el anden, vias, espacios y redes de servicios publicos.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>Reparar danos o perjuicios causados a bienes colindantes o cercanos.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr>
+<tr><td>No demoler, construir o reparar entre las 6 pm y las 8 am ni festivos en zonas residenciales.</td><td style="text-align:center"><select class="sel-c"><option value="">-</option><option>Si</option><option>No</option></select></td><td style="text-align:center"><select class="sel-nc"><option value="">-</option><option>Si</option><option>No</option></select></td><td><input type="text" class="obs-inp" placeholder="Observacion..."></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg></div><div><div class="ct">Consulta norma POT - Acuerdo 033/2009</div><div class="cst">Normativa urbanistica del predio inspeccionado</div></div></div>
+    <div class="fg">
+      <div class="f"><label>Clasificacion del suelo</label>
+        <select id="clasificacion"><option value="">Seleccione</option><option>Urbano</option><option>Rural</option><option>De expansion urbana</option><option>Suburbano</option></select>
+      </div>
+      <div class="f"><label>Poligono de uso del suelo</label><input type="text" id="poligUso" placeholder="R2, C1, M1"></div>
+      <div class="f"><label>Poligono de tratamiento</label>
+        <select id="poligTrat">
+          <option value="">Seleccione</option>
+          <optgroup label="Consolidacion">
+            <option>Consolidacion nivel 1</option>
+            <option>Consolidacion nivel 2</option>
+            <option>Consolidacion nivel 3</option>
+          </optgroup>
+          <optgroup label="Mejoramiento">
+            <option>Mejoramiento integral</option>
+          </optgroup>
+          <optgroup label="Renovacion">
+            <option>Renovacion urbana - redesarrollo</option>
+            <option>Renovacion urbana - reactivacion</option>
+          </optgroup>
+          <optgroup label="Desarrollo">
+            <option>Desarrollo</option>
+          </optgroup>
+          <optgroup label="Conservacion">
+            <option>Conservacion historica</option>
+            <option>Conservacion arquitectonica</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="f"><label>Franja de intensidad</label>
+        <select id="franja">
+          <option value="">Seleccione</option>
+          <option>Franja baja</option>
+          <option>Franja media</option>
+          <option>Franja alta</option>
+          <option>No aplica</option>
+        </select>
+      </div>
+      <div class="f ff"><label>Suelo de proteccion o amenaza</label>
+        <select id="proteccion"><option value="">Seleccione</option><option>No</option><option>Si - amenaza por inundacion</option><option>Si - amenaza por movimiento en masa</option><option>Si - area protegida</option><option>Si - ronda hidrica</option></select>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2zm12 4c0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3 3 1.34 3 3zm-9 8c0-2 4-3.1 6-3.1s6 1.1 6 3.1v1H6v-1z"/></svg></div><div><div class="ct">Hallazgos principales</div><div class="cst">Marque los que aplican</div></div></div>
+    <div class="hlist">
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="ocupacion en antejardín"><span>Ocupacion o intervencion en antejardín</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="construccion sin licencia urbanistica"><span>Construccion sin licencia urbanistica</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="construccion sin sistema estructural sismorresistente"><span>Construccion sin sistema estructural sismorresistente</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="construccion con desconocimiento de la licencia"><span>Construccion con desconocimiento de la licencia</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="eliminacion o cambio de uso de celdas de parqueo"><span>Eliminacion o cambio de uso de celdas de parqueo</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="vanos en muros medianeros no aprobados"><span>Vanos en muros medianeros no aprobados</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="materiales de construccion en espacio publico"><span>Materiales de construccion en espacio publico</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="patologias o fisuras estructurales"><span>Patologias o fisuras estructurales</span></label>
+      <label class="hitem"><input type="checkbox" class="hallazgo" value="uso diferente al senalado en la licencia de construccion"><span>Uso diferente al senalado en la licencia de construccion</span></label>
+    </div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div><div><div class="ct">Comportamientos contrarios - Art. 135 Lit. A y C</div><div class="cst">Marque los que aplican para incluir en conclusiones</div></div></div>
+    <div style="margin-bottom:8px"><small style="font-size:11px;color:#2E5496;font-weight:700">LITERAL A — Comportamientos contra la integridad urbanistica:</small></div>
+    <div class="hlist" style="margin-bottom:14px">
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="A1 - En areas protegidas o afectadas por el plan vial o de infraestructura de servicios publicos domiciliarios, y las destinadas a equipamientos publicos"><span>1. En areas protegidas o afectadas por el plan vial o de infraestructura de servicios publicos domiciliarios, y las destinadas a equipamientos publicos</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="A2 - Con desconocimiento a lo preceptuado en la licencia"><span>2. Con desconocimiento a lo preceptuado en la licencia</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="A3 - En bienes de uso publico y terrenos afectados al espacio publico"><span>3. En bienes de uso publico y terrenos afectados al espacio publico</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="A4 - En terrenos aptos para estas actuaciones, sin licencia o cuando esta hubiere caducado"><span>4. En terrenos aptos para estas actuaciones, sin licencia o cuando esta hubiere caducado</span></label>
+    </div>
+    <div style="margin-bottom:8px"><small style="font-size:11px;color:#2E5496;font-weight:700">LITERAL C — Comportamientos contra el uso del suelo:</small></div>
+    <div class="hlist">
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="C9 - Uso diferente al senalado en la licencia de construccion"><span>9. Uso diferente al senalado en la licencia de construccion</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="C10 - Ubicacion diferente a la senalada en la licencia de construccion"><span>10. Ubicacion diferente a la senalada en la licencia de construccion</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="C11 - Contravenir los usos especificos del suelo"><span>11. Contravenir los usos especificos del suelo</span></label>
+      <label class="hitem"><input type="checkbox" class="comp-ac" value="C12 - Facilitar, en cualquier clase de inmueble, el desarrollo de usos o destinaciones del suelo no autorizados en licencia de construccion o con desconocimiento de las normas urbanisticas sobre usos especificos"><span>12. Facilitar, en cualquier clase de inmueble, el desarrollo de usos o destinaciones del suelo no autorizados en licencia de construccion o con desconocimiento de las normas urbanisticas sobre usos especificos</span></label>
+    </div>
+  </div>
+  <div class="br">
+    <button class="btn btn-o" onclick="ir(3)">&larr; Atras</button>
+    <button class="btn btn-p" onclick="ir(5)">Continuar &rarr;</button>
+  </div>
+</div>
+<div id="p5" class="hidden">
+  <h1 class="ptitle">Generar informe</h1>
+  <p class="psub">Cargue el registro fotografico, revise el resumen y genere el informe F-GGO-43</p>
+
+  <!-- Imagen de localización (sección LOCALIZACIÓN del informe) -->
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><div><div class="ct">Localización</div><div class="cst">Imagen aérea para la sección LOCALIZACIÓN del informe</div></div></div>
+    <div class="nota" style="margin-bottom:12px">
+      Se genera automáticamente una imagen satelital con marcador. Puede <b>reemplazarla</b> con su captura propia de QGIS (con la capa de predios) para mayor precisión.
+    </div>
+    <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <div id="loc-preview" style="background:var(--fondo);border:1px solid var(--borde-med);border-radius:var(--r-sm);min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--texto-3);font-size:12px;overflow:hidden">
+          Esperando dirección…
+        </div>
+      </div>
+      <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:8px">
+        <div id="loc-fuente" style="font-size:12px;color:var(--texto-suave)">—</div>
+        <button class="btn btn-p" onclick="generarMapaLocalizacion()" id="btn-loc-gen">Regenerar mapa automático</button>
+        <label class="btn btn-o" style="text-align:center;cursor:pointer;display:inline-block">
+          📁 Subir captura propia (QGIS)
+          <input type="file" id="input-loc-qgis" accept="image/*" style="display:none" onchange="subirImagenLocalizacion(this)">
+        </label>
+        <button class="btn btn-o" id="btn-loc-restaurar" onclick="borrarImagenLocalizacion()" style="display:none;color:var(--brand-ink);border-color:var(--brand-accent)">Volver al mapa automático</button>
+        <div id="loc-status" style="font-size:11px;color:var(--texto-suave)"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div><div><div class="ct">Registro fotografico</div><div class="cst">Fotos de la subcarpeta <b>Fotos</b> de la visita</div></div></div>
+    <div class="nota" id="fotos-info" style="margin-bottom:12px">
+      Las fotografias se leen automaticamente desde la carpeta Drive de la visita asociada (subcarpeta <b>Fotos</b>). Se incluyen en el informe y dan contexto a la IA.
+      <div id="fotos-aviso-sin-ctx" class="hidden" style="margin-top:6px;color:var(--rojo)"><b>Aviso:</b> abra el generador desde una visita en V6 para cargar fotos.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="cargarFotosDeVisita()" id="btn-cargar-fotos">Cargar fotos de la visita</button>
+      <button class="btn btn-o" onclick="describirFotosConIA()" id="btn-describir-fotos" disabled style="opacity:.5" title="Genera una descripción técnica con IA solo para las fotos sin descripción manual">✨ Describir con IA</button>
+      <span id="fotos-status" style="font-size:11px;color:var(--texto-suave)"></span>
+    </div>
+    <div id="fotos-list"></div>
+  </div>
+
+  <div class="card" id="res-box"><p style="color:var(--texto-3);font-size:12px">Complete los pasos anteriores para ver el resumen.</p></div>
+
+  <div class="br">
+    <button class="btn btn-o" onclick="ir(4)">&larr; Atras</button>
+    <button class="btn btn-p" id="btn-gen" onclick="generarInforme()" style="margin-left:auto">Generar informe</button>
+  </div>
+  <div id="stbox" class="stbox hidden"></div>
+  <div id="dl-status" class="hidden" style="margin-top:10px;font-size:12px;color:var(--texto-suave)"></div>
+  <div id="prev-area" class="hidden">
+    <div class="sep"></div>
+    <p style="font-size:11px;color:var(--texto-suave);margin-bottom:6px">Vista previa del texto generado:</p>
+    <div class="prev-box" id="prev-txt"></div>
+  </div>
+</div>
+</main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script>
+// Webhook único — cambiar aquí si se redeploya Apps Script.
+var WH = 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec';
+
+var BARRIO_COMUNA = {"Los Sauces": "1", "El Cafetal": "1", "La Pradera": "1", "La Esmeralda": "1", "Paris": "1", "La Maruchenga": "1", "Jose Antonio Galan": "1", "Salvador Allende": "1", "Barrio Nuevo": "2", "La Cabanita": "2", "La Cabana": "2", "La Madera": "2", "La Florida": "2", "Gran Avenida": "2", "San Jose Obrero": "2", "Zona Industrial #1": "2", "Villas de Occidente": "3", "Molinares": "3", "San Simon": "3", "Amazonia": "3", "Santa Ana": "3", "Los Bucaros": "3", "Serramonte": "3", "Salento": "3", "Zona Industrial #2": "3", "Suarez": "4", "Puerto Bello": "4", "Rincon Santos": "4", "Central": "4", "Espiritu Santo": "4", "Centro": "4", "Perez": "4", "Nazaret": "4", "La Meseta": "4", "El Rosario": "4", "Andalucia": "4", "Lopez de Mesa": "4", "El Cairo": "4", "La Milagrosa": "4", "El Congolo": "4", "Las Granjas": "4", "Prado": "4", "Manchester": "4", "La Estacion": "4", "Zona Industrial #3": "4", "La Cumbre": "5", "Altavista": "5", "El Carmelo": "5", "Hato Viejo": "5", "El Porvenir": "5", "Briceno": "5", "Buenos Aires": "5", "El Paraiso": "5", "Riachuelos": "5", "Valadares": "5", "El Trapiche": "5", "Aralias": "5", "Urapanes": "5", "La Primavera": "5", "Villa Maria": "5", "Villas de Comfenalco": "5", "Bellavista": "6", "Playa Rica": "6", "San Gabriel": "6", "San Martin": "6", "Villas del Sol": "6", "Tierradentro": "6", "Villa Linda": "6", "Girasoles": "6", "Pachelly": "6", "Los Alpes": "6", "El Ducado": "6", "La Aldea": "6", "La Selva": "7", "El Mirador": "7", "Niquía Bifamiliares": "7", "Altos de Niquía": "7", "Altos de Quitasol": "7", "Ciudad Niquía": "8", "Panamericano": "8", "Ciudadela del Norte": "8", "Terranova": "8", "Hermosa Provincia": "8", "Zona Industrial #4": "8", "La Navarra": "9", "El Trebol": "9", "Guasimalito": "9", "Zona Industrial #5": "9", "La Virginia": "10", "Fontidueno": "10", "La Mina": "10", "Alcala": "10", "Los Ciruelos": "10", "Estacion Primera": "10", "Las Vegas": "10", "La Camila": "10", "Cinco Estrellas": "10", "Marco Fidel Suarez": "10", "Zona Industrial #6": "10", "La Gabriela": "11", "Belvedere": "11", "Acevedo": "11", "Zamora": "11", "Alpes del Norte": "11", "Santa Rita": "11", "Zona Industrial #7": "11", "Vda. Croacia": "12", "Vda. El Pinar": "12"};
+function autoComuna(sel) {
+  var barrio = sel.value;
+  var comunaEl = document.getElementById('comuna');
+  if (!barrio) { comunaEl.value = ''; return; }
+  var c = BARRIO_COMUNA[barrio];
+  if (c) {
+    comunaEl.value = c;
+    comunaEl.style.background = '#DCFCE7';
+    setTimeout(function() { comunaEl.style.background = ''; }, 1200);
+  } else {
+    comunaEl.value = 'Rural (sin comuna)';
+  }
+  guardar && guardar();
+}
+// Mostrar el bloque de modalidades solo si "Licencia de construccion" está marcado
+function toggleModalidades() {
+  var wrap = document.getElementById('modalidad-wrap');
+  if (!wrap) return;
+  var lic = document.querySelector('.tt-chk[value="Licencia de construccion"]');
+  var mostrar = !!(lic && lic.checked);
+  wrap.classList.toggle('hidden', !mostrar);
+  if (!mostrar) {
+    // Limpiar modalidades si el tipo de trámite ya no las requiere
+    document.querySelectorAll('.mod-chk').forEach(function(cb) { cb.checked = false; });
+  }
+}
+
+// Inspectores firmantes — se carga desde la hoja USUARIOS al iniciar.
+// Hardcodeada la lista de quienes firman informes; los demás usuarios
+// del sistema no aparecen aquí.
+var INSPECTORES_FIRMANTES = [
+  'ALEJANDRO HERNANDEZ MUÑOZ',
+  'MAURICIO HERRERA LOPERA',
+  'DANIEL PEDRAZA ARANGO'
+];
+var INSPECTORES_CARGOS = {}; // nombre -> cargo (col D de USUARIOS)
+
+async function cargarInspectoresDesdeBD() {
+  var sel = document.getElementById('inspector');
+  if (!sel) return;
+  try {
+    // Acción pública: solo nombre, cargo y rol — sin hashes ni datos sensibles.
+    var r = await fetch(WH + '?accion=listarInspectoresActivos');
+    var d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Sin datos');
+    var inspectores = d.inspectores || [];
+    sel.innerHTML = '<option value="">Seleccione...</option>';
+    INSPECTORES_FIRMANTES.forEach(function(nombre) {
+      var u = inspectores.find(function(x) {
+        return (x.nombre || '').toString().toUpperCase() === nombre;
+      });
+      if (u) {
+        INSPECTORES_CARGOS[nombre] = u.cargo || 'Inspector';
+        var opt = document.createElement('option');
+        opt.value = nombre; opt.textContent = nombre;
+        sel.appendChild(opt);
+      }
+    });
+    // Si llegó por prefill un nombre que coincide, mantenerlo seleccionado
+    var pendiente = sel.getAttribute('data-prefill');
+    if (pendiente) {
+      sel.value = pendiente;
+      onInspectorChange(sel);
+      sel.removeAttribute('data-prefill');
+    }
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error al cargar — revise conexion</option>';
+    console.warn('cargarInspectoresDesdeBD:', e.message);
+  }
+}
+
+function onInspectorChange(sel) {
+  var nom = sel.value;
+  var cargoEl = document.getElementById('cargo');
+  if (!cargoEl) return;
+  cargoEl.value = INSPECTORES_CARGOS[nom] || '';
+  guardar && guardar();
+}
+
+// ── Mejorar redacción de observaciones (paso 3) ─────────────────
+//  El original queda en #obs; la versión IA aparece en #obs-mejorada
+//  para que el inspector decida cuál usa o si la edita.
+async function mejorarObservaciones() {
+  var obsEl   = document.getElementById('obs');
+  var btn     = document.getElementById('btn-mejorar');
+  var stEl    = document.getElementById('mejorar-status');
+  var card    = document.getElementById('card-obs-mejorada');
+  var outEl   = document.getElementById('obs-mejorada');
+  if (!obsEl || !btn) return;
+
+  var texto = (obsEl.value || '').trim();
+  if (!texto) {
+    stEl.textContent = 'Escriba primero las observaciones antes de mejorarlas.';
+    stEl.style.color = 'var(--rojo)';
+    return;
+  }
+
+  btn.disabled = true;
+  stEl.style.color = 'var(--texto-suave)';
+  stEl.textContent = 'Mejorando redacción con IA...';
+
+  try {
+    var r = await fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ accion: 'mejorarTexto', texto: texto })
+    });
+    var d = await r.json();
+    if (!d.ok || !d.texto) throw new Error(d.error || 'Sin respuesta');
+
+    outEl.value = d.texto.trim();
+    card.classList.remove('hidden');
+    stEl.style.color = 'var(--verde-dark)';
+    stEl.textContent = '✓ Sugerencia generada. Revísela abajo.';
+    // Scroll para que el inspector la vea
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    stEl.style.color = 'var(--rojo)';
+    stEl.textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+function usarVersionMejorada() {
+  var obsEl = document.getElementById('obs');
+  var outEl = document.getElementById('obs-mejorada');
+  var card  = document.getElementById('card-obs-mejorada');
+  var stEl  = document.getElementById('mejorar-status');
+  if (!obsEl || !outEl) return;
+  obsEl.value = outEl.value;
+  card.classList.add('hidden');
+  outEl.value = '';
+  if (stEl) {
+    stEl.style.color = 'var(--verde-dark)';
+    stEl.textContent = '✓ Versión mejorada aplicada al texto en bruto.';
+  }
+  guardar && guardar();
+}
+
+function descartarVersionMejorada() {
+  var outEl = document.getElementById('obs-mejorada');
+  var card  = document.getElementById('card-obs-mejorada');
+  var stEl  = document.getElementById('mejorar-status');
+  if (card) card.classList.add('hidden');
+  if (outEl) outEl.value = '';
+  if (stEl) {
+    stEl.style.color = 'var(--texto-suave)';
+    stEl.textContent = 'Sugerencia descartada.';
+  }
+}
+var paso = 1;
+var tglobal = null;
+function ir(n) {
+  document.getElementById('p' + paso).classList.add('hidden');
+  document.getElementById('p' + n).classList.remove('hidden');
+  for (var i = 1; i <= 5; i++) {
+    var b = document.getElementById('sb' + i);
+    b.classList.remove('active','done');
+    if (i === n) b.classList.add('active');
+    else if (i < n) b.classList.add('done');
+  }
+  paso = n;
+  if (n === 5) buildRes();
+}
+function toggleSinLic(cb) {
+  document.getElementById('lic-fields').classList.toggle('hidden', cb.checked);
+}
+function toggleArt(cb) {
+  document.getElementById('art-table').classList.toggle('hidden', !cb.checked);
+}
+function gv(id) {
+  var el = document.getElementById(id);
+  return el ? (el.value || '') : '';
+}
+function buildRes() {
+  var sinLic = document.getElementById('sinLic').checked;
+  var hs = [], tts = [], mods = [], comps = [];
+  document.querySelectorAll('.hallazgo:checked').forEach(function(c) { hs.push(c.value); });
+  document.querySelectorAll('.tt-chk:checked').forEach(function(c) { tts.push(c.value); });
+  document.querySelectorAll('.mod-chk:checked').forEach(function(c) { mods.push(c.value); });
+  document.querySelectorAll('.comp-ac:checked').forEach(function(c) { comps.push(c.value); });
+  var nFotos = document.querySelectorAll('#fotos-list > div[id^="foto-"]').length;
+  var inclArt = document.getElementById('incluirArt').checked;
+
+  function fila(label, val) {
+    return '<div><small>' + label + '</small><b>' + (val || '&mdash;') + '</b></div>';
+  }
+  function bloque(titulo, contenido) {
+    return '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde)">'
+      + '<small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">' + titulo + '</small>'
+      + contenido + '</div>';
+  }
+  function chips(arr) {
+    if (!arr.length) return '<div style="color:var(--texto-3);font-size:11px;margin-top:6px">Ninguno seleccionado</div>';
+    return '<div class="res-chips">' + arr.map(function(x) { return '<span>' + x + '</span>'; }).join('') + '</div>';
+  }
+
+  var h = '<div style="font-family:var(--font-serif);font-size:20px;font-weight:600;color:var(--texto);letter-spacing:-0.3px">Resumen del caso</div>';
+
+  // ── Datos del caso ─────────────────────────────────────────
+  h += '<div class="res-grid" style="margin-top:14px">';
+  h += fila('Radicado',     gv('numRadicado'));
+  h += fila('Fecha visita', gv('fechaVisita'));
+  h += fila('Inspector',    gv('inspector'));
+  h += fila('Cargo',        gv('cargo'));
+  h += '</div>';
+
+  // ── Ubicación ──────────────────────────────────────────────
+  h += '<div class="res-grid" style="margin-top:10px">';
+  h += fila('Direccion',   gv('direccion'));
+  h += fila('Barrio',      gv('barrio'));
+  h += fila('Comuna',      gv('comuna'));
+  h += fila('Catastral',   gv('catastral'));
+  h += '</div>';
+
+  // ── Licencia ───────────────────────────────────────────────
+  if (sinLic) {
+    h += bloque('Licencia', '<div style="margin-top:6px;font-size:13px;color:var(--texto-2)">No se aporto documentacion urbanistica</div>');
+  } else {
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde)">';
+    h += '<small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Licencia urbanistica</small>';
+    h += '<div class="res-grid" style="margin-top:8px">';
+    h += fila('N resolucion',   gv('numRes'));
+    h += fila('Fecha ejecutoria', gv('fechaEjec'));
+    h += fila('Titular',        gv('titular'));
+    h += fila('Curaduria',      gv('curaduria'));
+    h += fila('Pisos aprobados', gv('pisos'));
+    h += fila('Area aprobada (m2)', gv('areaApro'));
+    h += fila('Sistema estructural', gv('sist'));
+    h += fila('Cubierta',       gv('cubierta'));
+    h += '</div>';
+    if (tts.length)  h += '<div style="margin-top:10px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Tipo de tramite</small>' + chips(tts) + '</div>';
+    if (mods.length) h += '<div style="margin-top:8px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Modalidades</small>' + chips(mods) + '</div>';
+    if (gv('dest'))  h += '<div style="margin-top:10px;font-size:12px;color:var(--texto-2)"><b>Destinaciones aprobadas:</b> ' + gv('dest') + '</div>';
+    h += '</div>';
+  }
+
+  // ── Observaciones / área en contravención ─────────────────
+  if (gv('obs') || gv('areas')) {
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde)">';
+    if (gv('obs')) {
+      h += '<small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Observaciones de campo</small>';
+      var obs = gv('obs');
+      var resumen = obs.length > 280 ? obs.substring(0, 280) + '…' : obs;
+      h += '<div style="margin-top:6px;font-size:12px;color:var(--texto-2);line-height:1.6;white-space:pre-wrap">' + resumen + '</div>';
+    }
+    if (gv('areas')) {
+      h += '<div style="margin-top:10px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Area en contravencion</small>';
+      h += '<div style="margin-top:4px;font-size:13px;color:var(--texto)">' + gv('areas') + '</div></div>';
+    }
+    h += '</div>';
+  }
+
+  // ── POT ────────────────────────────────────────────────────
+  if (gv('clasificacion') || gv('poligUso') || gv('poligTrat') || gv('proteccion')) {
+    h += '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde)">';
+    h += '<small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Norma POT</small>';
+    h += '<div class="res-grid" style="margin-top:8px">';
+    h += fila('Clasificacion suelo', gv('clasificacion'));
+    h += fila('Poligono uso',        gv('poligUso'));
+    h += fila('Poligono tratamiento', gv('poligTrat'));
+    h += fila('Franja intensidad',   gv('franja'));
+    h += '</div>';
+    if (gv('proteccion')) h += '<div style="margin-top:8px;font-size:12px;color:var(--texto-2)"><b>Suelo de proteccion / amenaza:</b> ' + gv('proteccion') + '</div>';
+    h += '</div>';
+  }
+
+  // ── Hallazgos ──────────────────────────────────────────────
+  if (hs.length) h += bloque('Hallazgos (' + hs.length + ')', chips(hs));
+
+  // ── Comportamientos Art. 135 ──────────────────────────────
+  if (comps.length) h += bloque('Comportamientos Art. 135 (' + comps.length + ')', chips(comps));
+
+  // ── Anexos / pie ──────────────────────────────────────────
+  h += '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde);display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--texto-suave)">';
+  h += '<span><b style="color:var(--texto)">' + nFotos + '</b> fotografia' + (nFotos === 1 ? '' : 's') + '</span>';
+  h += '<span>Tabla Art. 135: <b style="color:var(--texto)">' + (inclArt ? 'Si' : 'No') + '</b></span>';
+  h += '<span>Fecha emision: <b style="color:var(--texto)">' + (gv('fechaInforme') || '—') + '</b></span>';
+  h += '</div>';
+
+  document.getElementById('res-box').innerHTML = h;
+}
+function showStatus(tipo, titulo, msg) {
+  var box = document.getElementById('stbox');
+  var bgMap = {load:'var(--brand-bg)', ok:'var(--verde-bg)', er:'var(--rojo-bg)'};
+  var brMap = {load:'var(--brand-accent)', ok:'var(--verde)', er:'var(--rojo)'};
+  var tcMap = {load:'var(--brand-ink)', ok:'var(--verde-dark)', er:'var(--rojo)'};
+  var ic = tipo === 'load' ? '<div class="spin"></div>' : '<span style="font-size:16px;color:'+tcMap[tipo]+'">' + (tipo==='ok'?'&#10003;':'&#10007;') + '</span>';
+  box.style.background = bgMap[tipo];
+  box.style.borderColor = brMap[tipo];
+  box.innerHTML = ic + '<div><div style="font-size:13px;font-weight:600;color:' + tcMap[tipo] + '">' + titulo + '</div><div style="font-size:12px;color:var(--texto-suave);line-height:1.5;margin-top:2px">' + msg + '</div></div>';
+  box.classList.remove('hidden');
+}
+// ── Recolectar el estado del wizard ──────────────────────────────────────────
+//  Lee los inputs/checks del wizard y devuelve un contexto plano sin DOM.
+//  Lo consumen construirPromptF43() y renderDocx() para no tener que tocar
+//  los elementos otra vez.
+function recolectarDatosWizard() {
+  var sinLic = document.getElementById('sinLic').checked;
+  var hs = [], tts = [], mods = [];
+  document.querySelectorAll('.hallazgo:checked').forEach(function(c) { hs.push(c.value); });
+  document.querySelectorAll('.tt-chk:checked').forEach(function(c) { tts.push(c.value); });
+  document.querySelectorAll('.mod-chk:checked').forEach(function(c) { mods.push(c.value); });
+  var tipoTramiteStr = tts.join(', ') || 'No especificado';
+  var modalidadStr   = mods.join(', ') || (tts.indexOf('Licencia de construccion') >= 0 ? 'No especificada' : 'No aplica');
+  var d = {
+    fecha_visita:gv('fechaVisita'), fecha_informe:gv('fechaInforme'),
+    inspector:gv('inspector'), cargo:gv('cargo'),
+    direccion:gv('direccion'), barrio:gv('barrio'), comuna:gv('comuna'),
+    catastral:gv('catastral'),
+    sin_licencia:sinLic,
+    num_res:sinLic?'No se aporto':gv('numRes'),
+    fecha_ejec:sinLic?'No se aporto':gv('fechaEjec'),
+    tipo_tramite:sinLic?'No aplica':tipoTramiteStr,
+    modalidad:sinLic?'No aplica':modalidadStr,
+    titular:sinLic?'No se aporto':gv('titular'),
+    pisos:sinLic?'No se aporto':gv('pisos'),
+    area_apro:sinLic?'No se aporto':gv('areaApro'),
+    sist:sinLic?'No se aporto':gv('sist'),
+    dest:sinLic?'No se aporto':gv('dest'),
+    cubierta:sinLic?'No se aporto':gv('cubierta'),
+    curaduria:sinLic?'No aplica':gv('curaduria'),
+    obs:gv('obs'), areas:gv('areas'), hallazgos:hs,
+    clasificacion:gv('clasificacion'), polig_uso:gv('poligUso'),
+    polig_trat:gv('poligTrat'), franja:gv('franja'), proteccion:gv('proteccion')
+  };
+  var fotoDescs = [];
+  document.querySelectorAll('#fotos-list > div[id^="foto-"]').forEach(function(div) {
+    var desc = (document.getElementById('desc-' + div.id)||{}).value || '';
+    if (desc) fotoDescs.push(desc);
+  });
+  return { d: d, hs: hs, tts: tts, mods: mods, fotoDescs: fotoDescs, sinLic: sinLic };
+}
+
+// ── Construir el prompt para la IA ───────────────────────────────────────────
+//  Solo lógica de texto — no toca DOM. Recibe el ctx de recolectarDatosWizard().
+function construirPromptF43(ctx) {
+  var d = ctx.d, hs = ctx.hs, fotoDescs = ctx.fotoDescs, sinLic = ctx.sinLic;
+  var licNota = sinLic
+    ? 'No se aporto documentacion urbanistica. Indicarlo claramente en antecedentes.'
+    : 'Se aporto licencia. Contrastar en observaciones: aprobado vs hallado en campo.';
+  var hsNota = hs.length ? hs.join(', ') : 'los identificados segun las observaciones';
+  var prompt = 'Eres arquitecto inspector experto en normativa urbanistica de Bello, Antioquia. '
+    + 'Conoces NSR-10, Ley 400/1997, Decreto 1077/2015, Ley 388/1997, Ley 1801/2016, Acuerdo 033/2009 POT, Decreto 193/2011.\n\n'
+    + 'Redacta el informe F-GGO-43. Responde SOLO con JSON valido. Sin texto previo ni markdown.\n\n'
+    + 'DATOS: ' + JSON.stringify(d) + '\n'
+    + 'NOTA LICENCIA: ' + licNota + '\n'
+    + 'HALLAZGOS PRIORITARIOS: ' + hsNota + '\n\n'
+    + 'JSON exacto requerido:\n'
+    + '{"antecedentes":"parrafos separados por \\n","observaciones":"parrafos separados por \\n",'
+    + '"conclusiones_items":["item1","item2"],"recomendaciones_items":["item1","item2"]}\n\n'
+    + 'REGLAS:\n'
+    + '- antecedentes: 2 parrafos, tercera persona, fecha/direccion/origen/objeto de visita\n'
+    + '- observaciones: minimo 3 parrafos tecnicos, contrastar aprobado vs hallado, cerrar con area en contravencion: ' + (d.areas||'segun descripcion') + '\n'
+    + '- conclusiones: orden antejardiin > sin licencia > sin estructura > desconocimiento licencia > demas. Citar Art.135 Ley 1801/2016. Incluir area total.\n'
+    + '- recomendaciones: imperativas, misma prioridad que conclusiones\n'
+    + '- lenguaje formal tecnico, sin puntos suspensivos, sin coloquialismos';
+  if (fotoDescs.length > 0) {
+    prompt += '\n\nDESCRIPCION DE FOTOGRAFIAS DE LA VISITA (usar como contexto adicional para las observaciones):\n';
+    fotoDescs.forEach(function(desc, i) { prompt += (i+1) + '. ' + desc + '\n'; });
+  }
+  return prompt;
+}
+
+// ── Pedir JSON a la IA (webhook → DeepSeek → Claude) ────────────────────────
+//  Devuelve { ok, json } o { ok:false, error }. Las keys viven en backend.
+async function pedirJsonIA(prompt) {
+  try {
+    var r = await fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ accion: 'mejorarTexto', texto: prompt })
+    });
+    var data = await r.json();
+    if (!data.ok || !data.texto) throw new Error(data.error || 'Sin respuesta');
+    var clean = data.texto.replace(/```json/g,'').replace(/```/g,'').trim();
+    return { ok: true, json: JSON.parse(clean) };
+  } catch (e) {
+    console.warn('pedirJsonIA falló:', e.message);
+    return { ok: false, error: e.message };
+  }
+}
+
+// ── Orquestador del wizard ───────────────────────────────────────────────────
+async function generarInforme() {
+  var btn = document.getElementById('btn-gen');
+  btn.disabled = true;
+  document.getElementById('prev-area').classList.add('hidden');
+  showStatus('load', 'Procesando con IA...', 'Conectando con el servidor...');
+
+  var ctx    = recolectarDatosWizard();
+  var prompt = construirPromptF43(ctx);
+
+  showStatus('load', 'Generando informe con IA...', 'DeepSeek → Claude vía webhook...');
+  var ia = await pedirJsonIA(prompt);
+
+  if (!ia.ok) {
+    showStatus('er', 'Error al generar', 'El servicio de IA no respondió: ' + ia.error + '. Intente nuevamente en unos segundos.');
+    btn.disabled = false;
+    return;
+  }
+
+  tglobal = ia.json;
+  tglobal._d = ctx.d;
+  showStatus('ok', 'Informe generado correctamente', 'Revise la vista previa y descargue el Word.');
+  document.getElementById('prev-txt').textContent =
+      '=== ANTECEDENTES ===\n' + tglobal.antecedentes
+    + '\n\n=== OBSERVACIONES ===\n' + tglobal.observaciones
+    + '\n\n=== CONCLUSIONES ===\n' + tglobal.conclusiones_items.map(function(c,i){return (i+1)+'. '+c;}).join('\n')
+    + '\n\n=== RECOMENDACIONES ===\n' + tglobal.recomendaciones_items.map(function(r,i){return (i+1)+'. '+r;}).join('\n');
+  document.getElementById('prev-area').classList.remove('hidden');
+  // Descarga + subida automática para no requerir un segundo clic.
+  setTimeout(function() {
+    try { descargarDocx(); } catch(eDl) { console.warn('descargarDocx auto:', eDl.message); }
+  }, 300);
+  btn.disabled = false;
+}
+function fmtFecha(iso) {
+  if (!iso) return 'N/D';
+  var p = iso.split('-');
+  var m = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return parseInt(p[2]) + ' de ' + m[parseInt(p[1])-1] + ' de ' + p[0];
+}
+// ── Construcción del .docx F-GGO-43 ──────────────────────────────────────────
+//  Toma el JSON de la IA (tglobal con sus secciones) + datos del wizard
+//  (en tglobal._d) y devuelve un Blob listo para descargar o subir a Drive.
+//  Lee del DOM solo lo estrictamente UI (checkbox de Art.135 y filas de su
+//  tabla) — el resto vive en tglobal.
+async function renderDocx(tglobal) {
+  var d = tglobal._d;
+  var sl = d.sin_licencia;
+  var D = docx;
+  var PAG_W = 12240, PAG_H = 15840;
+  var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
+  var CONT = PAG_W - MAR_L - MAR_R;
+  var FILL_HEADER = 'A6A6A6';
+  var FONT = 'Arial';
+  var SZ_NORMAL = 22;
+  var SZ_SMALL = 20;
+  var SZ_TINY = 18;
+  var N = '000000', W = 'FFFFFF';
+  function bSingle(c, sz) {
+    return {style: D.BorderStyle.SINGLE, size: sz||4, color: c||'auto'};
+  }
+  function bAll(c) {
+    var b = bSingle(c);
+    return {top:b, bottom:b, left:b, right:b};
+  }
+  function bNone() {
+    var b = {style:D.BorderStyle.NONE, size:0, color:'auto'};
+    return {top:b, bottom:b, left:b, right:b};
+  }
+  function mkP(runs, opts) {
+    opts = opts||{};
+    return new D.Paragraph({
+      alignment: opts.jc || D.AlignmentType.BOTH,
+      spacing: {after: opts.spAfter!==undefined ? opts.spAfter : 200, line:276, lineRule:D.LineRuleType.AUTO},
+      numbering: opts.numRef ? {reference:opts.numRef, level:0} : undefined,
+      children: Array.isArray(runs) ? runs : [runs]
+    });
+  }
+  function mkR(text, opts) {
+    opts = opts||{};
+    return new D.TextRun({
+      text: String(text||''),
+      font: FONT,
+      size: opts.sz || SZ_NORMAL,
+      bold: opts.bold||false,
+      italics: opts.it||false,
+      color: opts.color||N
+    });
+  }
+  function p(text, opts) {
+    opts = opts||{};
+    return mkP(mkR(text, opts), opts);
+  }
+  function pTitle(text) {
+    return p(text, {bold:true, jc:D.AlignmentType.BOTH, spAfter:200});
+  }
+  function pNum(text) {
+    return new D.Paragraph({
+      numbering: {reference:'nums', level:0},
+      spacing: {after:200, line:276, lineRule:D.LineRuleType.AUTO},
+      children: [mkR(text)]
+    });
+  }
+  function mkCell(text, opts) {
+    opts = opts||{};
+    var fill = opts.fill||null;
+    return new D.TableCell({
+      width: opts.w ? {size:opts.w, type:D.WidthType.DXA} : undefined,
+      borders: opts.borders || bAll('auto'),
+      shading: fill ? {fill:fill, type:D.ShadingType.CLEAR} : undefined,
+      margins: {top:0, bottom:0, left:70, right:70},
+      verticalAlign: D.VerticalAlign.CENTER,
+      columnSpan: opts.span||undefined,
+      children: [new D.Paragraph({
+        alignment: opts.jc || D.AlignmentType.LEFT,
+        spacing: {after:0},
+        children: [mkR(text, {sz:opts.sz||SZ_NORMAL, bold:opts.bold||false, color:opts.color||N})]
+      })]
+    });
+  }
+  var header = new D.Header({children:[
+    p('INFORME TECNICO DE VIGILANCIA Y CONTROL', {bold:true, jc:D.AlignmentType.CENTER, spAfter:0}),
+    p('Secretaria de Seguridad y Convivencia Ciudadana', {jc:D.AlignmentType.CENTER, spAfter:0})
+  ]});
+  var footer = new D.Footer({children:[
+    new D.Paragraph({
+      spacing:{after:0},
+      children:[
+        mkR('Codigo : F-GGO-43', {sz:18}),
+        mkR('     Version: 01', {sz:18}),
+        mkR('     Fecha de aprobacion: 2026/03/10', {sz:18}),
+        mkR('     Pagina ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.CURRENT], font:FONT, size:18}),
+        mkR(' de ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:18})
+      ]
+    })
+  ]});
+  var LIC_C1 = 3820, LIC_C2 = 5180;
+  var licRows = [
+    new D.TableRow({children:[
+      mkCell('RESUMEN DE LO APROBADO POR CURADURIA:', {w:LIC_C1+LIC_C2, fill:FILL_HEADER, bold:true, sz:SZ_SMALL, span:2})
+    ]})
+  ];
+  var licItems = [
+    ['N de resolucion:', d.num_res],
+    ['Fecha de ejecutoria:', d.fecha_ejec],
+    ['Tipo de tramite:', d.tipo_tramite],
+    ['Modalidad de licencia:', d.modalidad],
+    ['Titular de la licencia:', d.titular],
+    ['N de pisos aprobados:', d.pisos],
+    ['Destinaciones aprobadas:', d.dest],
+    ['Especificaciones de la cubierta:', d.cubierta],
+    ['Area aprobada: (Segun uso)', d.area_apro],
+    ['Sistema estructural aprobado:', d.sist]
+  ];
+  licItems.forEach(function(it) {
+    licRows.push(new D.TableRow({children:[
+      mkCell(it[0], {w:LIC_C1, bold:true, sz:SZ_SMALL}),
+      mkCell(it[1]||'', {w:LIC_C2, sz:SZ_SMALL})
+    ]}));
+  });
+  var licTable = new D.Table({width:{size:LIC_C1+LIC_C2, type:D.WidthType.DXA}, columnWidths:[LIC_C1,LIC_C2], rows:licRows});
+  var A1=3510,A2=993,A3=992,A4=3572;
+  var inclArt = document.getElementById('incluirArt').checked;
+  var artRows = [];
+  if (inclArt) {
+    artRows.push(new D.TableRow({children:[
+      mkCell('Usar o destinar un inmueble a:', {w:A1, bold:true, sz:SZ_TINY}),
+      mkCell('Cumple', {w:A2, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+      mkCell('No Cumple', {w:A3, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+      mkCell('Observaciones', {w:A4, bold:true, sz:SZ_TINY})
+    ]}));
+    document.querySelectorAll('#art-table tbody tr').forEach(function(tr) {
+      if (tr.classList.contains('cbrow')) {
+        var txt = tr.querySelector('td').textContent.trim();
+        artRows.push(new D.TableRow({children:[mkCell(txt, {w:A1+A2+A3+A4, bold:true, sz:SZ_TINY, span:4})]}));
+      } else {
+        var tds = tr.querySelectorAll('td');
+        var sels = tr.querySelectorAll('select');
+        var inp = tr.querySelector('input[type=text]');
+        artRows.push(new D.TableRow({children:[
+          mkCell(tds[0]?tds[0].textContent.trim():'', {w:A1, sz:SZ_TINY}),
+          mkCell(sels[0]?sels[0].value:'', {w:A2, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+          mkCell(sels[1]?sels[1].value:'', {w:A3, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+          mkCell(inp?inp.value:'', {w:A4, sz:SZ_TINY})
+        ]}));
+      }
+    });
+  }
+  var FOTO_W = 9057;
+  var fotoChildren = [];
+  [1,2,3,4,5,6].forEach(function(n) {
+    fotoChildren.push(new D.Paragraph({
+      spacing:{after:100},
+      children:[mkR('Fotografia '+n+'. ', {bold:true, sz:SZ_SMALL}), mkR('(Descripcion)', {it:true, color:'888888', sz:SZ_SMALL})]
+    }));
+  });
+  var fotoTable = new D.Table({
+    width:{size:FOTO_W, type:D.WidthType.DXA}, columnWidths:[FOTO_W],
+    rows:[new D.TableRow({children:[new D.TableCell({
+      width:{size:FOTO_W,type:D.WidthType.DXA},
+      borders:bAll('auto'), margins:{top:0,bottom:0,left:70,right:70},
+      children:fotoChildren
+    })]})]
+  });
+  var P1=3690, P2=5205;
+  var potRows = [
+    new D.TableRow({children:[
+      mkCell('CONSULTA NORMA DEL PREDIO SEGUN POT', {w:P1+P2, fill:FILL_HEADER, bold:true, sz:SZ_SMALL, span:2})
+    ]}),
+    new D.TableRow({children:[mkCell('Clasificacion general del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.clasificacion||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Poligono uso del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_uso||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Poligono de tratamiento:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_trat||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Franja de intensidad:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.franja||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Suelo de proteccion o amenaza:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.proteccion||'', {w:P2, sz:SZ_SMALL})]})
+  ];
+  var potTable = new D.Table({width:{size:P1+P2, type:D.WidthType.DXA}, columnWidths:[P1,P2], rows:potRows});
+  var antecParrs = tglobal.antecedentes.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
+  var obsParrs   = tglobal.observaciones.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
+  var concItems  = tglobal.conclusiones_items.map(function(c){return pNum(c);});
+  var recItems   = tglobal.recomendaciones_items.map(function(r){return pNum(r);});
+  var conclusIntro = sl
+    ? 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, se concluye:'
+    : 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, y del analisis de los planos aprobados mediante '+d.num_res+' expedida por '+d.curaduria+', se concluye:';
+  var licBlock = sl
+    ? [p('(No se aporto documentacion urbanistica que ampare las obras o intervenciones presentes en el inmueble inspeccionado.)', {it:true})]
+    : [licTable];
+  var artBlock = [];
+  if (inclArt) {
+    artBlock = [
+      p(''),
+      pTitle('VERIFICACION OBLIGACIONES LITERALES C y D ARTICULO 135 LEY 1801 DE 2016'),
+      p('(Incluir en proyectos que sea necesario realizar la revision, especialmente proyectos de mas de 2000m2)', {it:true}),
+      new D.Table({width:{size:A1+A2+A3+A4,type:D.WidthType.DXA}, columnWidths:[A1,A2,A3,A4], rows:artRows})
+    ];
+  }
+  var children = [
+    p('Bello, ' + fmtFecha(d.fecha_informe)),
+    p(''),
+    p(''),
+    p('SECRETARIA DE SEGURIDAD Y CONVIVENCIA CIUDADANA', {bold:true, jc:D.AlignmentType.CENTER}),
+    p('SUBSECRETARIA DE GOBERNABILIDAD', {bold:true, jc:D.AlignmentType.CENTER}),
+    p('INSPECCION N 9 DE CONVIVENCIA CON FUNCIONES DE CONTROL URBANO', {bold:true, jc:D.AlignmentType.CENTER}),
+    p(''),
+    p(''),
+    pTitle('ANTECEDENTES.')
+  ]
+  .concat(antecParrs)
+  .concat([p('')])
+  .concat([
+    (function() {
+      // Construir celda LOCALIZACIÓN. Si hay imagen (locImg.base64) la inserta;
+      // si no, deja el placeholder original para que el inspector la pegue
+      // manualmente en Word.
+      function base64ToBytes(b64) {
+        var bin = atob(b64);
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return arr;
+      }
+      var celdaImg1Children;
+      if (locImg.base64) {
+        var fuenteTxt = locImg.fuente === 'qgis'
+          ? 'Imagen 1. Localización de la edificación. (Imagen tomada de QGIS)'
+          : 'Imagen 1. Localización de la edificación. (Imagen tomada de Google Maps)';
+        celdaImg1Children = [
+          new D.Paragraph({
+            alignment: D.AlignmentType.CENTER,
+            spacing: { after: 80 },
+            children: [new D.ImageRun({
+              data: base64ToBytes(locImg.base64),
+              transformation: { width: 540, height: 340 }
+            })]
+          }),
+          new D.Paragraph({
+            alignment: D.AlignmentType.CENTER,
+            spacing: { after: 120 },
+            children: [mkR(fuenteTxt, { it: true, sz: SZ_SMALL })]
+          })
+        ];
+      } else {
+        celdaImg1Children = [
+          new D.Paragraph({
+            spacing: { after: 200 },
+            alignment: D.AlignmentType.CENTER,
+            children: [mkR('Imagen 1. Localizacion de la edificacion. (Insertar imagen)', { it: true, color: '888888', sz: SZ_SMALL })]
+          })
+        ];
+      }
+      return new D.Table({
+        width: { size: 9073, type: D.WidthType.DXA }, columnWidths: [9073],
+        rows: [
+          new D.TableRow({ children: [mkCell('LOCALIZACION', { w: 9073, fill: FILL_HEADER, bold: true, jc: D.AlignmentType.CENTER })] }),
+          new D.TableRow({ children: [new D.TableCell({ width: { size: 9073, type: D.WidthType.DXA }, borders: bAll('auto'), margins: { top: 0, bottom: 0, left: 70, right: 70 }, children: celdaImg1Children })] }),
+          new D.TableRow({ children: [new D.TableCell({ width: { size: 9073, type: D.WidthType.DXA }, borders: bAll('auto'), margins: { top: 0, bottom: 0, left: 70, right: 70 }, children: [
+            new D.Paragraph({ spacing: { after: 200 }, alignment: D.AlignmentType.CENTER, children: [mkR('Imagen 2. (Opcional)', { it: true, color: '888888', sz: SZ_SMALL })] })
+          ] })] })
+        ]
+      });
+    })()
+  ])
+  .concat([p('')])
+  .concat(licBlock)
+  .concat([
+    p('(Eliminar en caso de no contar con licencia)', {it:true, jc:D.AlignmentType.CENTER}),
+    p(''),
+    pTitle('OBSERVACIONES DE CAMPO.')
+  ])
+  .concat(obsParrs)
+  .concat(artBlock)
+  .concat([
+    p(''), p(''), p(''),
+    fotoTable,
+    p('(Incluir cuantas requiera)', {it:true}),
+    p(''),
+    pTitle('CONCLUSIONES.'),
+    p('Acorde con lo establecido en el Plan de Ordenamiento Territorial Acuerdo 033 de 2009, la ubicacion del predio posee la siguiente normatividad:'),
+    potTable,
+    p(''),
+    p(conclusIntro)
+  ])
+  .concat(concItems)
+  .concat([
+    p('(Incluir cuantos numerales requiera)', {it:true}),
+    p(''),
+    pTitle('RECOMENDACIONES')
+  ])
+  .concat(recItems)
+  .concat([
+    p('(Incluir cuantos numerales requiera)', {it:true}),
+    p(''), p(''),
+    p('Atentamente,'),
+    p(''), p(''), p(''),
+    p(d.inspector||'NOMBRE', {bold:true}),
+    p(d.cargo||'Cargo')
+  ]);
+  var doc = new D.Document({
+    numbering:{config:[{reference:'nums',levels:[{level:0,format:D.LevelFormat.DECIMAL,text:'%1.',alignment:D.AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}]},
+    styles:{default:{document:{run:{font:FONT, size:SZ_NORMAL}}, paragraph:{run:{font:FONT, size:SZ_NORMAL}}}},
+    sections:[{
+      properties:{page:{size:{width:PAG_W, height:PAG_H}, margin:{top:MAR_T, right:MAR_R, bottom:MAR_B, left:MAR_L, header:426, footer:120}}},
+      headers:{default:header},
+      footers:{default:footer},
+      children:children
+    }]
+  });
+  var buf = await D.Packer.toBuffer(doc);
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+// ── Descargar .docx local + subirlo a Drive de la visita (si aplica) ────────
+//  Orquestador delgado: usa renderDocx() para el binario y dispara los dos
+//  efectos (descarga + upload). Mantiene tglobal como fuente de verdad.
+async function descargarDocx() {
+  if (!tglobal) { alert('Primero genere el informe.'); return; }
+  var d = tglobal._d;
+  try {
+    var blob = await renderDocx(tglobal);
+    var nombre = 'F-GGO-43_' + (d.direccion||'informe').replace(/[^a-zA-Z0-9]/g,'_').substring(0,25) + '_' + (d.fecha_visita||'sin_fecha') + '.docx';
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    // Subida a Drive solo cuando se abrió desde V6 con visita asociada.
+    if (V6_CTX.fila && V6_CTX.idCarpeta) {
+      var dlSt = document.getElementById('dl-status');
+      if (dlSt) {
+        dlSt.textContent = 'Subiendo informe a Drive...';
+        dlSt.classList.remove('hidden');
+        dlSt.style.color = 'var(--texto-suave)';
+      }
+      var link = await subirInformeAlDrive(blob);
+      if (dlSt) {
+        if (link) {
+          dlSt.innerHTML = '✓ Informe subido a Drive y registrado en BD. <a href="'+link+'" target="_blank" style="color:var(--brand-accent)">Ver archivo</a>';
+          dlSt.style.color = 'var(--verde-dark)';
+        } else {
+          dlSt.textContent = 'Word descargado localmente. (No se pudo subir a Drive.)';
+          dlSt.style.color = 'var(--amarillo)';
+        }
+      }
+    }
+  } catch (e) {
+    showStatus('er', 'Error generando Word', e.message);
+  }
+}
+var CAMPOS = [
+  'fechaVisita','fechaInforme','inspector','cargo',
+  'numRadicado','direccion','barrio','comuna','catastral',
+  'numRes','fechaEjec','titular',
+  'pisos','areaApro','sist','dest','cubierta','curaduria',
+  'obs','areas',
+  'clasificacion','poligUso','poligTrat','franja','proteccion'
+];
+var CHECKS = ['sinLic','incluirArt','esDiligencia'];
+// Grupos de checkboxes — se persisten y restauran por separado
+var CHK_GROUPS = [
+  { sel: '.tt-chk',     key: 'tipos_tramite' },
+  { sel: '.mod-chk',    key: 'modalidades'   },
+  { sel: '.hallazgo',   key: 'hallazgos'     },
+  { sel: '.comp-ac',    key: 'comp_ac'       }
+];
+function guardar() {
+  var data = {};
+  CAMPOS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) data[id] = el.value;
+  });
+  CHECKS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) data[id] = el.checked;
+  });
+  CHK_GROUPS.forEach(function(g) {
+    var arr = [];
+    document.querySelectorAll(g.sel + ':checked').forEach(function(c) { arr.push(c.value); });
+    data[g.key] = arr;
+  });
+  try { localStorage.setItem('fggo43_datos', JSON.stringify(data)); } catch(e) {}
+}
+function cargar() {
+  var raw;
+  try { raw = localStorage.getItem('fggo43_datos'); } catch(e) {}
+  if (!raw) return;
+  var data;
+  try { data = JSON.parse(raw); } catch(e) { return; }
+  CAMPOS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && data[id] !== undefined) el.value = data[id];
+  });
+  CHECKS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el && data[id] !== undefined) {
+      el.checked = data[id];
+      if (id === 'sinLic') toggleSinLic(el);
+      if (id === 'incluirArt') toggleArt(el);
+    }
+  });
+  CHK_GROUPS.forEach(function(g) {
+    var vals = data[g.key];
+    if (vals && vals.length) {
+      document.querySelectorAll(g.sel).forEach(function(cb) {
+        cb.checked = vals.indexOf(cb.value) >= 0;
+      });
+    }
+  });
+  toggleModalidades();
+}
+function nuevoInforme() {
+  if (!confirm('¿Crear un nuevo informe? Se borraran todos los datos actuales.')) return;
+  try { localStorage.removeItem('fggo43_datos'); } catch(e) {}
+  CAMPOS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  CHECKS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.checked = false; toggleSinLic && el.id==='sinLic' && toggleSinLic(el); toggleArt && el.id==='incluirArt' && toggleArt(el); }
+  });
+  document.querySelectorAll('.hallazgo,.mod-chk,.comp-ac,.tt-chk').forEach(function(cb) { cb.checked = false; });
+  document.querySelectorAll('.sel-c,.sel-nc').forEach(function(sel) { sel.value = ''; });
+  document.querySelectorAll('.obs-inp').forEach(function(inp) { inp.value = ''; });
+  document.getElementById('fotos-list').innerHTML = '';
+  fotoCount = 0;
+  var dl = document.getElementById('dl-status');
+  if (dl) { dl.textContent=''; dl.classList.add('hidden'); }
+  var prev = document.getElementById('prev-area');
+  if (prev) prev.classList.add('hidden');
+  tglobal = null;
+  var hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('fechaVisita').value = hoy;
+  document.getElementById('fechaInforme').value = hoy;
+  ir(1);
+}
+var fotoCount = 0;
+
+// ── Cargar fotos desde la carpeta Drive de la visita ─────────────────────────
+//  Solo lista y crea tarjetas. El analisis IA es opcional (boton "Describir
+//  con IA") y el inspector puede editar descripciones y reordenar manualmente.
+async function cargarFotosDeVisita() {
+  var btn    = document.getElementById('btn-cargar-fotos');
+  var status = document.getElementById('fotos-status');
+  if (!V6_CTX.idCarpeta) {
+    var aviso = document.getElementById('fotos-aviso-sin-ctx');
+    if (aviso) aviso.classList.remove('hidden');
+    status.textContent = 'No hay visita asociada.';
+    status.style.color = 'var(--rojo)';
+    return;
+  }
+  btn.disabled = true;
+  status.style.color = 'var(--texto-suave)';
+  status.textContent = 'Buscando subcarpeta Fotos...';
+  try {
+    var rIds = await fetch(WH + '?accion=obtenerIdFotos&idCarpeta=' + encodeURIComponent(V6_CTX.idCarpeta));
+    var dIds = await rIds.json();
+    if (!dIds.ok || !dIds.idFotos) throw new Error(dIds.error || 'Subcarpeta Fotos no encontrada');
+
+    status.textContent = 'Listando fotos...';
+    var rList = await fetch(WH + '?accion=listarFotosActa&idCarpeta=' + encodeURIComponent(dIds.idFotos));
+    var dList = await rList.json();
+    if (!dList.ok) throw new Error(dList.error || 'No se pudo listar fotos');
+    var fotos = dList.fotos || [];
+    if (fotos.length === 0) {
+      status.textContent = 'La subcarpeta Fotos esta vacia.';
+      status.style.color = 'var(--amarillo)';
+      btn.disabled = false;
+      return;
+    }
+
+    document.getElementById('fotos-list').innerHTML = '';
+    fotoCount = 0;
+    fotos.forEach(function(f) {
+      var thumbUrl = 'https://drive.google.com/thumbnail?id=' + f.id + '&sz=w400';
+      crearTarjetaFoto({ url: thumbUrl, descripcion: '', fileId: f.id });
+    });
+    status.textContent = fotos.length + ' fotos cargadas. Use ↑↓ para reordenar, "Describir con IA" para autocompletar.';
+    status.style.color = 'var(--verde-dark)';
+    var btnIA = document.getElementById('btn-describir-fotos');
+    if (btnIA) { btnIA.disabled = false; btnIA.style.opacity = '1'; }
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message;
+    status.style.color = 'var(--rojo)';
+  }
+  btn.disabled = false;
+}
+
+// ── Analisis IA bajo demanda ─────────────────────────────────────────────────
+//  Recorre las tarjetas actuales (en el orden visual del DOM) y dispara
+//  describirFotoDesdeId en serie. Solo escribe descripciones vacias para no
+//  pisar las que el inspector haya editado a mano.
+async function describirFotosConIA() {
+  var btn    = document.getElementById('btn-describir-fotos');
+  var status = document.getElementById('fotos-status');
+  var tarjetas = document.querySelectorAll('#fotos-list > div[id^="foto-"]');
+  if (tarjetas.length === 0) {
+    status.textContent = 'Cargue primero las fotos de la visita.';
+    status.style.color = 'var(--amarillo)';
+    return;
+  }
+  btn.disabled = true;
+  var ok = 0, total = tarjetas.length;
+  for (var i = 0; i < tarjetas.length; i++) {
+    var tid    = tarjetas[i].id;
+    var descEl = document.getElementById('desc-' + tid);
+    var fidEl  = document.getElementById('fid-' + tid);
+    if (!fidEl || !fidEl.value) continue;
+    if (descEl && descEl.value.trim()) continue; // no pisar lo escrito por el inspector
+    status.style.color = 'var(--texto-suave)';
+    status.textContent = 'Analizando con IA ' + (i + 1) + '/' + total + '...';
+    try {
+      var r = await fetch(WH + '?accion=describirFotoDesdeId&fileId=' + encodeURIComponent(fidEl.value));
+      var d = await r.json();
+      if (d.ok && d.descripcion && descEl) {
+        descEl.value = d.descripcion;
+        descEl.dispatchEvent(new Event('change'));
+        ok++;
+      }
+    } catch (e) {
+      console.warn('describir foto fallo:', e.message);
+    }
+  }
+  status.textContent = ok + ' descripciones generadas con IA. Puede editarlas.';
+  status.style.color = 'var(--verde-dark)';
+  btn.disabled = false;
+}
+
+// ── Reordenar tarjetas en el DOM ─────────────────────────────────────────────
+//  generarInforme y descargarDocx iteran #fotos-list con querySelectorAll,
+//  que respeta orden de DOM. Mover el nodo cambia el orden funcional sin
+//  renumerar IDs.
+function moverFoto(divId, direccion) {
+  var div = document.getElementById(divId);
+  if (!div) return;
+  var parent = div.parentNode;
+  if (direccion === 'arriba' && div.previousElementSibling) {
+    parent.insertBefore(div, div.previousElementSibling);
+  } else if (direccion === 'abajo' && div.nextElementSibling) {
+    parent.insertBefore(div.nextElementSibling, div);
+  }
+}
+
+// ── Tarjetas de foto ─────────────────────────────────────────────────────────
+//  Todas las tarjetas se crean desde Drive de la visita.
+//  IDs generados (foto-N, url-N, desc-N) los consume generarInforme / descargarDocx.
+function crearTarjetaFoto(opts) {
+  opts = opts || {};
+  var url    = opts.url || '';
+  var desc   = opts.descripcion || '';
+  var fileId = opts.fileId || '';
+
+  fotoCount++;
+  var n  = fotoCount;
+  var id = 'foto-' + n;
+
+  var div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'border:1px solid #DDE2EC;border-radius:8px;padding:12px 14px;margin-bottom:8px;background:#F4F6FA;display:flex;gap:12px;align-items:flex-start';
+
+  // Thumbnail
+  var thumb = document.createElement('div');
+  thumb.style.cssText = 'flex-shrink:0;width:80px;height:60px;background:#E5E7EB;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center';
+  if (url) {
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+    img.onerror = function() { thumb.innerHTML = '<span style="font-size:20px">&#128247;</span>'; };
+    thumb.appendChild(img);
+  } else {
+    thumb.innerHTML = '<span style="font-size:20px">&#128247;</span>';
+  }
+  div.appendChild(thumb);
+
+  // Campos
+  var fields = document.createElement('div');
+  fields.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:6px';
+  div.appendChild(fields);
+
+  // Header: etiqueta + botones de orden + boton eliminar
+  var row1 = document.createElement('div');
+  row1.style.cssText = 'display:flex;align-items:center;gap:8px';
+  var lbl = document.createElement('span');
+  lbl.style.cssText = 'font-size:12px;font-weight:700;color:#1F3864';
+  lbl.textContent = 'Foto ' + n;
+  row1.appendChild(lbl);
+
+  // Botones de reordenamiento — el orden lo dicta el DOM, no los IDs
+  var ordenWrap = document.createElement('span');
+  ordenWrap.style.cssText = 'margin-left:auto;display:inline-flex;gap:4px';
+  function btnOrden(simbolo, dir, titulo) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.title = titulo;
+    b.textContent = simbolo;
+    b.style.cssText = 'background:#E5E7EB;border:none;color:#1F3864;font-size:12px;width:24px;height:24px;border-radius:5px;cursor:pointer;line-height:1';
+    b.onclick = function() { moverFoto(id, dir); };
+    return b;
+  }
+  ordenWrap.appendChild(btnOrden('↑', 'arriba', 'Subir'));
+  ordenWrap.appendChild(btnOrden('↓', 'abajo', 'Bajar'));
+  row1.appendChild(ordenWrap);
+
+  var delBtn = document.createElement('button');
+  delBtn.style.cssText = 'background:transparent;border:none;color:#dc2626;font-size:11px;cursor:pointer';
+  delBtn.textContent = 'Eliminar';
+  delBtn.onclick = function() { div.remove(); };
+  row1.appendChild(delBtn);
+  fields.appendChild(row1);
+
+  // URL e ID hidden (los consume generarInforme / descargarDocx)
+  var urlHidden = document.createElement('input');
+  urlHidden.type  = 'hidden';
+  urlHidden.id    = 'url-' + id;
+  urlHidden.value = url;
+  fields.appendChild(urlHidden);
+  if (fileId) {
+    var fidHidden = document.createElement('input');
+    fidHidden.type  = 'hidden';
+    fidHidden.id    = 'fid-' + id;
+    fidHidden.value = fileId;
+    fields.appendChild(fidHidden);
+  }
+
+  // Descripción
+  var descField = document.createElement('div');
+  descField.className = 'f';
+  var descLabel = document.createElement('label');
+  descLabel.textContent = 'Descripcion';
+  var descInput = document.createElement('input');
+  descInput.type = 'text';
+  descInput.id    = 'desc-' + id;
+  descInput.value = desc;
+  descInput.placeholder = 'Que muestra esta fotografia (se autocompleta con IA)';
+  descField.appendChild(descLabel);
+  descField.appendChild(descInput);
+  fields.appendChild(descField);
+
+  document.getElementById('fotos-list').appendChild(div);
+}
+// MAPS_KEY: vive en cliente solo para Maps Static (preview de localización).
+var MAPS_KEY = 'AIzaSyDGVJDtuoFiG3wti16Dybvh2jUCPRvY3lg';
+
+// ── Imagen de localización para la sección LOCALIZACIÓN del docx ────────────
+//  Estrategia:
+//   - Si hay V6_CTX.lat/lon (de la BD), centra el mapa ahí (más preciso).
+//   - Si no, geocodifica por dirección + barrio + Bello.
+//   - Descarga el PNG → base64 para insertarlo en el docx.
+//   - Si el inspector sube una captura propia (típicamente desde QGIS con la
+//     capa de predios), esa imagen reemplaza al mapa automático.
+function setLocPreview(dataUrl, fuenteLabel) {
+  var preview = document.getElementById('loc-preview');
+  if (!preview) return;
+  preview.innerHTML = '';
+  if (dataUrl) {
+    var img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.cssText = 'max-width:100%;display:block;border-radius:var(--r-sm)';
+    preview.appendChild(img);
+  } else {
+    preview.textContent = 'Sin imagen';
+  }
+  var fuenteEl = document.getElementById('loc-fuente');
+  if (fuenteEl) fuenteEl.textContent = 'Fuente: ' + (fuenteLabel || '—');
+  // Mostrar el botón "Volver al mapa automático" solo si la fuente es QGIS
+  var btnRestaurar = document.getElementById('btn-loc-restaurar');
+  if (btnRestaurar) btnRestaurar.style.display = (locImg.fuente === 'qgis') ? 'inline-block' : 'none';
+}
+
+async function generarMapaLocalizacion() {
+  var statusEl = document.getElementById('loc-status');
+  var btn      = document.getElementById('btn-loc-gen');
+  if (statusEl) { statusEl.style.color = 'var(--texto-suave)'; statusEl.textContent = ''; }
+  if (btn) btn.disabled = true;
+
+  try {
+    var center;
+    if (V6_CTX.lat && V6_CTX.lon) {
+      center = V6_CTX.lat + ',' + V6_CTX.lon;
+    } else {
+      var dir = gv('direccion');
+      if (!dir) throw new Error('Ingrese una dirección o pase coordenadas');
+      var barrio = gv('barrio');
+      center = encodeURIComponent(dir + (barrio ? ', ' + barrio : '') + ', Bello, Antioquia, Colombia');
+    }
+    var url = 'https://maps.googleapis.com/maps/api/staticmap'
+      + '?center=' + center
+      + '&zoom=18&size=800x500&maptype=satellite&scale=2'
+      + '&markers=color:red%7Clabel:P%7C' + center
+      + '&key=' + MAPS_KEY;
+
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('Maps HTTP ' + res.status);
+    var blob = await res.blob();
+    var b64  = await new Promise(function(resolve, reject) {
+      var r = new FileReader();
+      r.onload  = function(e) { resolve(e.target.result); };
+      r.onerror = function() { reject(new Error('No se pudo leer la imagen')); };
+      r.readAsDataURL(blob);
+    });
+    var partes = b64.split(',');
+    locImg.fuente      = 'maps';
+    locImg.base64      = partes.length > 1 ? partes[1] : '';
+    locImg.mimeType    = blob.type || 'image/png';
+    locImg.fuenteLabel = 'Google Maps satelital';
+    setLocPreview(b64, locImg.fuenteLabel);
+    if (statusEl) { statusEl.style.color = 'var(--verde-dark)'; statusEl.textContent = '✓ Mapa generado'; }
+  } catch (e) {
+    if (statusEl) { statusEl.style.color = 'var(--rojo)'; statusEl.textContent = 'Error: ' + e.message; }
+  }
+  if (btn) btn.disabled = false;
+}
+
+function subirImagenLocalizacion(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var statusEl = document.getElementById('loc-status');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var dataUrl = e.target.result;
+    var partes  = dataUrl.split(',');
+    locImg.fuente      = 'qgis';
+    locImg.base64      = partes.length > 1 ? partes[1] : '';
+    locImg.mimeType    = file.type || 'image/png';
+    locImg.fuenteLabel = 'Captura propia (' + file.name + ')';
+    setLocPreview(dataUrl, locImg.fuenteLabel);
+    if (statusEl) { statusEl.style.color = 'var(--verde-dark)'; statusEl.textContent = '✓ Captura cargada — reemplaza al mapa automático'; }
+  };
+  reader.readAsDataURL(file);
+  input.value = ''; // permitir resubir el mismo archivo si el usuario quiere
+}
+
+function borrarImagenLocalizacion() {
+  locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '' };
+  setLocPreview('', '');
+  var statusEl = document.getElementById('loc-status');
+  if (statusEl) { statusEl.style.color = 'var(--texto-suave)'; statusEl.textContent = 'Regenerando mapa automático…'; }
+  generarMapaLocalizacion();
+}
+// (Eliminada la sobrescritura async que dependía de localhost:8765.
+//  La generación es 100% cliente con docx UMD y la subida a Drive se hace
+//  desde la función descargarDocx original.)
+
+// ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+(function() {
+  var hoy = new Date().toISOString().split('T')[0];
+  cargar();
+  if (!document.getElementById('fechaVisita').value) document.getElementById('fechaVisita').value = hoy;
+  if (!document.getElementById('fechaInforme').value) document.getElementById('fechaInforme').value = hoy;
+  CAMPOS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { el.addEventListener('input', guardar); el.addEventListener('change', guardar); }
+  });
+  CHECKS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', guardar);
+  });
+  document.querySelectorAll('.hallazgo,.mod-chk,.comp-ac,.tt-chk').forEach(function(cb) {
+    cb.addEventListener('change', guardar);
+  });
+  var irOrig = ir;
+  ir = function(n) { guardar(); irOrig(n); };
+  var ind = document.createElement('div');
+  ind.id = 'save-ind';
+  ind.style.cssText = 'position:fixed;bottom:14px;right:16px;background:#166534;color:#fff;font-size:11px;font-family:Arial,sans-serif;padding:5px 12px;border-radius:20px;opacity:0;transition:opacity .4s;pointer-events:none;z-index:999';
+  ind.textContent = 'Guardado';
+  document.body.appendChild(ind);
+  var guardarOrig = guardar;
+  guardar = function() {
+    guardarOrig();
+    ind.style.opacity = '1';
+    clearTimeout(ind._t);
+    ind._t = setTimeout(function() { ind.style.opacity = '0'; }, 1400);
+  };
+  // Autosave periódico eliminado: ya hay listeners input/change en todos los
+  // campos y wrapper en ir(); el setInterval de 30s solo parpadeaba "Guardado".
+
+  // ── Prefill por query string (cuando se abre desde V6) ───────
+  //  Si llegan params, sobrescriben lo cargado de localStorage para
+  //  reflejar siempre los datos frescos de la visita seleccionada.
+  prefillDesdeURL();
+
+  // Imagen de localización: se genera apenas hay dirección (o coords).
+  setTimeout(function() {
+    if (V6_CTX.lat || V6_CTX.lon || gv('direccion')) {
+      generarMapaLocalizacion();
+    }
+  }, 600);
+
+  // ── Inspectores firmantes desde hoja USUARIOS ────────────────
+  //  Se hace después de prefillDesdeURL para que el data-prefill ya
+  //  esté seteado y se aplique cuando termine el fetch.
+  cargarInspectoresDesdeBD();
+})();
+
+// ── Contexto V6: visita asociada (si aplica) ─────────────────────
+var V6_CTX = {
+  fila: null,           // número de fila en BD VISITAS
+  idCarpeta: null,      // id de carpeta Drive de la visita
+  radicado: null,
+  direccion: null,
+  lat: null,            // coordenadas opcionales para la imagen de localización
+  lon: null
+};
+
+// Imagen de localización para la sección LOCALIZACIÓN del docx.
+// fuente: 'maps' (Google Maps Static) o 'qgis' (subida manual por inspector).
+// base64 es lo que se inserta en el docx.
+var locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '' };
+
+function setSelectByText(id, valor) {
+  var el = document.getElementById(id);
+  if (!el || !valor) return;
+  var v = valor.toString().trim().toLowerCase();
+  for (var i = 0; i < el.options.length; i++) {
+    if ((el.options[i].text || '').trim().toLowerCase() === v ||
+        (el.options[i].value || '').trim().toLowerCase() === v) {
+      el.selectedIndex = i;
+      return;
+    }
+  }
+}
+
+function normalizar(s) {
+  return (s || '').toString().toLowerCase()
+    .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').trim();
+}
+
+function prefillDesdeURL() {
+  var p = new URLSearchParams(window.location.search);
+  if (!p.toString()) return;
+
+  // Contexto para subir el docx después
+  V6_CTX.fila      = p.get('fila') || null;
+  V6_CTX.idCarpeta = p.get('idCarpeta') || null;
+  V6_CTX.radicado  = p.get('radicado') || null;
+  V6_CTX.direccion = p.get('direccion') || null;
+  V6_CTX.lat       = p.get('lat') || null;
+  V6_CTX.lon       = p.get('lon') || null;
+
+  // Datos del caso (paso 1)
+  var map = {
+    fechaVisita:  p.get('fechaVisita'),
+    cargo:        p.get('cargo'),
+    numRadicado:  p.get('radicado'),
+    direccion:    p.get('direccion'),
+    catastral:    p.get('catastral')
+  };
+  Object.keys(map).forEach(function(k) {
+    if (map[k]) {
+      var el = document.getElementById(k);
+      if (el) el.value = map[k];
+    }
+  });
+
+  // Inspector: el <select> aún no tiene opciones cargadas (fetch async).
+  // Dejamos el nombre como atributo data-prefill; cargarInspectoresDesdeBD
+  // lo aplicará cuando termine de poblar las opciones.
+  var insPrefill = p.get('inspector');
+  if (insPrefill) {
+    var insSel = document.getElementById('inspector');
+    if (insSel) insSel.setAttribute('data-prefill', insPrefill.toUpperCase());
+  }
+
+  // Barrio → activa autoComuna; si llega comuna explícita, prevalece
+  var barrio = p.get('barrio');
+  if (barrio) {
+    var sel = document.getElementById('barrio');
+    if (sel) {
+      // Coincidencia tolerante a tildes/casing
+      var norm = normalizar(barrio);
+      for (var i = 0; i < sel.options.length; i++) {
+        if (normalizar(sel.options[i].value) === norm) {
+          sel.selectedIndex = i;
+          autoComuna(sel);
+          break;
+        }
+      }
+    }
+  }
+  var comuna = p.get('comuna');
+  if (comuna) {
+    var c = document.getElementById('comuna');
+    if (c) c.value = comuna;
+  }
+
+  // ── Licencia (paso 2) ──────────────────────────────────────
+  // SE APORTO LICENCIA = "NO" → marcar checkbox sinLic
+  var aporto = (p.get('seAportoLicencia') || '').toString().trim().toUpperCase();
+  if (aporto === 'NO' || aporto === 'NO SE APORTO') {
+    var cb = document.getElementById('sinLic');
+    if (cb) { cb.checked = true; toggleSinLic(cb); }
+  } else {
+    if (p.get('numRes'))    document.getElementById('numRes').value    = p.get('numRes');
+    if (p.get('fechaEjec')) document.getElementById('fechaEjec').value = p.get('fechaEjec');
+    if (p.get('pisos'))     document.getElementById('pisos').value     = p.get('pisos');
+    if (p.get('dest'))      document.getElementById('dest').value      = p.get('dest');
+    if (p.get('cubierta'))  document.getElementById('cubierta').value  = p.get('cubierta');
+    if (p.get('sist'))      setSelectByText('sist', p.get('sist'));
+
+    // tipoModalidad: "Licencia de construcción — Obra nueva, Ampliación"
+    // (puede contener varios tipos separados por coma a la izquierda)
+    var tm = p.get('tipoModalidad');
+    if (tm) {
+      var partes = tm.split(/\s*—\s*|\s+-\s+/);  // — o -
+      if (partes[0]) {
+        var tipos = partes[0].split(/\s*,\s*/).map(function(s){return normalizar(s);});
+        document.querySelectorAll('.tt-chk').forEach(function(cb) {
+          if (tipos.indexOf(normalizar(cb.value)) >= 0) cb.checked = true;
+        });
+        toggleModalidades();
+      }
+      if (partes[1]) {
+        var mods = partes[1].split(/\s*,\s*/).map(function(s){return normalizar(s);});
+        document.querySelectorAll('.mod-chk').forEach(function(cb) {
+          if (mods.indexOf(normalizar(cb.value)) >= 0) cb.checked = true;
+        });
+      }
+    }
+
+    // Observación de licencia (BD col AQ) → contexto extra al final de obs
+    var obsLic = p.get('obsLicencia');
+    if (obsLic) {
+      var obsEl = document.getElementById('obs');
+      if (obsEl && !obsEl.value) {
+        obsEl.value = '[Obs. licencia desde BD]: ' + obsLic + '\n\n';
+      }
+    }
+  }
+
+  // Indicador visual de prefill en la sidebar
+  if (V6_CTX.radicado || V6_CTX.direccion) {
+    var info = document.getElementById('sb-visita-info');
+    var rad  = document.getElementById('sb-visita-rad');
+    var dir  = document.getElementById('sb-visita-dir');
+    if (info) info.classList.remove('hidden');
+    if (rad)  rad.textContent = V6_CTX.radicado || '—';
+    if (dir)  dir.textContent = V6_CTX.direccion || '';
+  }
+
+  // Píldora verde en main: confirmación de prefill.
+  // El radicado viene del query string — se inyecta con textContent para
+  // evitar XSS reflejado si la URL llega manipulada (ej. ?radicado=<script>).
+  if (V6_CTX.radicado) {
+    var pill = document.createElement('div');
+    pill.className = 'prefill-pill';
+    pill.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+    var span = document.createElement('span');
+    span.appendChild(document.createTextNode('Datos cargados desde la visita '));
+    var b = document.createElement('b');
+    b.textContent = V6_CTX.radicado;
+    span.appendChild(b);
+    span.appendChild(document.createTextNode('. Revise y complete lo faltante.'));
+    pill.appendChild(span);
+    var p1 = document.getElementById('p1');
+    if (p1 && p1.firstChild) p1.insertBefore(pill, p1.firstChild.nextSibling);
+  }
+
+  // Guardar prefill en localStorage para no perderlo al recargar
+  guardar();
+}
+
+// ── Subir docx generado a Drive + registrar link en BD VISITAS ──
+//  Se llama desde el flujo de descargarDocx (cliente). No bloquea
+//  la descarga local; solo informa al opener (V6) si tuvo éxito.
+async function subirInformeAlDrive(blob) {
+  if (!V6_CTX.fila || !V6_CTX.idCarpeta) return null; // caso suelto: no sube
+  try {
+    var base64 = await new Promise(function(resolve) {
+      var r = new FileReader();
+      r.onload = function(e) { resolve((e.target.result || '').split(',')[1] || ''); };
+      r.onerror = function() { resolve(''); };
+      r.readAsDataURL(blob);
+    });
+    if (!base64) return null;
+    var nombre = 'F-GGO-43_' + (V6_CTX.radicado || 'informe').replace(/[^a-zA-Z0-9._-]/g,'_') + '_' + (gv('fechaVisita') || 'sin_fecha') + '.docx';
+    var r = await fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({
+        accion: 'subirInformeF43',
+        fila: V6_CTX.fila,
+        idCarpeta: V6_CTX.idCarpeta,
+        nombreArchivo: nombre,
+        base64: base64
+      })
+    });
+    var d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Sin respuesta');
+    // Notificar a V6 (pestaña padre) que ya hay link
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({
+          tipo: 'informe-f43-subido',
+          fila: V6_CTX.fila,
+          radicado: V6_CTX.radicado,
+          link: d.link
+        }, '*');
+      }
+    } catch(eP) {}
+    return d.link || null;
+  } catch(e) {
+    console.warn('Subida a Drive falló:', e.message);
+    return null;
+  }
+}
+</script>
+</body>
+</html>

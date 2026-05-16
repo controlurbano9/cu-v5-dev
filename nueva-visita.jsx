@@ -1266,7 +1266,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }
 
   // ── Render ─────────────────────────────────────────────────
-  const tituloPantalla = filaEditando ? 'Continuar visita' : 'Nueva visita';
+  const nVisitaLabel = d.nVisita && d.nVisita > 1 ? ' · Visita N°' + d.nVisita : '';
+  const tituloPantalla = filaEditando
+    ? 'Continuar visita'
+    : (d.esOficio ? 'Visita de oficio' : 'Nueva visita');
 
   return (
     <div className="pantalla activa pad-bottom">
@@ -1283,21 +1286,45 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         </div>
       </div>
 
-      {/* Panel sticky con dirección y radicado (z-index 100, debajo de la barra de título) */}
-      {d.direccion && (
+      {/* Panel sticky con dirección, radicado y N° visita (z-index 100) */}
+      {(d.direccion || d.radicado || d.esOficio) && (
         <div className="nv-address-sticky-bar visible">
-          <span className="dir-label">Visita en</span>
-          <span className="dir-valor">{d.direccion}{d.barrio && d.barrio !== '__otro__' ? ' · ' + d.barrio : ''}</span>
-          {d.radicado && <div className="dir-radicado">RAD {d.radicado}</div>}
+          {d.direccion && (
+            <>
+              <span className="dir-label">Visita en</span>
+              <span className="dir-valor">{d.direccion}{d.barrio && d.barrio !== '__otro__' ? ' · ' + d.barrio : ''}</span>
+            </>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: d.direccion ? 2 : 0 }}>
+            {d.radicado && <span className="dir-radicado" style={{ margin: 0 }}>RAD {d.radicado}</span>}
+            {d.esOficio && d.orden && <span className="dir-radicado" style={{ margin: 0 }}>OFICIO {d.orden}</span>}
+            {d.nVisita > 1 && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                background: 'var(--brand-bg)', color: 'var(--brand-ink)',
+                border: '1px solid var(--brand-accent)',
+              }}>Visita N°{d.nVisita}</span>
+            )}
+          </div>
         </div>
       )}
 
       {/* 1. IDENTIFICACIÓN ───────────────────────────────── */}
       <_Seccion titulo="Identificación del caso" color="azul">
-        <_Campo label="¿Es visita de oficio?">
-          <_Radio value={d.esOficio ? 'SI' : 'NO'}
-            onChange={v => setCampo('esOficio', v === 'SI')}
-            opciones={[{ v: 'NO', l: 'PQR / Radicado' }, { v: 'SI', l: 'Oficio' }]} />
+        {/* Indicador tipo de visita (solo lectura — se eligió en el modal) */}
+        <_Campo label="Tipo de visita">
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '8px 14px', borderRadius: 'var(--r-md)',
+            background: d.esOficio ? '#fef3c7' : 'var(--brand-bg)',
+            border: '1px solid ' + (d.esOficio ? '#f59e0b' : 'var(--brand-accent)'),
+            fontSize: 14, fontWeight: 600,
+            color: d.esOficio ? '#92400e' : 'var(--brand-ink)',
+          }}>
+            <span>{d.esOficio ? '🏗️' : '📋'}</span>
+            {d.esOficio ? 'Visita de oficio' : 'PQR / Radicado'}
+            {d.nVisita > 1 && <span style={{ marginLeft: 4, opacity: 0.7 }}>· Visita N°{d.nVisita}</span>}
+          </div>
         </_Campo>
         {!d.esOficio && (
           <>

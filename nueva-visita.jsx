@@ -1822,19 +1822,22 @@ function NuevaVisitaWrapper({ usuario, filaInicial, datosIniciales, onSalir }) {
   });
 
   function handleModalResult(result) {
+    const ts = Date.now(); // timestamp estable para key de React
     if (result.tipo === 'oficio') {
-      setConfig({ listo: true, fila: null, datos: { _oficio: true } });
+      setConfig({ listo: true, fila: null, datos: { _oficio: true }, ts });
     } else if (result.tipo === 'pqr') {
       setConfig({
         listo: true,
         fila: result.esNueva ? null : result.fila,
         datos: result.datosIniciales,
+        ts,
       });
     } else if (result.tipo === 'pqr_manual') {
       setConfig({
         listo: true,
         fila: null,
         datos: { RADICADO: result.radicado },
+        ts,
       });
     }
   }
@@ -1850,7 +1853,7 @@ function NuevaVisitaWrapper({ usuario, filaInicial, datosIniciales, onSalir }) {
 
   return (
     <NuevaVisitaScreen
-      key={(config.fila || 'nueva') + '-' + Date.now()}
+      key={(config.fila || 'nueva') + '-' + (config.ts || 0)}
       usuario={usuario}
       filaInicial={config.fila}
       datosIniciales={config.datos}

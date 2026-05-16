@@ -178,6 +178,9 @@ const CONTRAVENCION_ESPECIAL = 'No se evidencia infracción';
 // ── Estado inicial (en blanco o prefill) ───────────────────────
 function _estadoInicial(datosIniciales) {
   const d = datosIniciales || {};
+  // Separar actuación y conclusiones (almacenados juntos en BD col AU)
+  const _rawAct = d['ACTUACION / OBSERVACIONES'] || d['ACTUACION'] || '';
+  const _partsAct = _rawAct.split('\n══CONCLUSIONES══\n');
   return {
     // Identificación
     radicado:       d['RADICADO']             || '',
@@ -221,7 +224,8 @@ function _estadoInicial(datosIniciales) {
     sistema:         d['SISTEMA ESTRUCTURAL'] || d['SISTEMA ESTRUCT'] || '',
     obsLicencia:     d['OBS LICENCIA']        || '',
     // Descripción + conclusiones
-    actuacion:       d['ACTUACION / OBSERVACIONES'] || d['ACTUACION'] || '',
+    actuacion:       _partsAct[0] || '',
+    obsConclusion:   _partsAct[1] || '',
     infraccion:      d['TIPO DE INFRACCION']  || '',
     area:            d['AREA CONTRAVENCION m2'] || d['AREA CONTRAVENCION M2'] || '',
     areaNoMedible:   false, // checkbox "No se pudo medir"
@@ -329,7 +333,7 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.suspension || '',                           // AR SUSPENSION DE LA OBRA
     d.orden || '',                                // AS N° ORDEN DE POLICIA
     citFmt,                                       // AT FECHA CITACION
-    _primeraMayus(d.actuacion),                   // AU ACTUACION / OBSERVACIONES
+    _primeraMayus(d.actuacion) + (d.obsConclusion ? '\n══CONCLUSIONES══\n' + d.obsConclusion : ''), // AU ACTUACION / OBSERVACIONES (incluye conclusiones)
     '',                                           // AV RADICADOS REITERADOS
     d.lat != null ? Number(d.lat).toFixed(6) : '',  // AW LATITUD
     d.lon != null ? Number(d.lon).toFixed(6) : '',  // AX LONGITUD
@@ -605,6 +609,295 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
 }
 
 // ══════════════════════════════════════════════════════════════
+//   MODAL INICIO — Elige tipo de visita y busca radicado
+// ══════════════════════════════════════════════════════════════
+function ModalInicioVisita({ onResult, onCancelar }) {
+  const [paso, setPaso]         = useStateNV('tipo');    // 'tipo' | 'radicado' | 'resultado'
+  const [radicado, setRadicado] = useStateNV('');
+  const [buscando, setBuscando] = useStateNV(false);
+  const [resultado, setResultado] = useStateNV(null);
+  // resultado: { encontrado, visitas[], ultimaVisita, nVisitaSig }
+
+  async function buscarRadicado() {
+    if (!radicado.trim()) return;
+    setBuscando(true);
+    try {
+      const { datos } = await leerVisitas({ forzar: true });
+      const visitasRad = datos.filter(f =>
+        (f['RADICADO'] || '').trim() === radicado.trim()
+      );
+      // Ordenar por N° visita descendente
+      visitasRad.sort((a, b) =>
+        parseInt(b['N° VISITA'] || b['N VISITA'] || 1) -
+        parseInt(a['N° VISITA'] || a['N VISITA'] || 1)
+      );
+      const ultima = visitasRad[0] || null;
+      const nMax = ultima
+        ? parseInt(ultima['N° VISITA'] || ultima['N VISITA'] || 1)
+        : 0;
+      setResultado({
+        encontrado: visitasRad.length > 0,
+        visitas: visitasRad,
+        ultimaVisita: ultima,
+        nVisitaSig: nMax + 1,
+      });
+      setPaso('resultado');
+    } catch (e) {
+      await appAlert('Error al buscar: ' + e.message, { titulo: 'Error' });
+    }
+    setBuscando(false);
+  }
+
+  // Iniciar visita con datos precargados de una fila existente
+  function iniciarConDatos(fila, nVisita) {
+    onResult({
+      tipo: 'pqr',
+      datosIniciales: fila,
+      fila: fila._idx,
+      nVisita: nVisita || parseInt(fila['N° VISITA'] || fila['N VISITA'] || 1),
+      esNueva: false,
+    });
+  }
+
+  // Crear nueva visita para el mismo radicado (incrementa N° visita)
+  function crearNuevaVisitaRadicado(filaBase) {
+    // Copia datos base pero limpia campos de visita
+    const datosBase = { ...filaBase };
+    datosBase['N° VISITA'] = (resultado?.nVisitaSig || 2).toString();
+    datosBase['N VISITA'] = datosBase['N° VISITA'];
+    datosBase['ESTADO VISITA'] = 'PENDIENTE';
+    datosBase['FECHA DE VISITA'] = '';
+    datosBase['LINK_DRIVE'] = '';
+    datosBase['ACTUACION / OBSERVACIONES'] = '';
+    datosBase['TIPO DE INFRACCION'] = '';
+    datosBase['AREA CONTRAVENCION m2'] = '';
+    datosBase['AREA CONTRAVENCION M2'] = '';
+    datosBase['SUSPENSION DE LA OBRA'] = '';
+    datosBase['N° ORDEN DE POLICIA'] = '';
+    datosBase['N ORDEN DE POLICIA'] = '';
+    datosBase['FECHA CITACION'] = '';
+    onResult({
+      tipo: 'pqr',
+      datosIniciales: datosBase,
+      fila: null, // nueva fila
+      nVisita: resultado?.nVisitaSig || 2,
+      esNueva: true,
+    });
+  }
+
+  // Radicado no encontrado — formulario manual
+  function iniciarSinDatos() {
+    onResult({
+      tipo: 'pqr_manual',
+      radicado: radicado.trim(),
+    });
+  }
+
+  // Visita de oficio
+  function iniciarOficio() {
+    onResult({ tipo: 'oficio' });
+  }
+
+  const estiloModal = {
+    minHeight: '60vh', display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', padding: '40px 20px',
+  };
+  const estiloCard = {
+    background: 'var(--superficie)', borderRadius: 'var(--r-lg)',
+    border: '1px solid var(--borde)', boxShadow: 'var(--sombra-md)',
+    padding: 28, maxWidth: 440, width: '100%',
+  };
+  const estiloBtn = (accent) => ({
+    display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+    padding: '16px 20px', border: '1.5px solid ' + (accent ? 'var(--brand-accent)' : 'var(--borde-med)'),
+    borderRadius: 'var(--r-md)', background: accent ? 'var(--brand-bg)' : 'var(--superficie)',
+    cursor: 'pointer', fontFamily: 'inherit', fontSize: 15, fontWeight: 600,
+    color: accent ? 'var(--brand-ink)' : 'var(--texto)', textAlign: 'left',
+    transition: 'border-color 0.15s',
+  });
+
+  return (
+    <div className="pantalla activa" style={estiloModal}>
+      <div style={estiloCard}>
+        {/* PASO 1: Elegir tipo */}
+        {paso === 'tipo' && (
+          <>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6, textAlign: 'center' }}>
+              Nueva visita
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 24, textAlign: 'center' }}>
+              ¿Qué tipo de visita vas a realizar?
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button type="button" style={estiloBtn(true)} onClick={() => setPaso('radicado')}>
+                <span style={{ fontSize: 24 }}>📋</span>
+                <div>
+                  <div>Visita PQR / Radicado</div>
+                  <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--texto-suave)', marginTop: 2 }}>
+                    Atención a una queja o solicitud con número de radicado
+                  </div>
+                </div>
+              </button>
+              <button type="button" style={estiloBtn(false)} onClick={iniciarOficio}>
+                <span style={{ fontSize: 24 }}>🏗️</span>
+                <div>
+                  <div>Visita de oficio</div>
+                  <div style={{ fontSize: 11, fontWeight: 400, color: 'var(--texto-suave)', marginTop: 2 }}>
+                    Inspección por iniciativa propia, sin radicado previo
+                  </div>
+                </div>
+              </button>
+            </div>
+            <button type="button" onClick={onCancelar} style={{
+              marginTop: 20, background: 'none', border: 'none', color: 'var(--texto-suave)',
+              fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', width: '100%', textAlign: 'center',
+            }}>← Volver al inicio</button>
+          </>
+        )}
+
+        {/* PASO 2: Ingresar radicado */}
+        {paso === 'radicado' && (
+          <>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
+              Buscar radicado
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 16 }}>
+              Ingresa el número de radicado para cargar los datos de la BD
+            </div>
+            <input
+              type="text"
+              className="input-campo mono"
+              placeholder="Ej: 20251143210"
+              value={radicado}
+              onChange={e => setRadicado(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && buscarRadicado()}
+              autoFocus
+              style={{ fontSize: 16, padding: 14, marginBottom: 12 }}
+            />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="button" onClick={buscarRadicado} disabled={buscando || !radicado.trim()}
+                className="btn-principal verde" style={{ flex: 1, margin: 0, fontSize: 14 }}>
+                {buscando ? 'Buscando...' : 'Buscar en BD'}
+              </button>
+              <button type="button" onClick={() => setPaso('tipo')} style={{
+                background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
+                padding: '10px 16px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+              }}>Atrás</button>
+            </div>
+          </>
+        )}
+
+        {/* PASO 3: Resultado de búsqueda */}
+        {paso === 'resultado' && resultado && (
+          <>
+            {/* Radicado NO encontrado */}
+            {!resultado.encontrado && (
+              <>
+                <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 8 }}>🔍</div>
+                <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 6 }}>
+                  Radicado no encontrado
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--texto-suave)', textAlign: 'center', marginBottom: 20 }}>
+                  El radicado <strong>{radicado}</strong> no está en la base de datos.
+                  Los datos deberán ingresarse manualmente.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button type="button" onClick={iniciarSinDatos}
+                    className="btn-principal" style={{ margin: 0, fontSize: 14 }}>
+                    Continuar sin datos precargados
+                  </button>
+                  <button type="button" onClick={() => { setPaso('radicado'); setResultado(null); }} style={{
+                    background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
+                    padding: '10px 16px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+                    width: '100%',
+                  }}>Buscar otro radicado</button>
+                </div>
+              </>
+            )}
+
+            {/* Radicado encontrado */}
+            {resultado.encontrado && (() => {
+              const u = resultado.ultimaVisita;
+              const est = normalizarEstado(u['ESTADO VISITA']);
+              const nVis = parseInt(u['N° VISITA'] || u['N VISITA'] || 1);
+              const fecha = u['FECHA DE VISITA'] || u['FECHA RADICADO'] || '';
+              const dir = u['DIRECCION INFRACCION'] || u['DIRECCION'] || '';
+              const esCompletada = est === 'COMPLETADO' || est === 'COMPLETADA';
+              const esIniciada = est === 'INICIADO';
+
+              return (
+                <>
+                  <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 8 }}>
+                    {esCompletada ? '✅' : esIniciada ? '🔄' : '📋'}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 4 }}>
+                    Radicado {radicado}
+                  </div>
+                  {/* Resumen de la visita existente */}
+                  <div style={{
+                    background: 'var(--gris-bg)', borderRadius: 'var(--r-md)',
+                    padding: 14, marginBottom: 16, fontSize: 13,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600 }}>Visita N°{nVis}</span>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                        background: esCompletada ? '#dcfce7' : esIniciada ? '#fef9c3' : '#e0e7ff',
+                        color: esCompletada ? '#166534' : esIniciada ? '#854d0e' : '#3730a3',
+                      }}>{est}</span>
+                    </div>
+                    {dir && <div style={{ color: 'var(--texto-suave)' }}>{dir}</div>}
+                    {fecha && <div style={{ color: 'var(--texto-suave)', marginTop: 2 }}>Fecha: {fecha}</div>}
+                  </div>
+
+                  {/* Acciones según estado */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {esCompletada && (
+                      <>
+                        <div style={{ fontSize: 13, color: 'var(--texto-suave)', textAlign: 'center', marginBottom: 4 }}>
+                          La visita N°{nVis} ya fue completada. ¿Desea realizar una nueva visita?
+                        </div>
+                        <button type="button" onClick={() => crearNuevaVisitaRadicado(u)}
+                          className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                          Crear visita N°{resultado.nVisitaSig}
+                        </button>
+                      </>
+                    )}
+                    {esIniciada && (
+                      <>
+                        <button type="button" onClick={() => iniciarConDatos(u, nVis)}
+                          className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                          Continuar visita N°{nVis}
+                        </button>
+                        <button type="button" onClick={() => crearNuevaVisitaRadicado(u)}
+                          className="btn-principal" style={{ margin: 0, fontSize: 14 }}>
+                          Crear nueva visita N°{resultado.nVisitaSig}
+                        </button>
+                      </>
+                    )}
+                    {!esCompletada && !esIniciada && (
+                      <button type="button" onClick={() => iniciarConDatos(u, nVis)}
+                        className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                        Iniciar visita
+                      </button>
+                    )}
+                    <button type="button" onClick={() => { setPaso('radicado'); setResultado(null); }} style={{
+                      background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
+                      padding: '10px 16px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+                      width: '100%',
+                    }}>Buscar otro radicado</button>
+                  </div>
+                </>
+              );
+            })()}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 //   PANTALLA
 // ══════════════════════════════════════════════════════════════
 function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
@@ -852,7 +1145,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       retiroQuebrada: d.quebrada,
       infraccion:     d.infraccion,
       area:           d.areaNoMedible ? '' : d.area,
-      obsConclusion:  d.obsLicencia,
+      obsConclusion:  d.obsConclusion || '',
       // Citación
       orden:          d.orden,
       citacion:       d.citacionFecha
@@ -1185,38 +1478,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         )}
       </_Seccion>
 
-      {/* 6. CONSULTA NORMA POT ───────────────────────────── */}
-      <_Seccion titulo="Consulta norma POT" color="gris">
-        <_Campo label="Código catastral">
-          <_Input mono value={d.catastral} onChange={v => setCampo('catastral', v)} />
-        </_Campo>
-        <_Campo label="N° ficha predial">
-          <_Input mono value={d.ficha} onChange={v => setCampo('ficha', v)} />
-        </_Campo>
-        <_Campo label="Polígono de uso del suelo">
-          <_Input mono value={d.poligono} onChange={v => setCampo('poligono', v)}
-            placeholder="ZR-CN-1" />
-        </_Campo>
-        <_Campo label="¿Amenaza?">
-          <_Radio value={d.amenaza} onChange={v => setCampo('amenaza', v)}
-            opciones={['SI', 'NO']} />
-        </_Campo>
-        <_Campo label="¿Suelo de protección?">
-          <_Radio value={d.sueloProt} onChange={v => setCampo('sueloProt', v)}
-            opciones={['SI', 'NO']} />
-        </_Campo>
-        <_Campo label="¿Cumple retiro de quebrada?">
-          <_Radio value={d.quebrada} onChange={v => setCampo('quebrada', v)}
-            opciones={['SI', 'NO']} />
-        </_Campo>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <_BtnAccion busy={busyPOT} onClick={ejecutarPOT}>
-            {busyPOT ? '...' : 'Consultar POT por coordenadas'}
-          </_BtnAccion>
-        </div>
-      </_Seccion>
-
-      {/* 7. DESCRIPCIÓN ──────────────────────────────────── */}
+      {/* 6. DESCRIPCIÓN ──────────────────────────────────── */}
       <_Seccion titulo="Descripción de la situación encontrada" color="gris">
         <_Campo label="Actuación / Observaciones" fullWidth
           hint="Texto descriptivo de lo encontrado en sitio. Usa el botón IA para pulir la redacción.">
@@ -1327,6 +1589,46 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             })}
           </div>
         </_Campo>
+      </_Seccion>
+
+      {/* 9. OBSERVACIONES Y CONCLUSIONES ──────────────────── */}
+      <_Seccion titulo="Observaciones y conclusiones" color="gris">
+        <_Campo label="Conclusiones generales del inspector" fullWidth
+          hint="Dictamen técnico, observaciones sobre la situación encontrada y su relación con la normativa aplicable.">
+          <_TextArea value={d.obsConclusion} onChange={v => setCampo('obsConclusion', v)} rows={6}
+            placeholder="Describa las conclusiones de la visita, hallazgos relevantes y recomendaciones..." />
+        </_Campo>
+      </_Seccion>
+
+      {/* 10. CONSULTA NORMA POT ──────────────────────────── */}
+      <_Seccion titulo="Consulta norma POT" color="gris">
+        <_Campo label="Código catastral">
+          <_Input mono value={d.catastral} onChange={v => setCampo('catastral', v)} />
+        </_Campo>
+        <_Campo label="N° ficha predial">
+          <_Input mono value={d.ficha} onChange={v => setCampo('ficha', v)} />
+        </_Campo>
+        <_Campo label="Polígono de uso del suelo">
+          <_Input mono value={d.poligono} onChange={v => setCampo('poligono', v)}
+            placeholder="ZR-CN-1" />
+        </_Campo>
+        <_Campo label="¿Amenaza?">
+          <_Radio value={d.amenaza} onChange={v => setCampo('amenaza', v)}
+            opciones={['SI', 'NO']} />
+        </_Campo>
+        <_Campo label="¿Suelo de protección?">
+          <_Radio value={d.sueloProt} onChange={v => setCampo('sueloProt', v)}
+            opciones={['SI', 'NO']} />
+        </_Campo>
+        <_Campo label="¿Cumple retiro de quebrada?">
+          <_Radio value={d.quebrada} onChange={v => setCampo('quebrada', v)}
+            opciones={['SI', 'NO']} />
+        </_Campo>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <_BtnAccion busy={busyPOT} onClick={() => ejecutarPOT()}>
+            {busyPOT ? '...' : 'Consultar POT por coordenadas'}
+          </_BtnAccion>
+        </div>
       </_Seccion>
 
       {/* ── Botón guardar ──────────────────────────────────── */}
@@ -1502,4 +1804,59 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
   );
 }
 
-window.NuevaVisitaScreen = NuevaVisitaScreen;
+// ══════════════════════════════════════════════════════════════
+//   WRAPPER — Modal de inicio → Formulario
+// ══════════════════════════════════════════════════════════════
+function NuevaVisitaWrapper({ usuario, filaInicial, datosIniciales, onSalir }) {
+  const [config, setConfig] = useStateNV(() => {
+    // Si viene con filaInicial, ir directo al formulario
+    if (filaInicial != null) {
+      return { listo: true, fila: filaInicial, datos: datosIniciales };
+    }
+    // Si viene con datosIniciales pero sin fila, directo al formulario
+    if (datosIniciales) {
+      return { listo: true, fila: null, datos: datosIniciales };
+    }
+    // Sin datos: mostrar modal de inicio
+    return { listo: false, fila: null, datos: null };
+  });
+
+  function handleModalResult(result) {
+    if (result.tipo === 'oficio') {
+      setConfig({ listo: true, fila: null, datos: { _oficio: true } });
+    } else if (result.tipo === 'pqr') {
+      setConfig({
+        listo: true,
+        fila: result.esNueva ? null : result.fila,
+        datos: result.datosIniciales,
+      });
+    } else if (result.tipo === 'pqr_manual') {
+      setConfig({
+        listo: true,
+        fila: null,
+        datos: { RADICADO: result.radicado },
+      });
+    }
+  }
+
+  if (!config.listo) {
+    return (
+      <ModalInicioVisita
+        onResult={handleModalResult}
+        onCancelar={onSalir}
+      />
+    );
+  }
+
+  return (
+    <NuevaVisitaScreen
+      key={(config.fila || 'nueva') + '-' + Date.now()}
+      usuario={usuario}
+      filaInicial={config.fila}
+      datosIniciales={config.datos}
+      onSalir={onSalir}
+    />
+  );
+}
+
+window.NuevaVisitaScreen = NuevaVisitaWrapper;

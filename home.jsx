@@ -39,10 +39,11 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       if (e === 'PENDIENTE' || e === 'ASIGNADO') pendientes++;
       if (e === 'COMPLETADO') {
         const dComp = parsearFecha(f['FECHA DEVOLUCION'] || '');
-        if (dComp) {
-          if (dComp.getMonth() === mesActual && dComp.getFullYear() === anioActual) mes++;
-          if (formatearFecha(dComp) === hoyStr) realHoy++;
-        }
+        if (dComp && dComp.getMonth() === mesActual && dComp.getFullYear() === anioActual) mes++;
+      }
+      if (e === 'INICIADO') {
+        const dVis = parsearFecha(f['FECHA DE VISITA'] || '');
+        if (dVis && formatearFecha(dVis) === hoyStr) realHoy++;
       }
       if (e === 'ASIGNADO') {
         const dAsig = parsearFecha(f['FECHA ASIGNACION VISITA'] || '');
@@ -273,7 +274,7 @@ function AlertaCard({ alerta, tipo, onContinuar }) {
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
             {f['RADICADO'] || '—'}
             {f['BARRIO/VEREDA'] && ' · ' + (f['BARRIO/VEREDA'] || '')}
-            {f['VISITADOR(ES)'] && ' · ' + f['VISITADOR(ES)']}
+            {f['VISITADOR(ES)'] && ' · ' + (f['VISITADOR(ES)'] || '').split(',')[0].trim()}
           </div>
         </div>
         <button type="button" onClick={() => onContinuar(f._idx, f)} style={{

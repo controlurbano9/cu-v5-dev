@@ -467,7 +467,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
           </div>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {f['FECHA DE VISITA'] && <span>{formatearFecha(f['FECHA DE VISITA'])}</span>}
-            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Visitador:</span> {f['VISITADOR(ES)']}</span>}
+            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Inspector:</span> {(f['VISITADOR(ES)'] || '').split(',')[0].trim()}</span>}
             {f['FECHA ASIGNACION VISITA'] && <span><span style={{ opacity: 0.7 }}>Asignado:</span> {formatearFecha(f['FECHA ASIGNACION VISITA'])}</span>}
           </div>
         </div>
@@ -518,12 +518,14 @@ function FilaVisitaBase({ f, usuario, onContinuar,
               fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
               cursor: busy ? 'not-allowed' : 'pointer',
             }}>↩ Desasignar</button>
-            <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
-              className="btn-principal verde"
-              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-              ✓ Completar
-            </button>
           </>
+        )}
+        {est === 'INICIADO' && esAdmin && (
+          <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
+            className="btn-principal verde"
+            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
+            ✓ Completar
+          </button>
         )}
       </div>
 

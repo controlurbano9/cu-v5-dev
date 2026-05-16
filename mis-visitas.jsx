@@ -21,11 +21,20 @@ const SECCION_COLORES = {
   completadas: { bg: 'rgba(107,122,58,0.18)', fg: '#516028' },
 };
 
-// Iconos para cada sección del acordeón
+// Iconos SVG minimalistas para cada sección del acordeón
 const SECCION_ICONOS = {
-  asignadas:   '\u{1F4CB}',   // clipboard
-  iniciadas:   '\u{1F6A7}',   // construcción
-  completadas: '✅',       // check verde
+  asignadas: React.createElement('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    React.createElement('path', { d: 'M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2' }),
+    React.createElement('rect', { x: 8, y: 2, width: 8, height: 4, rx: 1 })
+  ),
+  iniciadas: React.createElement('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    React.createElement('circle', { cx: 12, cy: 12, r: 10 }),
+    React.createElement('polyline', { points: '12 6 12 12 16 14' })
+  ),
+  completadas: React.createElement('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    React.createElement('path', { d: 'M22 11.08V12a10 10 0 11-5.93-9.14' }),
+    React.createElement('polyline', { points: '22 4 12 14.01 9 11.01' })
+  ),
 };
 
 // Cantidad inicial de completadas visibles
@@ -270,7 +279,7 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
           transition: 'background 0.15s ease',
         }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 18 }}>{icono}</span>
+          <span style={{ display: 'flex', alignItems: 'center' }}>{icono}</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--texto-2)' }}>
             {titulo}
           </span>

@@ -1,3 +1,4 @@
+console.log('[nueva-visita] v3 cargado');
 // ═══════════════════════════════════════════════════════════════
 // v6/nueva-visita.jsx — Pantalla "Nueva visita" / "Continuar visita"
 //
@@ -917,6 +918,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     _extraerConsecutivoOrden((datosIniciales || {})['N° ORDEN DE POLICIA'] || (datosIniciales || {})['N ORDEN DE POLICIA'] || '')
   );
 
+  console.log('[NuevaVisitaScreen] render', { filaInicial, esOficio: d.esOficio, estadoVisita });
   // Helper para actualizar un campo del form
   function setCampo(k, v) { setD(prev => ({ ...prev, [k]: v })); }
 

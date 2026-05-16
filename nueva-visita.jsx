@@ -1,4 +1,3 @@
-console.log('[nueva-visita] v3 cargado');
 // ═══════════════════════════════════════════════════════════════
 // v6/nueva-visita.jsx — Pantalla "Nueva visita" / "Continuar visita"
 //
@@ -902,6 +901,10 @@ function ModalInicioVisita({ onResult, onCancelar }) {
 //   PANTALLA
 // ══════════════════════════════════════════════════════════════
 function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
+  // ── Fase: 'modal' muestra el selector de tipo, 'formulario' muestra el form ──
+  const tieneDatos = filaInicial != null || datosIniciales != null;
+  const [fase, setFase] = useStateNV(tieneDatos ? 'formulario' : 'modal');
+
   const [d, setD]               = useStateNV(() => _estadoInicial(datosIniciales));
   const [estadoVisita, setEstV] = useStateNV(filaInicial ? 'INICIADO' : 'PENDIENTE');
   const [filaEditando, setFE]   = useStateNV(filaInicial || null);
@@ -918,7 +921,37 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     _extraerConsecutivoOrden((datosIniciales || {})['N° ORDEN DE POLICIA'] || (datosIniciales || {})['N ORDEN DE POLICIA'] || '')
   );
 
-  console.log('[NuevaVisitaScreen] render', { filaInicial, esOficio: d.esOficio, estadoVisita });
+  // ── Callback del modal: configura el formulario según la elección ──
+  function handleModalResult(res) {
+    if (res.tipo === 'oficio') {
+      // Visita de oficio — formulario en blanco con flag _oficio
+      setD(_estadoInicial({ '_oficio': true }));
+      setEstV('PENDIENTE');
+      setFE(null);
+    } else if (res.tipo === 'pqr') {
+      // PQR con datos precargados de BD
+      setD(_estadoInicial(res.datosIniciales));
+      setEstV(res.esNueva ? 'PENDIENTE' : 'INICIADO');
+      setFE(res.esNueva ? null : (res.fila || null));
+      if (res.datosIniciales) {
+        setOrdenConsecutivo(
+          _extraerConsecutivoOrden(res.datosIniciales['N° ORDEN DE POLICIA'] || res.datosIniciales['N ORDEN DE POLICIA'] || '')
+        );
+      }
+    } else if (res.tipo === 'pqr_manual') {
+      // PQR sin datos en BD — solo radicado precompletado
+      setD(_estadoInicial({ 'RADICADO': res.radicado }));
+      setEstV('PENDIENTE');
+      setFE(null);
+    }
+    setFase('formulario');
+  }
+
+  // ── Si estamos en fase modal, mostrar solo el selector ──
+  if (fase === 'modal') {
+    return <ModalInicioVisita onResult={handleModalResult} onCancelar={onSalir} />;
+  }
+
   // Helper para actualizar un campo del form
   function setCampo(k, v) { setD(prev => ({ ...prev, [k]: v })); }
 
@@ -1806,62 +1839,4 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-//   WRAPPER — Modal de inicio → Formulario
-// ══════════════════════════════════════════════════════════════
-function NuevaVisitaWrapper({ usuario, filaInicial, datosIniciales, onSalir }) {
-  const [config, setConfig] = useStateNV(() => {
-    // Si viene con filaInicial, ir directo al formulario
-    if (filaInicial != null) {
-      return { listo: true, fila: filaInicial, datos: datosIniciales };
-    }
-    // Si viene con datosIniciales pero sin fila, directo al formulario
-    if (datosIniciales) {
-      return { listo: true, fila: null, datos: datosIniciales };
-    }
-    // Sin datos: mostrar modal de inicio
-    return { listo: false, fila: null, datos: null };
-  });
-
-  function handleModalResult(result) {
-    const ts = Date.now(); // timestamp estable para key de React
-    if (result.tipo === 'oficio') {
-      setConfig({ listo: true, fila: null, datos: { _oficio: true }, ts });
-    } else if (result.tipo === 'pqr') {
-      setConfig({
-        listo: true,
-        fila: result.esNueva ? null : result.fila,
-        datos: result.datosIniciales,
-        ts,
-      });
-    } else if (result.tipo === 'pqr_manual') {
-      setConfig({
-        listo: true,
-        fila: null,
-        datos: { RADICADO: result.radicado },
-        ts,
-      });
-    }
-  }
-
-  if (!config.listo) {
-    return (
-      <ModalInicioVisita
-        onResult={handleModalResult}
-        onCancelar={onSalir}
-      />
-    );
-  }
-
-  return (
-    <NuevaVisitaScreen
-      key={(config.fila || 'nueva') + '-' + (config.ts || 0)}
-      usuario={usuario}
-      filaInicial={config.fila}
-      datosIniciales={config.datos}
-      onSalir={onSalir}
-    />
-  );
-}
-
-window.NuevaVisitaScreen = NuevaVisitaWrapper;
+window.NuevaVisitaScreen = NuevaVisitaScreen;

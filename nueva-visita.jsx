@@ -914,6 +914,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [busyMejora, setBusyMe] = useStateNV(false);
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
+  const [dictando, setDictando] = useStateNV(false);    // grabación por voz activa
   const [busyPOT, setBusyPOT]   = useStateNV(false);
   // Estado auxiliar para barrio "Otro" (texto libre)
   const [barrioOtro, setBarrioOtro] = useStateNV('');
@@ -1026,6 +1027,60 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }
   function descartarSugerenciaIA() {
     setSugerenciaIA('');
+  }
+
+  // ── Dictado por voz (Web Speech API) ───────────────────────
+  // Referencia estable al recognition para poder detenerlo
+  const recognitionRef = React.useRef(null);
+
+  function toggleDictado() {
+    // Si ya está dictando, detener
+    if (dictando && recognitionRef.current) {
+      recognitionRef.current.stop();
+      return;
+    }
+    // Verificar soporte
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      appAlert('Tu navegador no soporta dictado por voz. Usa Chrome o Edge.', { titulo: 'Sin soporte' });
+      return;
+    }
+    const rec = new SpeechRecognition();
+    rec.lang = 'es-CO';
+    rec.continuous = true;
+    rec.interimResults = false;
+    recognitionRef.current = rec;
+
+    rec.onresult = (ev) => {
+      let texto = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) {
+          texto += ev.results[i][0].transcript;
+        }
+      }
+      if (texto) {
+        // Añadir al final del texto existente con espacio
+        setD(prev => ({
+          ...prev,
+          actuacion: (prev.actuacion ? prev.actuacion + ' ' : '') + texto.trim(),
+        }));
+      }
+    };
+    rec.onerror = (ev) => {
+      console.warn('[Dictado] error:', ev.error);
+      if (ev.error !== 'aborted') {
+        appAlert('Error de dictado: ' + ev.error, { titulo: 'Dictado' });
+      }
+      setDictando(false);
+      recognitionRef.current = null;
+    };
+    rec.onend = () => {
+      setDictando(false);
+      recognitionRef.current = null;
+    };
+
+    rec.start();
+    setDictando(true);
   }
 
   // ── Consultar norma POT ────────────────────────────────────
@@ -1555,10 +1610,26 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           hint="Texto descriptivo de lo encontrado en sitio. Usa el botón IA para pulir la redacción.">
           <_TextArea value={d.actuacion} onChange={v => setCampo('actuacion', v)} rows={8} />
         </_Campo>
-        <div style={{ display: 'flex', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 4, gridColumn: '1 / -1', flexWrap: 'wrap' }}>
           <_BtnAccion busy={busyMejora} onClick={ejecutarMejora}>
             {busyMejora ? '⏳ Mejorando...' : '✨ Mejorar con IA'}
           </_BtnAccion>
+          <_BtnAccion onClick={toggleDictado} busy={false}>
+            <span style={dictando ? { color: '#ef4444', animation: 'none' } : {}}>{dictando ? '⏹' : '🎙️'}</span>
+            {dictando ? 'Detener dictado' : 'Dictar'}
+          </_BtnAccion>
+          {dictando && (
+            <span style={{
+              fontSize: 12, color: '#ef4444', fontWeight: 600,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', background: '#ef4444',
+                display: 'inline-block', animation: 'pulsar 1s infinite',
+              }} />
+              Grabando...
+            </span>
+          )}
         </div>
 
         {/* Panel comparador: sugerencia IA vs original */}

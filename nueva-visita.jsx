@@ -947,21 +947,17 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setFase('formulario');
   }
 
-  // ── Si estamos en fase modal, mostrar solo el selector ──
-  if (fase === 'modal') {
-    return <ModalInicioVisita onResult={handleModalResult} onCancelar={onSalir} />;
-  }
-
   // Helper para actualizar un campo del form
   function setCampo(k, v) { setD(prev => ({ ...prev, [k]: v })); }
 
   // Prefijar visitador con el usuario logueado (si está en la lista)
   useEffectNV(() => {
+    if (fase !== 'formulario') return; // no ejecutar en fase modal
     if (!d.visitador && usuario) {
       const m = VISITADORES.find(v => v.val.includes(usuario.usuario.toUpperCase().split(' ')[0]));
       if (m) setCampo('visitador', m.val);
     }
-  }, []); // solo al montar
+  }, [fase]); // se dispara cuando pasa a 'formulario'
 
   // Sincronizar orden completa cuando cambia el consecutivo
   useEffectNV(() => {
@@ -978,6 +974,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       setCampo('suspension', 'N/A');
     }
   }, [d.estadoObra]);
+
+  // ── Si estamos en fase modal, mostrar solo el selector ──
+  if (fase === 'modal') {
+    return <ModalInicioVisita onResult={handleModalResult} onCancelar={onSalir} />;
+  }
 
   // ── Geocode botón — al obtener coords dispara consulta POT automática ─
   async function ejecutarGeocode() {

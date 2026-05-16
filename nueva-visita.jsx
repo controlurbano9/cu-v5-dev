@@ -913,6 +913,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [generandoRF,  setGRF]  = useStateNV(false);
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [busyMejora, setBusyMe] = useStateNV(false);
+  const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
   const [busyPOT, setBusyPOT]   = useStateNV(false);
   // Estado auxiliar para barrio "Otro" (texto libre)
   const [barrioOtro, setBarrioOtro] = useStateNV('');
@@ -1004,7 +1005,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setBusyGeo(false);
   }
 
-  // ── Mejorar texto con IA ───────────────────────────────────
+  // ── Mejorar texto con IA (genera sugerencia, no reemplaza directo) ──
   async function ejecutarMejora() {
     if (!d.actuacion) {
       await appAlert('Escribe algo en la descripción primero.', { titulo: 'Nada que mejorar' });
@@ -1013,11 +1014,18 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setBusyMe(true);
     try {
       const t = await mejorarTexto(d.actuacion);
-      if (t) setCampo('actuacion', t);
+      if (t) setSugerenciaIA(t);
     } catch (e) {
       await appAlert('Error: ' + e.message, { titulo: 'Mejora con IA' });
     }
     setBusyMe(false);
+  }
+  function aceptarSugerenciaIA() {
+    setCampo('actuacion', sugerenciaIA);
+    setSugerenciaIA('');
+  }
+  function descartarSugerenciaIA() {
+    setSugerenciaIA('');
   }
 
   // ── Consultar norma POT ────────────────────────────────────
@@ -1549,12 +1557,48 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         </_Campo>
         <div style={{ display: 'flex', gap: 8, marginTop: 4, gridColumn: '1 / -1' }}>
           <_BtnAccion busy={busyMejora} onClick={ejecutarMejora}>
-            {busyMejora ? '...' : 'Mejorar con IA'}
-          </_BtnAccion>
-          <_BtnAccion onClick={() => appAlert('La grabación por voz se conectará en la próxima iteración (Web Speech API + transcripción).', { titulo: 'Próximamente' })}>
-            Dictar (próximo)
+            {busyMejora ? '⏳ Mejorando...' : '✨ Mejorar con IA'}
           </_BtnAccion>
         </div>
+
+        {/* Panel comparador: sugerencia IA vs original */}
+        {sugerenciaIA && (
+          <div style={{
+            gridColumn: '1 / -1', marginTop: 12, padding: 16,
+            background: 'var(--brand-bg)', border: '1.5px solid var(--brand-accent)',
+            borderRadius: 'var(--r-lg)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 18 }}>✨</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--brand-ink)' }}>Versión mejorada (sugerencia IA)</div>
+                <div style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
+                  Puede editarla antes de aplicarla. El texto original se conserva arriba.
+                </div>
+              </div>
+            </div>
+            <textarea
+              className="input-campo"
+              rows={8}
+              value={sugerenciaIA}
+              onChange={e => setSugerenciaIA(e.target.value)}
+              style={{ marginBottom: 10, background: '#fff' }}
+            />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button type="button" onClick={aceptarSugerenciaIA} className="btn-principal verde"
+                style={{ margin: 0, fontSize: 13, padding: '8px 18px' }}>
+                Usar esta versión
+              </button>
+              <button type="button" onClick={descartarSugerenciaIA} style={{
+                background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
+                padding: '8px 16px', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+              }}>Descartar</button>
+              <span style={{ fontSize: 11, color: 'var(--texto-suave)', marginLeft: 'auto' }}>
+                Al usarla, reemplaza el texto original.
+              </span>
+            </div>
+          </div>
+        )}
       </_Seccion>
 
       {/* 7B. CONCLUSIONES ────────────────────────────────── */}

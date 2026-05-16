@@ -335,6 +335,11 @@
     font-size: 10px; color: var(--texto-suave);
     margin-top: 2px; font-weight: 400;
   }
+  /* Stats compactos (home dashboard) */
+  .stats-grid-2x2.compact { gap: 8px; margin-bottom: 14px; }
+  .stat-box-v2.compact { padding: 12px 12px; }
+  .stat-box-v2.compact .stat-num-v2 { font-size: 28px; letter-spacing: -1px; }
+  .stat-box-v2.compact .stat-label-v2 { font-size: 11px; margin-top: 4px; }
 
   /* ── HOME TABS (Mis visitas / Todas) ───────────────────────── */
   .home-tabs {
@@ -674,18 +679,33 @@
     display: flex; z-index: 200;
     padding-bottom: env(safe-area-inset-bottom);
   }
-  .nav-btn {
-    flex: 1; padding: 10px 4px 8px;
+  .nav-btn,
+  .bottom-tab {
+    flex: 1; padding: 8px 4px 6px;
     border: none; background: none; cursor: pointer;
     font-family: inherit;
     display: flex; flex-direction: column;
-    align-items: center; gap: 3px;
+    align-items: center; gap: 2px;
     color: var(--slate-400); font-size: 10px; font-weight: 500;
     transition: color 0.15s; letter-spacing: 0.1px;
   }
-  .nav-btn:active { opacity: 0.6; }
-  .nav-btn.activo { color: var(--brand-accent); }
-  .nav-btn svg { width: 22px; height: 22px; }
+  .nav-btn:active, .bottom-tab:active { opacity: 0.6; }
+  .nav-btn.activo, .bottom-tab.activo { color: var(--brand-accent); }
+  .nav-btn svg, .bottom-tab svg { width: 22px; height: 22px; }
+
+  /* ── FAB Nueva Visita ────────────────────────────────────────── */
+  .fab-nueva {
+    position: fixed; bottom: 76px; right: 16px;
+    width: 52px; height: 52px;
+    background: var(--brand-accent);
+    border-radius: var(--r-full);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.22);
+    z-index: 199; color: #FFFBF5;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .fab-nueva:active { transform: scale(0.92); box-shadow: var(--sombra-sm); }
 
   /* ── FILTROS ESTADO ─────────────────────────────────────────── */
   .filtros-estado { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -776,6 +796,7 @@
   @media (min-width: 768px) {
     body { background: var(--fondo); }
     .nav-inferior, #nav-inferior, .fab { display: none !important; }
+    .fab-nueva { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; }
 
     #app-wrapper {
       max-width: 100%;

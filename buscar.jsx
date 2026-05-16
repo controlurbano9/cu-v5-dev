@@ -400,11 +400,10 @@ function FilaVisitaBase({ f, usuario, onContinuar }) {
             {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}
             {f['COMUNA'] && ` · C${f['COMUNA']}`}
           </div>
-          {f['VISITADOR(ES)'] && (
-            <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
-              <span style={{ opacity: 0.7 }}>Visitador:</span> {f['VISITADOR(ES)']}
-            </div>
-          )}
+          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {f['FECHA DE VISITA'] && <span>{formatearFecha(f['FECHA DE VISITA'])}</span>}
+            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Visitador:</span> {f['VISITADOR(ES)']}</span>}
+          </div>
         </div>
         <span style={{
           background: tono.bg, color: tono.fg, fontSize: 10, fontWeight: 700,

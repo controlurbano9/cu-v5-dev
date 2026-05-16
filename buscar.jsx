@@ -44,14 +44,17 @@ function BuscarScreen({ usuario, onContinuar }) {
   // Lista de visitadores activos (chips de filtro admin). Se carga desde
   // USUARIOS vía endpoint público — sin nombres hardcoded en el bundle.
   const [visitadores, setVisitadores] = useStateB([]);
-  // Paginación incremental: por defecto se renderizan los primeros LIMITE_INICIAL
-  // grupos. El botón "Mostrar 50 más" sube el techo. Se reinicia cuando cambian
-  // los filtros o el texto de búsqueda.
+  // Paginación incremental
   const LIMITE_INICIAL = 50;
   const LIMITE_PASO    = 50;
   const [limite, setLimite] = useStateB(LIMITE_INICIAL);
 
   const esAdmin = usuario.rol === 'ADMIN';
+
+  // ── Estado para acciones de gestión admin ──
+  const [inspectores, setInspectores] = useStateB([]);
+  const [busyFila, setBusyFila] = useStateB(null);       // _idx de fila en proceso
+  const [asignandoFila, setAsignandoFila] = useStateB(null); // _idx de fila con panel abierto
 
   useEffectB(() => { cargar(); }, []);
 
@@ -64,8 +67,59 @@ function BuscarScreen({ usuario, onContinuar }) {
         val: u.nombre,
         l:   titleCaseFirst2(u.nombre),
       })));
-    }).catch(() => { /* silencioso: el filtro queda vacío si falla */ });
+      // También guardar lista completa para el panel de asignación
+      setInspectores(lista || []);
+    }).catch(() => {});
   }, [esAdmin]);
+
+  // ── Acciones admin: asignar, desasignar, completar ──
+  async function adminAsignar(fila, inspector) {
+    setBusyFila(fila);
+    try {
+      await gasGet({
+        accion: 'asignarRadicado', fila, inspector,
+        fechaAsignacion: hoyDDMMAAAA(),
+      });
+      invalidarCache('visitas');
+      setAsignandoFila(null);
+      await cargar(true);
+    } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
+    setBusyFila(null);
+  }
+
+  async function adminDesasignar(fila, rad) {
+    const ok = await appConfirm(
+      '¿Quitar asignación de ' + (rad || 'este radicado') + '?\nVolverá a estado PENDIENTE.',
+      { titulo: 'Desasignar', btnOk: 'Desasignar' }
+    );
+    if (!ok) return;
+    setBusyFila(fila);
+    try {
+      await gasGet({ accion: 'desasignarRadicado', fila });
+      invalidarCache('visitas');
+      await cargar(true);
+    } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
+    setBusyFila(null);
+  }
+
+  async function adminCompletar(fila, fechaAsig) {
+    const ok = await appConfirm('¿Marcar como COMPLETADO?', {
+      titulo: 'Completar visita', btnOk: 'Completar',
+    });
+    if (!ok) return;
+    setBusyFila(fila);
+    try {
+      const dias = fechaAsig ? diasDesde(fechaAsig) : '';
+      await gasGet({
+        accion: 'completarRegistro', fila,
+        dias: dias || '',
+        fecha: hoyDDMMAAAA(),
+      });
+      invalidarCache('visitas');
+      await cargar(true);
+    } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
+    setBusyFila(null);
+  }
 
   // Debounce 300ms: sincroniza qInput → q sin gatillar refiltros por keystroke.
   useEffectB(() => {
@@ -283,7 +337,10 @@ function BuscarScreen({ usuario, onContinuar }) {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {visibles.map(([rad, filas]) => (
-              <GrupoRadicado key={rad} radicado={rad} filas={filas} usuario={usuario} onContinuar={onContinuar} />
+              <GrupoRadicado key={rad} radicado={rad} filas={filas} usuario={usuario} onContinuar={onContinuar}
+                esAdmin={esAdmin} inspectores={inspectores} busyFila={busyFila}
+                asignandoFila={asignandoFila} setAsignandoFila={setAsignandoFila}
+                onAsignar={adminAsignar} onDesasignar={adminDesasignar} onCompletar={adminCompletar} />
             ))}
             {ocultos > 0 && (
               <button
@@ -354,7 +411,9 @@ function urlInformeF43(f, usuario) {
 // React.memo más abajo. Cada GrupoRadicado se re-renderiza solo si cambian
 // sus props (radicado, filas, usuario); un keystroke en el buscador que
 // reduce filtros ya no rerenderea todas las tarjetas visibles.
-function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar }) {
+function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
+  esAdmin, inspectores, busyFila, asignandoFila, setAsignandoFila,
+  onAsignar, onDesasignar, onCompletar }) {
   const [open, setOpen] = useStateB(filas.length === 1);
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -373,14 +432,20 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar }) {
       </div>
       {open && (
         <div>
-          {filas.map((f, i) => <FilaVisita key={f._idx || i} f={f} usuario={usuario} onContinuar={onContinuar} />)}
+          {filas.map((f, i) => <FilaVisita key={f._idx || i} f={f} usuario={usuario} onContinuar={onContinuar}
+            esAdmin={esAdmin} inspectores={inspectores}
+            busy={busyFila === f._idx}
+            abierto={asignandoFila === f._idx}
+            onAbrirAsignar={() => setAsignandoFila(asignandoFila === f._idx ? null : f._idx)}
+            onAsignar={onAsignar} onDesasignar={onDesasignar} onCompletar={onCompletar} />)}
         </div>
       )}
     </div>
   );
 }
 
-function FilaVisitaBase({ f, usuario, onContinuar }) {
+function FilaVisitaBase({ f, usuario, onContinuar,
+  esAdmin, inspectores, busy, abierto, onAbrirAsignar, onAsignar, onDesasignar, onCompletar }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
   const tono = {
     PENDIENTE:  { bg: 'rgba(184,135,58,0.14)',  fg: '#8A6628' },
@@ -403,6 +468,7 @@ function FilaVisitaBase({ f, usuario, onContinuar }) {
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {f['FECHA DE VISITA'] && <span>{formatearFecha(f['FECHA DE VISITA'])}</span>}
             {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Visitador:</span> {f['VISITADOR(ES)']}</span>}
+            {f['FECHA ASIGNACION VISITA'] && <span><span style={{ opacity: 0.7 }}>Asignado:</span> {formatearFecha(f['FECHA ASIGNACION VISITA'])}</span>}
           </div>
         </div>
         <span style={{
@@ -411,30 +477,76 @@ function FilaVisitaBase({ f, usuario, onContinuar }) {
         }}>{est || '—'}</span>
       </div>
 
-      {est === 'INICIADO' && onContinuar && (
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={() => onContinuar(f._idx, f)}
+      {/* ── Botones de acción ── */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        {/* PENDIENTE: botón Iniciar + Asignar (admin) */}
+        {est === 'PENDIENTE' && onContinuar && (
+          <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
             className="btn-principal verde"
-            style={{ margin: 0, padding: '6px 14px', fontSize: 12 }}
-            title="Continuar el diligenciamiento de esta visita"
-          >
-            ▶ Continuar visita
-          </button>
-        </div>
-      )}
-      {(est === 'PENDIENTE' || est === 'ASIGNADO') && onContinuar && (
-        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="button"
-            onClick={() => onContinuar(f._idx, f)}
-            className="btn-principal verde"
-            style={{ margin: 0, padding: '6px 14px', fontSize: 12 }}
-            title="Abrir el formulario para iniciar esta visita"
-          >
+            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
             ▶ Iniciar visita
           </button>
+        )}
+        {est === 'PENDIENTE' && esAdmin && (
+          <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
+            flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
+            border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
+            fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+            cursor: busy ? 'not-allowed' : 'pointer',
+          }}>{busy ? '...' : (abierto ? 'Cancelar' : 'Asignar')}</button>
+        )}
+
+        {/* ASIGNADO / INICIADO: Continuar + Reasignar + Desasignar + Completar (admin) */}
+        {(est === 'ASIGNADO' || est === 'INICIADO') && onContinuar && (
+          <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
+            className="btn-principal verde"
+            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
+            ▶ {est === 'INICIADO' ? 'Continuar' : 'Iniciar'}
+          </button>
+        )}
+        {(est === 'ASIGNADO' || est === 'INICIADO') && esAdmin && (
+          <>
+            <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
+              flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
+              border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}>{abierto ? 'Cancelar' : 'Reasignar'}</button>
+            <button type="button" onClick={() => onDesasignar(f._idx, f['RADICADO'])} disabled={busy} style={{
+              flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
+              border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}>↩ Desasignar</button>
+            <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
+              className="btn-principal verde"
+              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
+              ✓ Completar
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ── Panel de selección de inspector (asignar/reasignar) ── */}
+      {abierto && esAdmin && inspectores && inspectores.length > 0 && (
+        <div style={{
+          marginTop: 10, padding: 10, background: 'var(--gris-bg)', borderRadius: 8,
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
+            Asignar a:
+          </div>
+          {inspectores.map(i => (
+            <button key={i.nombre} type="button"
+              onClick={() => onAsignar(f._idx, i.nombre)} disabled={busy} style={{
+              background: 'var(--superficie)', border: '1px solid var(--borde)', borderRadius: 6,
+              padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, textAlign: 'left',
+              cursor: busy ? 'not-allowed' : 'pointer',
+            }}>
+              {i.nombre}
+              {i.cargo && <span style={{ color: 'var(--texto-suave)', fontSize: 11 }}> · {i.cargo}</span>}
+            </button>
+          ))}
         </div>
       )}
     </div>

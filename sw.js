@@ -4,12 +4,12 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v1';
+const CACHE_NAME = 'cu-v6-cache-v2';
 
 // Assets locales que se pre-cachean en install
 const PRECACHE_URLS = [
   './',
-  './VERSION_6_REACT.html',
+  './index.html',
   './styles.css',
   './api.js',
   './logo.jpg',

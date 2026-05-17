@@ -457,6 +457,58 @@ const SESSION = {
   },
 };
 
+// ── CATASTRO — búsqueda por GPS ───────────────────────────────
+// catastro.json: array de [lat, lon, ficha, catastral_sin_05088, direccion]
+// Ordenado por lat → búsqueda binaria + filtro por distancia.
+let _catastroData = null;
+let _catastroLoading = null;
+
+async function _cargarCatastro() {
+  if (_catastroData) return _catastroData;
+  if (_catastroLoading) return _catastroLoading;
+  _catastroLoading = fetch('catastro.json').then(r => {
+    if (!r.ok) throw new Error('No se pudo cargar catastro.json');
+    return r.json();
+  }).then(data => { _catastroData = data; _catastroLoading = null; return data; });
+  return _catastroLoading;
+}
+
+async function buscarCatastroGPS(lat, lon, radioM) {
+  radioM = radioM || 80;
+  const data = await _cargarCatastro();
+  // ~111,000 m por grado de lat; ~cos(6.35°)*111,000 ≈ 110,320 m por grado de lon
+  const dLat = radioM / 111000;
+  const dLon = radioM / 110320;
+  const latMin = lat - dLat, latMax = lat + dLat;
+  const lonMin = lon - dLon, lonMax = lon + dLon;
+
+  // Búsqueda binaria para encontrar rango de latitudes
+  let lo = 0, hi = data.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; data[m][0] < latMin ? lo = m + 1 : hi = m; }
+  const start = lo;
+  hi = data.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; data[m][0] <= latMax ? lo = m + 1 : hi = m; }
+  const end = lo;
+
+  const results = [];
+  for (let i = start; i < end; i++) {
+    const r = data[i];
+    if (r[1] < lonMin || r[1] > lonMax) continue;
+    const distM = Math.sqrt(Math.pow((r[0] - lat) * 111000, 2) + Math.pow((r[1] - lon) * 110320, 2));
+    if (distM <= radioM) {
+      results.push({
+        ficha: r[2],
+        catastral: '05088' + r[3],
+        direccion: r[4],
+        distancia: Math.round(distM),
+        lat: r[0], lon: r[1],
+      });
+    }
+  }
+  results.sort((a, b) => a.distancia - b.distancia);
+  return results;
+}
+
 // Exportar al global para que los componentes JSX (cada uno con su scope)
 // los puedan usar sin imports.
 Object.assign(window, {
@@ -468,6 +520,7 @@ Object.assign(window, {
   geocodeDireccion, crearCarpetaVisita, guardarVisita,
   mejorarTexto,
   subirFotoConDescripcion, describirFotoConIA, consultarPOT,
+  buscarCatastroGPS,
   SESSION_V6: SESSION,
   invalidarCache,
 });

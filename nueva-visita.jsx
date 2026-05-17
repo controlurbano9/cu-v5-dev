@@ -916,6 +916,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
   const [dictando, setDictando] = useStateNV(false);    // grabación por voz activa
   const [busyPOT, setBusyPOT]   = useStateNV(false);
+  const [busyCat, setBusyCat]   = useStateNV(false);
+  const [catResultados, setCatRes] = useStateNV(null);
   // Estado auxiliar para barrio "Otro" (texto libre)
   const [barrioOtro, setBarrioOtro] = useStateNV('');
   // Estado auxiliar para consecutivo de orden de policía (solo el número)
@@ -995,8 +997,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const c = r.data || r;
       if (c.lat && c.lng) {
         setCampo('lat', c.lat); setCampo('lon', c.lng);
-        // Consulta POT automática (igual que producción V2). No bloqueante.
         ejecutarPOT(c.lat, c.lng);
+        ejecutarBusquedaCatastral(c.lat, c.lng);
       } else {
         await appAlert('No se encontró la ubicación. Refina la dirección.', { titulo: 'Sin resultado' });
       }
@@ -1124,6 +1126,63 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       await appAlert('Error: ' + e.message, { titulo: 'Consulta POT' });
     }
     setBusyPOT(false);
+  }
+
+  // ── Búsqueda catastral por GPS ────────────────────────────
+  async function ejecutarBusquedaCatastral(latArg, lonArg) {
+    const lat = (latArg != null) ? latArg : d.lat;
+    const lon = (lonArg != null) ? lonArg : d.lon;
+    if (lat == null || lon == null) {
+      await appAlert('Necesitas coordenadas primero. Usa "Buscar coordenadas" o "Mi ubicación".', { titulo: 'Sin GPS' });
+      return;
+    }
+    setBusyCat(true);
+    setCatRes(null);
+    try {
+      const res = await buscarCatastroGPS(lat, lon, 100);
+      if (!res.length) {
+        await appAlert('No se encontraron predios en un radio de 100m.', { titulo: 'Sin resultados' });
+      } else if (res.length === 1) {
+        setCampo('catastral', res[0].catastral);
+        setCampo('ficha', String(res[0].ficha));
+      } else {
+        setCatRes(res.slice(0, 10));
+      }
+    } catch (e) {
+      await appAlert('Error: ' + e.message, { titulo: 'Catastro' });
+    }
+    setBusyCat(false);
+  }
+
+  function seleccionarCatastral(item) {
+    setCampo('catastral', item.catastral);
+    setCampo('ficha', String(item.ficha));
+    setCatRes(null);
+  }
+
+  // ── Geolocalización directa del dispositivo ───────────────
+  async function usarMiUbicacion() {
+    if (!navigator.geolocation) {
+      await appAlert('Tu dispositivo no soporta geolocalización.', { titulo: 'GPS' });
+      return;
+    }
+    setBusyGeo(true);
+    try {
+      const pos = await new Promise((ok, fail) =>
+        navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 15000 })
+      );
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      setCampo('lat', lat);
+      setCampo('lon', lon);
+      ejecutarPOT(lat, lon);
+      ejecutarBusquedaCatastral(lat, lon);
+    } catch (e) {
+      const msg = e.code === 1 ? 'Permiso de ubicación denegado.' :
+                  e.code === 3 ? 'Tiempo de espera agotado.' : 'No se pudo obtener ubicación.';
+      await appAlert(msg, { titulo: 'GPS' });
+    }
+    setBusyGeo(false);
   }
 
   // ── Validaciones mínimas antes de guardar ──────────────────
@@ -1456,9 +1515,14 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             </div>
             <div className="gps-dir">{d.direccion || '—'}</div>
           </div>
-          <_BtnAccion busy={busyGeo} onClick={ejecutarGeocode}>
-            {busyGeo ? '...' : 'Buscar coordenadas'}
-          </_BtnAccion>
+          <div style={{ display: 'flex', gap: 6, flexDirection: 'column' }}>
+            <_BtnAccion busy={busyGeo} onClick={ejecutarGeocode}>
+              {busyGeo ? '...' : 'Buscar coordenadas'}
+            </_BtnAccion>
+            <_BtnAccion busy={busyGeo} onClick={usarMiUbicacion}>
+              {busyGeo ? '...' : 'Mi ubicación'}
+            </_BtnAccion>
+          </div>
         </div>
       </_Seccion>
 
@@ -1786,6 +1850,42 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         <_Campo label="N° ficha predial">
           <_Input mono value={d.ficha} onChange={v => setCampo('ficha', v)} />
         </_Campo>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <_BtnAccion busy={busyCat} onClick={() => ejecutarBusquedaCatastral()}>
+            {busyCat ? 'Buscando...' : 'Buscar catastral por ubicación'}
+          </_BtnAccion>
+        </div>
+
+        {catResultados && catResultados.length > 0 && (
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
+              {catResultados.length} predios encontrados — selecciona uno:
+            </div>
+            {catResultados.map((r, i) => (
+              <button key={i} type="button" onClick={() => seleccionarCatastral(r)}
+                style={{
+                  textAlign: 'left', padding: '10px 12px', borderRadius: 8,
+                  border: '1px solid var(--borde)', background: 'var(--superficie)',
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+                  transition: 'background 0.15s',
+                }}>
+                <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                  Ficha {r.ficha}
+                  <span style={{ fontWeight: 400, color: 'var(--texto-suave)', marginLeft: 8 }}>
+                    {r.distancia}m
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
+                  {r.direccion || 'Sin dirección'}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--texto-suave)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                  {r.catastral}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         <_Campo label="Polígono de uso del suelo">
           <_Input mono value={d.poligono} onChange={v => setCampo('poligono', v)}
             placeholder="ZR-CN-1" />

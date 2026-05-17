@@ -467,7 +467,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
           </div>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {f['FECHA DE VISITA'] && <span>{formatearFecha(f['FECHA DE VISITA'])}</span>}
-            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Inspector:</span> {(f['VISITADOR(ES)'] || '').split(',')[0].trim()}</span>}
+            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Inspector:</span> {(f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}</span>}
             {f['FECHA ASIGNACION VISITA'] && <span><span style={{ opacity: 0.7 }}>Asignado:</span> {formatearFecha(f['FECHA ASIGNACION VISITA'])}</span>}
           </div>
         </div>

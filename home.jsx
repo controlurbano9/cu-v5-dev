@@ -274,7 +274,7 @@ function AlertaCard({ alerta, tipo, onContinuar }) {
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
             {f['RADICADO'] || '—'}
             {f['BARRIO/VEREDA'] && ' · ' + (f['BARRIO/VEREDA'] || '')}
-            {f['VISITADOR(ES)'] && ' · ' + (f['VISITADOR(ES)'] || '').split(',')[0].trim()}
+            {f['VISITADOR(ES)'] && ' · ' + (f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}
           </div>
         </div>
         <button type="button" onClick={() => onContinuar(f._idx, f)} style={{

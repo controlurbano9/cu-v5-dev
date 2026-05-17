@@ -608,6 +608,49 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
   );
 }
 
+// Mapa Google Maps con pin arrastrable para corregir coordenadas
+function _MapaGPS({ lat, lon, onMove }) {
+  const mapRef = React.useRef(null);
+  const gMapRef = React.useRef(null);
+  const markerRef = React.useRef(null);
+
+  useEffectNV(() => {
+    if (!mapRef.current || typeof google === 'undefined' || !google.maps) return;
+    const pos = { lat: Number(lat), lng: Number(lon) };
+
+    if (!gMapRef.current) {
+      gMapRef.current = new google.maps.Map(mapRef.current, {
+        center: pos, zoom: 18, mapTypeId: 'satellite',
+        disableDefaultUI: true, zoomControl: true,
+        gestureHandling: 'greedy',
+      });
+      markerRef.current = new google.maps.Marker({
+        position: pos, map: gMapRef.current, draggable: true,
+        title: 'Arrastra para corregir ubicación',
+      });
+      markerRef.current.addListener('dragend', () => {
+        const p = markerRef.current.getPosition();
+        if (onMove) onMove(p.lat(), p.lng());
+      });
+    } else {
+      gMapRef.current.setCenter(pos);
+      markerRef.current.setPosition(pos);
+    }
+  }, [lat, lon]);
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
+        Arrastra el pin para corregir la ubicación
+      </div>
+      <div ref={mapRef} style={{
+        width: '100%', height: 220, borderRadius: 10,
+        border: '1px solid var(--borde)', overflow: 'hidden',
+      }} />
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 //   MODAL INICIO — Elige tipo de visita y busca radicado
 // ══════════════════════════════════════════════════════════════
@@ -1524,6 +1567,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             </_BtnAccion>
           </div>
         </div>
+        {d.lat != null && d.lon != null && (
+          <div style={{ gridColumn: '1 / -1' }}>
+            <_MapaGPS lat={d.lat} lon={d.lon} onMove={(lat, lon) => {
+              setCampo('lat', lat); setCampo('lon', lon);
+            }} />
+          </div>
+        )}
       </_Seccion>
 
       {/* 3. PERSONA QUE ATIENDE ──────────────────────────── */}

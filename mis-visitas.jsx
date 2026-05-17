@@ -10,7 +10,7 @@ const { useState: useStateMV, useEffect: useEffectMV, useMemo: useMemoMV } = Rea
 const TONOS_MV = {
   PENDIENTE:  { bg: 'rgba(184,135,58,0.14)', fg: '#8A6628', label: 'Pendiente' },
   ASIGNADO:   { bg: 'rgba(74,108,140,0.14)', fg: '#3F5C78', label: 'Asignada' },
-  INICIADO:   { bg: 'rgba(74,108,140,0.20)', fg: '#2E4A5E', label: 'En campo' },
+  INICIADO:   { bg: 'rgba(74,108,140,0.20)', fg: '#2E4A5E', label: 'Iniciada' },
   COMPLETADO: { bg: 'rgba(107,122,58,0.14)', fg: '#516028', label: 'Completada' },
 };
 

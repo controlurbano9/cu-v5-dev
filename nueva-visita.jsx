@@ -260,6 +260,7 @@ function _estadoInicial(datosIniciales) {
     orden:           d['N° ORDEN DE POLICIA'] || d['N ORDEN DE POLICIA'] || '',
     citacionFecha:   _fechaAIso((d['FECHA CITACION'] || '').split(' · ')[0]),
     citacionHora:    '',
+    noCitacion:      false, // checkbox "No se deja citación" — desactiva fecha y hora
     // Visitadores
     visitador:       d['VISITADOR(ES)']       || '',
     // POT
@@ -2010,13 +2011,31 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           </>
         )}
 
+        <_Campo label="Citación" fullWidth>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, color: 'var(--texto-suave)', cursor: 'pointer' }}>
+            <input type="checkbox"
+              checked={d.noCitacion}
+              onChange={e => {
+                setCampo('noCitacion', e.target.checked);
+                if (e.target.checked) {
+                  setCampo('citacionFecha', '');
+                  setCampo('citacionHora', '');
+                }
+              }}
+              style={{ accentColor: 'var(--brand-accent)' }}
+            />
+            No se deja citación
+          </label>
+        </_Campo>
         <_Campo label="Fecha de citación">
           <_Input type="date" value={d.citacionFecha}
-            onChange={v => setCampo('citacionFecha', v)} />
+            onChange={v => setCampo('citacionFecha', v)}
+            disabled={d.noCitacion} />
         </_Campo>
         <_Campo label="Hora de citación">
           <select className="input-campo" value={d.citacionHora}
-            onChange={e => setCampo('citacionHora', e.target.value)}>
+            onChange={e => setCampo('citacionHora', e.target.value)}
+            disabled={d.noCitacion}>
             <option value="">Sin hora</option>
             {HORAS_CITACION.map(h => <option key={h.val} value={h.val}>{h.l}</option>)}
           </select>

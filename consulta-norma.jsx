@@ -368,10 +368,22 @@ function ConsultaNormaScreen() {
             <CampoResultado label="Tratamiento urbanístico" valor={resultado.tratamiento || '—'} />
             <CampoResultado label="Franja de intensidad" valor={resultado.intensidad || '—'} />
             <CampoResultado label="Suelo de protección" valor={resultado.sueloProt || 'NO'} />
-            <CampoResultado label="Amenaza natural" valor={resultado.amenaza || 'NO'} />
+            <CampoResultado
+              label="Amenaza natural"
+              valor={resultado.amenaza === 'SI'
+                ? (resultado.amenazaTipo
+                    ? (resultado.amenazaTipo + (resultado.amenazaCategoria ? ' (' + resultado.amenazaCategoria + ')' : ''))
+                    : 'SI')
+                : 'NO'}
+            />
             <CampoResultado label="Retiro corrientes" valor={resultado.enRetiro || 'NO'} />
             <CampoResultado label="Comuna" valor={comunaLabel} />
             <CampoResultado label="Barrio / Vereda" valor={resultado.barrioSugerido || '—'} />
+            <CampoResultado
+              label="DRMI Quitasol-La Holanda"
+              valor={resultado.enDRMI === 'SI' ? (resultado.drmiNombre || 'SI') : 'NO'}
+              span={2}
+            />
           </div>
           );
         })()}

@@ -293,7 +293,7 @@ async function consultarPOT(lat, lon) {
       .catch(() => null),
   ]);
 
-  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '' };
+  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', amenazaTipo: '', amenazaCategoria: '', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '', enDRMI: 'NO', drmiNombre: '' };
 
   // 1. Polígono uso del suelo
   if (usoSuelo) {
@@ -319,16 +319,22 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 3. Amenaza (puntos con tolerancia 50m + polígonos)
+  // 3. Amenaza (polígonos con tipo: Fenomeno + Categoria_Amenaza)
   if (amenazas) {
     for (const feat of amenazas.features) {
       try {
+        var dentro = false;
         if (feat.geometry.type === 'Point') {
-          if (turf.distance(punto, turf.point(feat.geometry.coordinates)) < 0.05) {
-            result.amenaza = 'SI'; break;
-          }
-        } else if (turf.booleanPointInPolygon(punto, feat)) {
-          result.amenaza = 'SI'; break;
+          dentro = turf.distance(punto, turf.point(feat.geometry.coordinates)) < 0.05;
+        } else {
+          dentro = turf.booleanPointInPolygon(punto, feat);
+        }
+        if (dentro) {
+          var pA = feat.properties || {};
+          result.amenaza          = 'SI';
+          result.amenazaTipo      = pA.Fenomeno || pA.FENOMENO || pA.fenomeno || pA.CATEGORIA || pA.categoria || '';
+          result.amenazaCategoria = pA.Categoria_Amenaza || pA.categoria_amenaza || pA.CATEGORIA_AMENAZA || '';
+          break;
         }
       } catch (e) {}
     }
@@ -379,15 +385,35 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 6. Clasificación del suelo (urbano / rural / expansión) + tratamiento + franja + comuna
-  const [clasifSuelo, tratUrb, franjaInt, comunas] = await Promise.all([
+  // 6. Clasificación del suelo (urbano / rural / expansión) + tratamiento + densidad + comuna + DRMI
+  const [clasifSuelo, tratUrb, franjaInt, comunas, drmi] = await Promise.all([
     _cargarGeoJSON('ClasificacionSueloMunicipal.geojson')
       .catch(() => _cargarGeoJSON('ClasificacionSuelo.geojson'))
       .catch(() => null),
     _cargarGeoJSON('TratamientoUrbanistico.geojson').catch(() => null),
-    _cargarGeoJSON('FranjaIntensidad.geojson').catch(() => null),
+    // Capa de densidad: primero Densidades.geojson (3651 features detalladas
+    // con índices de ocupación) y fallback al FranjaIntensidad.geojson viejo
+    // (DensidadesUrbanas, 12 macro-grupos)
+    _cargarGeoJSON('Densidades.geojson')
+      .catch(() => _cargarGeoJSON('FranjaIntensidad.geojson'))
+      .catch(() => null),
     _cargarGeoJSON('Comunas.geojson').catch(() => null),
+    _cargarGeoJSON('DRMI_Quitasol_LaHolanda.geojson').catch(() => null),
   ]);
+
+  // 6d. DRMI Quitasol-La Holanda (Corantioquia, 1 polígono)
+  if (drmi) {
+    for (const feat of drmi.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          var pD = feat.properties || {};
+          result.enDRMI = 'SI';
+          result.drmiNombre = pD.NOMBRE || pD.nombre || pD.CATEGORIA || 'DRMI Quitasol-La Holanda';
+          break;
+        }
+      } catch (e) {}
+    }
+  }
 
   // 6c. Comuna (point-in-polygon contra Comunas.geojson)
   if (comunas) {
@@ -445,13 +471,15 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 8. Franja de intensidad / Densidades urbanas (NMG = nombre macro-grupo, Densidad_Vivha = viv/ha)
+  // 8. Densidades / Franja de intensidad
+  //    Densidades.geojson (3651 features) usa atributo Layer = "DENSIDAD ALTA/MEDIA/BAJA"
+  //    FranjaIntensidad.geojson (legado) usa NMG + Densidad_Vivha
   if (franjaInt) {
     for (const feat of franjaInt.features) {
       try {
         if (turf.booleanPointInPolygon(punto, feat)) {
           const p = feat.properties || {};
-          var nombre = p.NMG || p.nmg || p.FRANJA || p.franja || p.INTENSIDAD ||
+          var nombre = p.Layer || p.LAYER || p.NMG || p.nmg || p.FRANJA || p.franja || p.INTENSIDAD ||
             p.intensidad || p.NOMBRE || p.nombre || '';
           var dens = p.Densidad_Vivha != null ? p.Densidad_Vivha
                    : (p.DENSIDAD_VIVHA != null ? p.DENSIDAD_VIVHA : null);

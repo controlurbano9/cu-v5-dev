@@ -311,6 +311,50 @@ function ConsultaNormaScreen() {
         </div>
       )}
 
+      {/* Consulta Catastro — acordeón, encima del panel POT */}
+      {(busyCat || catastro) && (
+        <div className="card" style={{ marginBottom: 12, padding: 0, overflow: 'hidden' }}>
+          <div onClick={() => setCatastroOpen(!catastroOpen)} style={{
+            padding: '14px 16px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            borderBottom: catastroOpen ? '1px solid var(--borde)' : 'none',
+            userSelect: 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="card-titulo" style={{ margin: 0 }}>Consulta Catastro</div>
+              {catastro && catastro.length > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                  background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
+                }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
+              )}
+            </div>
+            <span style={{ color: 'var(--texto-suave)', fontSize: 12 }}>
+              {catastroOpen ? '▲' : '▼'}
+            </span>
+          </div>
+          {catastroOpen && (
+            <div style={{ padding: '12px 16px' }}>
+              {busyCat && (
+                <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
+                  Consultando catastro...
+                </div>
+              )}
+              {!busyCat && catastro && catastro.length === 0 && (
+                <div style={{ color: 'var(--texto-suave)', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
+                  El punto no cae dentro de ningún predio del catastro 2026.
+                </div>
+              )}
+              {!busyCat && catastro && catastro.length > 0 && (
+                catastro.length === 1
+                  ? <_TarjetaFichaCatastral r={catastro[0]} expandida={true} />
+                  : <_ListaFichasCatastrales fichas={catastro} maxAlto={420} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Resultado POT — siempre visible */}
       <div className="card">
         <div className="card-titulo" style={{ marginBottom: 12 }}>Norma POT</div>
@@ -374,50 +418,6 @@ function ConsultaNormaScreen() {
           }}>Limpiar</button>
         </div>
       </div>
-
-      {/* Consulta Catastro — acordeón, al final, debajo del panel POT */}
-      {(busyCat || catastro) && (
-        <div className="card" style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
-          <div onClick={() => setCatastroOpen(!catastroOpen)} style={{
-            padding: '14px 16px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            borderBottom: catastroOpen ? '1px solid var(--borde)' : 'none',
-            userSelect: 'none',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div className="card-titulo" style={{ margin: 0 }}>Consulta Catastro</div>
-              {catastro && catastro.length > 0 && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                  background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
-                }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
-              )}
-            </div>
-            <span style={{ color: 'var(--texto-suave)', fontSize: 12 }}>
-              {catastroOpen ? '▲' : '▼'}
-            </span>
-          </div>
-          {catastroOpen && (
-            <div style={{ padding: '12px 16px' }}>
-              {busyCat && (
-                <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
-                  Consultando catastro...
-                </div>
-              )}
-              {!busyCat && catastro && catastro.length === 0 && (
-                <div style={{ color: 'var(--texto-suave)', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
-                  El punto no cae dentro de ningún predio del catastro 2026.
-                </div>
-              )}
-              {!busyCat && catastro && catastro.length > 0 && (
-                catastro.length === 1
-                  ? <_TarjetaFichaCatastral r={catastro[0]} expandida={true} />
-                  : <_ListaFichasCatastrales fichas={catastro} maxAlto={420} />
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

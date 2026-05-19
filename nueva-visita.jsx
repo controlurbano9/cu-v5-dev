@@ -1926,10 +1926,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         </_Campo>
         <div style={{ display: 'flex', gap: 8, marginTop: 4, gridColumn: '1 / -1', flexWrap: 'wrap' }}>
           <_BtnAccion busy={busyMejora} onClick={ejecutarMejora}>
-            {busyMejora ? '⏳ Mejorando...' : '✨ Mejorar con IA'}
+            {busyMejora ? 'Mejorando...' : 'Mejorar texto'}
           </_BtnAccion>
           <_BtnAccion onClick={toggleDictado} busy={false}>
-            <span style={dictando ? { color: '#ef4444', animation: 'none' } : {}}>{dictando ? '⏹' : '🎙️'}</span>
             {dictando ? 'Detener dictado' : 'Dictar'}
           </_BtnAccion>
           {dictando && (
@@ -2177,35 +2176,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         {guardando ? 'Guardando...' : (filaEditando ? 'Actualizar visita' : 'Guardar visita')}
       </button>
 
-      {/* Fotos (aparece cuando hay carpeta Drive) */}
-      {d.idCarpetaFotos && filaEditando && (
-        <SeccionFotos
-          idCarpetaFotos={d.idCarpetaFotos}
-          fila={filaEditando}
-          linkDrive={d.linkDrive}
-        />
-      )}
-
-      {/* Generar acta F-GGO-46 — dos botones independientes (solo con fila guardada) */}
+      {/* Botones de documentos generados (solo con fila guardada) */}
       {filaEditando && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Acta F-GGO-46: estilo principal (relleno color marca) */}
           <button onClick={generarActa} disabled={generandoActa} className="btn-principal"
             style={{ fontSize: 15 }}>
             {generandoActa ? 'Generando acta...' : 'Generar acta F-GGO-46'}
           </button>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: -4 }}>
-            Hoja de caracterización en Drive.
-          </div>
 
-          <button onClick={generarRegistroFotografico} disabled={generandoRF}
-            className="btn-principal" style={{ fontSize: 15, marginTop: 6 }}>
-            {generandoRF ? 'Generando registro fotográfico...' : 'Generar registro fotográfico'}
-          </button>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: -4 }}>
-            Documento con todas las fotos subidas a la subcarpeta de la visita.
-          </div>
-
-          {/* Generar Informe F-GGO-43 — abre el modal/wizard del generador. */}
+          {/* Informe F-GGO-43: estilo outlined para diferenciarlo del acta */}
           <button onClick={() => {
             if (typeof window.abrirInformeF43 !== 'function') {
               appAlert('El generador de informe no cargó.', { titulo: 'Error' });
@@ -2232,13 +2212,31 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               sist:             d.sistema,
               obsLicencia:      d.obsLicencia,
             });
-          }} className="btn-principal" style={{ fontSize: 15, marginTop: 6 }}>
+          }} style={{
+            background: 'transparent', color: 'var(--brand-accent)',
+            border: '1.5px solid var(--brand-accent)', borderRadius: 10,
+            padding: '12px 16px', fontFamily: 'inherit', fontSize: 15, fontWeight: 600,
+            cursor: 'pointer',
+          }}>
             Generar informe F-GGO-43
           </button>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: -4 }}>
-            Abre el wizard del informe técnico precargado con los datos de la visita.
-          </div>
         </div>
+      )}
+
+      {/* Registro fotográfico al final: primero el panel con las fotos,
+          después el botón para generar el documento RF. */}
+      {d.idCarpetaFotos && filaEditando && (
+        <SeccionFotos
+          idCarpetaFotos={d.idCarpetaFotos}
+          fila={filaEditando}
+          linkDrive={d.linkDrive}
+        />
+      )}
+      {filaEditando && (
+        <button onClick={generarRegistroFotografico} disabled={generandoRF}
+          className="btn-principal" style={{ fontSize: 15, marginTop: 14 }}>
+          {generandoRF ? 'Generando registro fotográfico...' : 'Generar registro fotográfico'}
+        </button>
       )}
     </div>
   );

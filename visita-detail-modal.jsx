@@ -57,8 +57,8 @@ function _siNo(v) {
 }
 
 function VisitaDetailUI({ f, onCerrar }) {
-  // Separar actuación y conclusiones (almacenadas juntas en BD col AU)
-  const _rawAct = _g(f, 'ACTUACION / OBSERVACIONES', 'ACTUACION');
+  // Separar actuación y conclusiones (almacenadas juntas en BD col AU = índice 46)
+  const _rawAct = _g(f, 'ACTUACION / OBSERVACIONES', 'ACTUACION', 46);
   const _parts = String(_rawAct || '').split('\n══CONCLUSIONES══\n');
   const actuacion = _parts[0] || '';
   const obsConclusion = _parts[1] || '';
@@ -128,53 +128,53 @@ function VisitaDetailUI({ f, onCerrar }) {
           )}
 
           <_Seccion titulo="1. Identificación del caso">
-            <_Campo l="Radicado"            v={_g(f, 'RADICADO')} />
-            <_Campo l="Fecha radicado"      v={_fmt(_g(f, 'FECHA RADICADO'))} />
-            <_Campo l="Atención PQR"        v={_g(f, 'ATENCION PQR')} />
-            <_Campo l="Denunciante"         v={_g(f, 'DENUNCIANTE/REMITENTE', 'DENUNCIANTE')} />
-            <_Campo l="N° visita"           v={_g(f, 'N° VISITA', 'N VISITA')} />
-            <_Campo l="Fecha visita"        v={_fmt(_g(f, 'FECHA DE VISITA'))} />
-            <_Campo l="N° orden policía"    v={_g(f, 'N° ORDEN DE POLICIA', 'N ORDEN DE POLICIA')} />
+            <_Campo l="Radicado"            v={_g(f, 'RADICADO', 1)} />
+            <_Campo l="Fecha radicado"      v={_fmt(_g(f, 'FECHA RADICADO', 2))} />
+            <_Campo l="Atención PQR"        v={_g(f, 'ATENCION PQR', 0)} />
+            <_Campo l="Denunciante"         v={_g(f, 'DENUNCIANTE/REMITENTE', 'DENUNCIANTE', 6)} />
+            <_Campo l="N° visita"           v={_g(f, 'N° VISITA', 'N VISITA', 16)} />
+            <_Campo l="Fecha visita"        v={_fmt(_g(f, 'FECHA DE VISITA', 15))} />
+            <_Campo l="N° orden policía"    v={_g(f, 'N° ORDEN DE POLICIA', 'N ORDEN DE POLICIA', 44)} />
           </_Seccion>
 
           <_Seccion titulo="2. Ubicación del inmueble">
-            <_Campo l="Dirección"           v={_g(f, 'DIRECCION INFRACCION', 'DIRECCION')} />
-            <_Campo l="Barrio / Vereda"     v={_g(f, 'BARRIO/VEREDA', 'BARRIO')} />
-            <_Campo l="Comuna"              v={_g(f, 'COMUNA')} />
-            <_Campo l="Coordenadas"         v={_g(f, 'LATITUD') && _g(f, 'LONGITUD') ? `${_g(f, 'LATITUD')}, ${_g(f, 'LONGITUD')}` : '—'} />
-            <_Campo l="Código catastral"    v={_g(f, 'CODIGO CATASTRAL', 'CATASTRAL')} />
-            <_Campo l="N° ficha predial"    v={_g(f, 'N° FICHA PREDIAL', 'N FICHA PREDIAL')} />
+            <_Campo l="Dirección"           v={_g(f, 'DIRECCION INFRACCION', 'DIRECCION', 3)} />
+            <_Campo l="Barrio / Vereda"     v={_g(f, 'BARRIO/VEREDA', 'BARRIO', 4)} />
+            <_Campo l="Comuna"              v={_g(f, 'COMUNA', 5)} />
+            <_Campo l="Coordenadas"         v={(_g(f, 'LATITUD', 48) && _g(f, 'LONGITUD', 49)) ? `${_g(f, 'LATITUD', 48)}, ${_g(f, 'LONGITUD', 49)}` : '—'} />
+            <_Campo l="Código catastral"    v={_g(f, 'CODIGO CATASTRAL', 'CATASTRAL', 32)} />
+            <_Campo l="N° ficha predial"    v={_g(f, 'N° FICHA PREDIAL', 'N FICHA PREDIAL', 33)} />
           </_Seccion>
 
           <_Seccion titulo="3. Persona que atiende">
-            <_Campo l="Nombre"              v={_g(f, 'NOMBRE PERSONA ATIENDE')} />
-            <_Campo l="Identificación"      v={_g(f, 'ID PERSONA ATIENDE')} />
-            <_Campo l="Teléfono"            v={_g(f, 'TELEFONO PERSONA ATIENDE')} />
-            <_Campo l="Relación con el evento" v={_g(f, 'RELACION CON EL EVENTO')} />
-            <_Campo l="Dirección notificación" v={_g(f, 'DIR NOTIFICACION')} />
-            <_Campo l="Correo electrónico"  v={_g(f, 'CORREO ELECTRONICO')} />
+            <_Campo l="Nombre"              v={_g(f, 'NOMBRE PERSONA ATIENDE', 7)} />
+            <_Campo l="Identificación"      v={_g(f, 'ID PERSONA ATIENDE', 8)} />
+            <_Campo l="Teléfono"            v={_g(f, 'TELEFONO PERSONA ATIENDE', 9)} />
+            <_Campo l="Relación con el evento" v={_g(f, 'RELACION CON EL EVENTO', 10)} />
+            <_Campo l="Dirección notificación" v={_g(f, 'DIR NOTIFICACION', 11)} />
+            <_Campo l="Correo electrónico"  v={_g(f, 'CORREO ELECTRONICO', 12)} />
           </_Seccion>
 
           <_Seccion titulo="4. Características de la edificación">
-            <_Campo l="Estado de la obra"   v={_g(f, 'ESTADO OBRA')} />
-            <_Campo l="Reparación locativa" v={_siNo(_g(f, 'REPARACION LOCATIVA'))} />
-            <_Campo l="Habitado"            v={_siNo(_g(f, 'HABITADO'))} />
-            <_Campo l="Altura en pisos"     v={_g(f, 'ALTURA EN PISOS')} />
-            <_Campo l="Destinaciones actuales" v={_g(f, 'N° DESTINACIONES ACTUALES', 'N DESTINACIONES ACTUALES')} />
-            <_Campo l="Usos actuales"       v={_g(f, 'USOS ACTUALES')} />
-            <_Campo l="Tipo cubierta actual" v={_g(f, 'TIPO CUBIERTA ACTUAL')} />
+            <_Campo l="Estado de la obra"   v={_g(f, 'ESTADO OBRA', 22)} />
+            <_Campo l="Reparación locativa" v={_siNo(_g(f, 'REPARACION LOCATIVA', 26))} />
+            <_Campo l="Habitado"            v={_siNo(_g(f, 'HABITADO', 27))} />
+            <_Campo l="Altura en pisos"     v={_g(f, 'ALTURA EN PISOS', 28)} />
+            <_Campo l="Destinaciones actuales" v={_g(f, 'N° DESTINACIONES ACTUALES', 'N DESTINACIONES ACTUALES', 29)} />
+            <_Campo l="Usos actuales"       v={_g(f, 'USOS ACTUALES', 30)} />
+            <_Campo l="Tipo cubierta actual" v={_g(f, 'TIPO CUBIERTA ACTUAL', 31)} />
           </_Seccion>
 
           <_Seccion titulo="5. Verificación documental (licencia)">
-            <_Campo l="Se aportó licencia"  v={_siNo(_g(f, 'SE APORTO LICENCIA'))} />
-            <_Campo l="N° licencia"         v={_g(f, 'N° LICENCIA', 'N LICENCIA')} />
-            <_Campo l="Fecha licencia"      v={_fmt(_g(f, 'FECHA LICENCIA'))} />
-            <_Campo l="Tipo y modalidad"    v={_g(f, 'TIPO Y MODALIDAD LICENCIA')} />
-            <_Campo l="Pisos aprobados"     v={_g(f, 'PISOS APROBADOS')} />
-            <_Campo l="Destinaciones"       v={_g(f, 'DESTINACIONES LICENCIA')} />
-            <_Campo l="Cubierta"            v={_g(f, 'CUBIERTA LICENCIA')} />
-            <_Campo l="Sistema estructural" v={_g(f, 'SISTEMA ESTRUCTURAL', 'SISTEMA ESTRUCT')} />
-            <_Campo l="Observaciones licencia" v={_g(f, 'OBS LICENCIA')} ancho />
+            <_Campo l="Se aportó licencia"  v={_siNo(_g(f, 'SE APORTO LICENCIA', 35))} />
+            <_Campo l="N° licencia"         v={_g(f, 'N° LICENCIA', 'N LICENCIA', 34)} />
+            <_Campo l="Fecha licencia"      v={_fmt(_g(f, 'FECHA LICENCIA', 36))} />
+            <_Campo l="Tipo y modalidad"    v={_g(f, 'TIPO Y MODALIDAD LICENCIA', 'TIPO Y MODALIDAD', 37)} />
+            <_Campo l="Pisos aprobados"     v={_g(f, 'PISOS APROBADOS', 38)} />
+            <_Campo l="Destinaciones"       v={_g(f, 'DESTINACIONES LICENCIA', 39)} />
+            <_Campo l="Cubierta"            v={_g(f, 'CUBIERTA LICENCIA', 40)} />
+            <_Campo l="Sistema estructural" v={_g(f, 'SISTEMA ESTRUCTURAL', 'SISTEMA ESTRUCT', 41)} />
+            <_Campo l="Observaciones licencia" v={_g(f, 'OBS LICENCIA', 42)} ancho />
           </_Seccion>
 
           <_Seccion titulo="6. Descripción de la situación encontrada">
@@ -182,23 +182,23 @@ function VisitaDetailUI({ f, onCerrar }) {
           </_Seccion>
 
           <_Seccion titulo="7. Conclusiones">
-            <_Campo l="Tipo de contravención" v={_g(f, 'TIPO DE INFRACCION')} ancho />
-            <_Campo l="Área contravención (m²)" v={_g(f, 'AREA CONTRAVENCION m2', 'AREA CONTRAVENCION M2')} />
-            <_Campo l="Suspensión de obra" v={_siNo(_g(f, 'SUSPENSION DE LA OBRA'))} />
-            <_Campo l="Cumple retiro quebrada" v={_siNo(_g(f, 'CUMPLE RETIRO QUEBRADA'))} />
-            <_Campo l="Fecha citación"      v={_g(f, 'FECHA CITACION')} />
+            <_Campo l="Tipo de contravención" v={_g(f, 'TIPO DE INFRACCION', 23)} ancho />
+            <_Campo l="Área contravención (m²)" v={_g(f, 'AREA CONTRAVENCION m2', 'AREA CONTRAVENCION M2', 24)} />
+            <_Campo l="Suspensión de obra" v={_siNo(_g(f, 'SUSPENSION DE LA OBRA', 43))} />
+            <_Campo l="Cumple retiro quebrada" v={_siNo(_g(f, 'CUMPLE RETIRO QUEBRADA', 25))} />
+            <_Campo l="Fecha citación"      v={_g(f, 'FECHA CITACION', 45)} />
           </_Seccion>
 
           <_Seccion titulo="8. Funcionarios">
-            <_Campo l="Visitador(es)"       v={_g(f, 'VISITADOR(ES)')} ancho />
-            <_Campo l="Fecha asignación"    v={_fmt(_g(f, 'FECHA ASIGNACION VISITA'))} />
-            <_Campo l="Fecha devolución"    v={_fmt(_g(f, 'FECHA DEVOLUCION'))} />
+            <_Campo l="Visitador(es)"       v={_g(f, 'VISITADOR(ES)', 17)} ancho />
+            <_Campo l="Fecha asignación"    v={_fmt(_g(f, 'FECHA ASIGNACION VISITA', 14))} />
+            <_Campo l="Fecha devolución"    v={_fmt(_g(f, 'FECHA DEVOLUCION', 20))} />
           </_Seccion>
 
           <_Seccion titulo="9. Norma POT">
-            <_Campo l="Polígono uso suelo"  v={_g(f, 'POLIGONO USO SUELO')} />
-            <_Campo l="Amenaza natural"     v={_siNo(_g(f, 'AMENAZA'))} />
-            <_Campo l="Suelo de protección" v={_siNo(_g(f, 'SUELO DE PROTECCION'))} />
+            <_Campo l="Polígono uso suelo"  v={_g(f, 'POLIGONO USO SUELO', 51)} />
+            <_Campo l="Amenaza natural"     v={_siNo(_g(f, 'AMENAZA', 52))} />
+            <_Campo l="Suelo de protección" v={_siNo(_g(f, 'SUELO DE PROTECCION', 53))} />
           </_Seccion>
 
           {obsConclusion && (

@@ -207,6 +207,7 @@ function AppV6() {
 
       <ModalHost />
       <InformeModalHost />
+      <VisitaDetailModalHost />
     </div>
   );
 }

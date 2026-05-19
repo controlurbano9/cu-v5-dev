@@ -527,6 +527,31 @@ function FilaVisitaBase({ f, usuario, onContinuar,
             ✓ Completar
           </button>
         )}
+
+        {/* COMPLETADO: ver entregables + modal solo-lectura con todos los campos */}
+        {est === 'COMPLETADO' && (() => {
+          var linkDrive    = f['LINK_DRIVE'];
+          var linkActaPdf  = f['LINK_PDF_ACTA'] || f['LINK_XLSX_ACTA'];
+          var linkInforme  = f['LINK_DOCX_INFORME'] || f['LINK_INFORME_F43'];
+          var btnSty = {
+            background: 'var(--gris-bg)', color: 'var(--texto)',
+            border: '1px solid var(--borde)', borderRadius: 10,
+            padding: '8px 12px', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+            cursor: 'pointer', textDecoration: 'none', display: 'inline-flex',
+            alignItems: 'center', gap: 6, flex: 1, minWidth: 100,
+            justifyContent: 'center',
+          };
+          return <>
+            <button type="button" onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
+              className="btn-principal verde"
+              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
+              👁 Ver datos
+            </button>
+            {linkDrive && <a href={linkDrive} target="_blank" rel="noopener noreferrer" style={btnSty}>📂 Carpeta</a>}
+            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}>📄 Acta</a>}
+            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}>📝 Informe</a>}
+          </>;
+        })()}
       </div>
 
       {/* ── Panel de selección de inspector (asignar/reasignar) ── */}

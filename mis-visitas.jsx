@@ -379,6 +379,34 @@ function TarjetaVisitaMV({ f, onContinuar }) {
           </button>
         </div>
       )}
+
+      {/* COMPLETADO: ver datos + entregables Drive/Acta/Informe */}
+      {est === 'COMPLETADO' && (() => {
+        const linkDrive   = f['LINK_DRIVE'];
+        const linkActaPdf = f['LINK_PDF_ACTA'] || f['LINK_XLSX_ACTA'];
+        const linkInforme = f['LINK_DOCX_INFORME'] || f['LINK_INFORME_F43'];
+        const btnSty = {
+          background: 'var(--gris-bg)', color: 'var(--texto)',
+          border: '1px solid var(--borde)', borderRadius: 10,
+          padding: '8px 12px', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+          cursor: 'pointer', textDecoration: 'none', display: 'inline-flex',
+          alignItems: 'center', gap: 6, flex: 1, minWidth: 100,
+          justifyContent: 'center',
+        };
+        return (
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button"
+              onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
+              className="btn-principal verde"
+              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
+              👁 Ver datos
+            </button>
+            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}>📂 Carpeta</a>}
+            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}>📄 Acta</a>}
+            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}>📝 Informe</a>}
+          </div>
+        );
+      })()}
     </div>
   );
 }

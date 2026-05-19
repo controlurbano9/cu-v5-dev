@@ -60,15 +60,22 @@ function BuscarScreen({ usuario, onContinuar }) {
 
   // Cargar lista de visitadores activos (filtro admin) desde USUARIOS.
   // listarInspectoresActivos() está cacheado en api.js (TTL 60s).
+  // El filtro de chips del Buscar solo muestra los inspectores fijos
+  // (Alejandro, Mauricio, Daniel); la lista completa se conserva
+  // para el panel de asignación admin.
+  const VISITADORES_FILTRO = ['ALEJANDRO HERNANDEZ', 'MAURICIO HERRERA', 'DANIEL PEDRAZA'];
   useEffectB(() => {
     if (!esAdmin) return;
     listarInspectoresActivos().then(lista => {
-      setVisitadores((lista || []).map(u => ({
-        val: u.nombre,
-        l:   titleCaseFirst2(u.nombre),
-      })));
-      // También guardar lista completa para el panel de asignación
-      setInspectores(lista || []);
+      const todos = lista || [];
+      setVisitadores(
+        todos
+          .filter(u => VISITADORES_FILTRO.some(pref =>
+            (u.nombre || '').toUpperCase().includes(pref)))
+          .map(u => ({ val: u.nombre, l: titleCaseFirst2(u.nombre) }))
+      );
+      // Lista completa para el panel de asignación
+      setInspectores(todos);
     }).catch(() => {});
   }, [esAdmin]);
 

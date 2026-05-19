@@ -367,7 +367,12 @@ function ConsultaNormaScreen() {
             <CampoResultado label="Polígono uso suelo" valor={resultado.poligono || '—'} />
             <CampoResultado label="Tratamiento urbanístico" valor={resultado.tratamiento || '—'} />
             <CampoResultado label="Franja de intensidad" valor={resultado.intensidad || '—'} />
-            <CampoResultado label="Suelo de protección" valor={resultado.sueloProt || 'NO'} />
+            <CampoResultado
+              label="Suelo de protección"
+              valor={resultado.sueloProt === 'SI'
+                ? (resultado.sueloProtCategoria || 'SI')
+                : 'NO'}
+            />
             <CampoResultado
               label="Amenaza natural"
               valor={resultado.amenaza === 'SI'

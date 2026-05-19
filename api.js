@@ -293,7 +293,7 @@ async function consultarPOT(lat, lon) {
       .catch(() => null),
   ]);
 
-  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', amenazaTipo: '', amenazaCategoria: '', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '', enDRMI: 'NO', drmiNombre: '' };
+  const result = { poligono: '', sueloProt: 'NO', sueloProtCategoria: '', amenaza: 'NO', amenazaTipo: '', amenazaCategoria: '', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '', enDRMI: 'NO', drmiNombre: '' };
 
   // 1. Polígono uso del suelo
   if (usoSuelo) {
@@ -311,11 +311,18 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 2. Suelo de protección
+  // 2. Suelo de protección (categoría: ZCA, ZPA, ZIM, ZPM, ZPAP, etc.)
   if (sueloProtec) {
     for (const feat of sueloProtec.features) {
-      try { if (turf.booleanPointInPolygon(punto, feat)) { result.sueloProt = 'SI'; break; } }
-      catch (e) {}
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          var pSP = feat.properties || {};
+          result.sueloProt = 'SI';
+          result.sueloProtCategoria = pSP.CATEGORIA || pSP.categoria ||
+            pSP.Tipo_Suelo_Proteccion || pSP.Nmg || pSP.NMG || '';
+          break;
+        }
+      } catch (e) {}
     }
   }
 

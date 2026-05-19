@@ -328,7 +328,7 @@ function ConsultaNormaScreen() {
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                 }}>
                   <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
-                  <div>Predio del <strong>Municipio de Bello</strong> — coordinar con jurídica antes de actuar.</div>
+                  <div>Predio del <strong>Municipio de Bello</strong></div>
                 </div>
               )}
               <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>

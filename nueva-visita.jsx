@@ -661,6 +661,8 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
       borderRadius: 8, border: '1px solid ' + (r.municipal ? '#fca5a5' : 'var(--borde)'),
       background: r.municipal ? '#fef2f2' : 'var(--superficie)',
       overflow: 'hidden',
+      flexShrink: 0,           // evita que se aplaste dentro de flex-column con scroll
+      marginBottom: 4,
     }}>
       <div style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setAbierta(!abierta)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -713,6 +715,56 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
   );
 }
 window._TarjetaFichaCatastral = _TarjetaFichaCatastral;
+
+// Lista filtrable de fichas catastrales. Reutilizada en Nueva visita y Norma.
+// Si hay >10 fichas, muestra input para filtrar por ficha, dirección o titular.
+function _ListaFichasCatastrales({ fichas, onSeleccionar, maxAlto }) {
+  const [filtro, setFiltro] = useStateNV('');
+  const mostrarFiltro = fichas.length > 10;
+  const filtroNorm = filtro.trim().toLowerCase();
+  const fichasFiltradas = filtroNorm
+    ? fichas.filter(r =>
+        String(r.ficha).includes(filtroNorm) ||
+        (r.direccion || '').toLowerCase().includes(filtroNorm) ||
+        (r.propietario || '').toLowerCase().includes(filtroNorm) ||
+        (r.catastral || '').includes(filtroNorm))
+    : fichas;
+  return (
+    <div>
+      {mostrarFiltro && (
+        <input
+          type="text"
+          value={filtro}
+          onChange={e => setFiltro(e.target.value)}
+          placeholder={`Filtrar ${fichas.length} fichas por ficha, dirección o titular...`}
+          style={{
+            width: '100%', padding: '8px 12px', borderRadius: 8,
+            border: '1px solid var(--borde)', background: 'var(--superficie)',
+            fontFamily: 'inherit', fontSize: 12, marginBottom: 8,
+          }}
+        />
+      )}
+      <div style={{ maxHeight: maxAlto || 420, overflowY: 'auto', paddingRight: 4 }}>
+        {fichasFiltradas.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--texto-suave)', textAlign: 'center', padding: 20 }}>
+            Sin coincidencias para "{filtro}".
+          </div>
+        ) : (
+          fichasFiltradas.map((r, i) => (
+            <_TarjetaFichaCatastral key={i} r={r}
+              onSeleccionar={onSeleccionar ? () => onSeleccionar(r) : null} />
+          ))
+        )}
+      </div>
+      {mostrarFiltro && filtroNorm && (
+        <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 6, textAlign: 'center' }}>
+          {fichasFiltradas.length} de {fichas.length} fichas
+        </div>
+      )}
+    </div>
+  );
+}
+window._ListaFichasCatastrales = _ListaFichasCatastrales;
 
 // ══════════════════════════════════════════════════════════════
 //   MODAL INICIO — Elige tipo de visita y busca radicado
@@ -1997,12 +2049,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 ? '1 unidad en este predio:'
                 : catResultados.length + ' unidades en este predio (propiedad horizontal) — selecciona la correcta:'}
             </div>
-            <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {catResultados.map((r, i) => (
-                <_TarjetaFichaCatastral key={i} r={r}
-                  onSeleccionar={() => seleccionarCatastral(r)} />
-              ))}
-            </div>
+            <_ListaFichasCatastrales fichas={catResultados}
+              onSeleccionar={seleccionarCatastral} maxAlto={400} />
           </div>
         )}
 

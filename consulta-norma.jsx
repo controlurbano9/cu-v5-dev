@@ -8,9 +8,10 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateCN, useEffect: useEffectCN, useRef: useRefCN } = React;
 
-// Reutiliza la tarjeta de ficha catastral definida en nueva-visita.jsx
-// (se carga antes que este archivo, así que window._TarjetaFichaCatastral existe).
+// Reutiliza componentes catastrales definidos en nueva-visita.jsx
+// (se carga antes que este archivo, así que están en window).
 const _TarjetaFichaCatastral = window._TarjetaFichaCatastral;
+const _ListaFichasCatastrales = window._ListaFichasCatastrales;
 
 const BELLO_BBOX = { latMin: 6.18, latMax: 6.55, lonMin: -75.75, lonMax: -75.40 };
 const BELLO_CENTRO = { lat: 6.337, lng: -75.557 };
@@ -331,17 +332,10 @@ function ConsultaNormaScreen() {
                   <div>Predio del <strong>Municipio de Bello</strong></div>
                 </div>
               )}
-              <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {catastro.map((r, i) => (
-                  <_TarjetaFichaCatastral key={i} r={r}
-                    expandida={catastro.length === 1} />
-                ))}
-              </div>
-              {catastro.length > 1 && (
-                <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 8, textAlign: 'center' }}>
-                  Toca cualquier ficha para ver el detalle (NPN, matrícula, avalúo).
-                </div>
-              )}
+              {catastro.length === 1
+                ? <_TarjetaFichaCatastral r={catastro[0]} expandida={true} />
+                : <_ListaFichasCatastrales fichas={catastro} maxAlto={420} />
+              }
             </>
           )}
         </div>

@@ -202,6 +202,17 @@ async function crearCarpetaVisita(comuna, direccion, fechaVisita, nvisita) {
   });
 }
 
+// Recupera el id de la subcarpeta de fotos a partir de la carpeta de visita.
+// Necesario al reabrir una visita INICIADA: la BD solo guarda LINK_DRIVE
+// (carpeta visita), no la subcarpeta de fotos.
+async function obtenerIdFotos(idCarpetaVisita) {
+  if (!idCarpetaVisita) return '';
+  try {
+    const r = await gasGet({ accion: 'obtenerIdFotos', idCarpeta: idCarpetaVisita });
+    return (r && r.idFotos) || '';
+  } catch (e) { return ''; }
+}
+
 // Guarda una visita. Si pasa filaExistente actualiza; si no, agrega.
 // payload.valores es el array de 60 valores (cols B → BD) ya armado.
 async function guardarVisita(payload) {

@@ -762,15 +762,21 @@ window._TarjetaFichaCatastral = _TarjetaFichaCatastral;
 // Si hay >10 fichas, muestra input para filtrar por ficha, dirección o titular.
 function _ListaFichasCatastrales({ fichas, onSeleccionar, maxAlto }) {
   const [filtro, setFiltro] = useStateNV('');
-  const mostrarFiltro = fichas.length > 10;
+  // Ordenar: municipales primero (predios del Municipio de Bello), después el resto en su orden original
+  const fichasOrdenadas = React.useMemo(() => {
+    const muni = []; const otros = [];
+    (fichas || []).forEach(r => (r && r.municipal ? muni : otros).push(r));
+    return muni.concat(otros);
+  }, [fichas]);
+  const mostrarFiltro = fichasOrdenadas.length > 10;
   const filtroNorm = filtro.trim().toLowerCase();
   const fichasFiltradas = filtroNorm
-    ? fichas.filter(r =>
+    ? fichasOrdenadas.filter(r =>
         String(r.ficha).includes(filtroNorm) ||
         (r.direccion || '').toLowerCase().includes(filtroNorm) ||
         (r.propietario || '').toLowerCase().includes(filtroNorm) ||
         (r.catastral || '').includes(filtroNorm))
-    : fichas;
+    : fichasOrdenadas;
   return (
     <div>
       {mostrarFiltro && (
@@ -1174,6 +1180,23 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       setCampo('orden', '');
     }
   }, [ordenConsecutivo]);
+
+  // Recuperar idCarpetaFotos al reabrir una visita ya guardada.
+  // La BD solo persiste LINK_DRIVE (carpeta visita); la subcarpeta de Fotos
+  // se descubre vía webhook. Sin esto, la sección Fotos queda oculta al
+  // editar una visita INICIADA.
+  useEffectNV(() => {
+    if (fase !== 'formulario') return;
+    if (!filaEditando) return;
+    if (d.idCarpetaFotos) return;            // ya está cargada
+    if (!d.idCarpetaVisita) return;          // necesita la carpeta padre
+    let cancelado = false;
+    obtenerIdFotos(d.idCarpetaVisita).then(idF => {
+      if (cancelado) return;
+      if (idF) setCampo('idCarpetaFotos', idF);
+    });
+    return () => { cancelado = true; };
+  }, [fase, filaEditando, d.idCarpetaVisita, d.idCarpetaFotos]);
 
   // Cuando estadoObra cambia a "Terminada", forzar suspensión a N/A
   useEffectNV(() => {
@@ -2180,6 +2203,40 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           </button>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: -4 }}>
             Documento con todas las fotos subidas a la subcarpeta de la visita.
+          </div>
+
+          {/* Generar Informe F-GGO-43 — abre el modal/wizard del generador. */}
+          <button onClick={() => {
+            if (typeof window.abrirInformeF43 !== 'function') {
+              appAlert('El generador de informe no cargó.', { titulo: 'Error' });
+              return;
+            }
+            window.abrirInformeF43({
+              fila: filaEditando,
+              idCarpeta: d.idCarpetaVisita,
+              radicado: d.radicado,
+              direccion: d.direccion,
+              barrio: d.barrio,
+              comuna: d.comuna,
+              catastral: d.catastral,
+              lat: d.lat, lon: d.lon,
+              inspector: usuario?.usuario || '',
+              cargo: usuario?.cargo || '',
+              seAportoLicencia: d.licenciaAportada,
+              numRes:           d.licencia,
+              fechaEjec:        _isoAFecha(d.fechaLicencia),
+              tipoModalidad:    d.tipoLicencia,
+              pisos:            d.pisos,
+              dest:             d.destinaciones,
+              cubierta:         d.cubierta,
+              sist:             d.sistema,
+              obsLicencia:      d.obsLicencia,
+            });
+          }} className="btn-principal" style={{ fontSize: 15, marginTop: 6 }}>
+            Generar informe F-GGO-43
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: -4 }}>
+            Abre el wizard del informe técnico precargado con los datos de la visita.
           </div>
         </div>
       )}

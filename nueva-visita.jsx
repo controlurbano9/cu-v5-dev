@@ -253,14 +253,17 @@ function _estadoInicial(datosIniciales) {
     actuacion:       _partsAct[0] || '',
     obsConclusion:   _partsAct[1] || '',
     infraccion:      d['TIPO DE INFRACCION']  || '',
-    area:            d['AREA CONTRAVENCION m2'] || d['AREA CONTRAVENCION M2'] || '',
-    areaNoMedible:   false, // checkbox "No se pudo medir"
+    area:            (function(){
+                       var v = (d['AREA CONTRAVENCION m2'] || d['AREA CONTRAVENCION M2'] || '').toString().trim();
+                       return v === 'No se pudo medir' ? '' : v;
+                     })(),
+    areaNoMedible:   ((d['AREA CONTRAVENCION m2'] || d['AREA CONTRAVENCION M2'] || '').toString().trim() === 'No se pudo medir'),
     quebrada:        d['CUMPLE RETIRO QUEBRADA'] || '',
     suspension:      d['SUSPENSION DE LA OBRA'] || '',
     orden:           d['N° ORDEN DE POLICIA'] || d['N ORDEN DE POLICIA'] || '',
     citacionFecha:   _fechaAIso((d['FECHA CITACION'] || '').split(' · ')[0]),
     citacionHora:    '',
-    noCitacion:      false, // checkbox "No se deja citación" — desactiva fecha y hora
+    noCitacion:      (d['FECHA CITACION'] || '').toString().trim() === 'No se deja citación',
     // Visitadores
     visitador:       d['VISITADOR(ES)']       || '',
     // POT
@@ -302,9 +305,11 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     : _capPalabras(fpDenunc);
 
   const horaFmt = HORAS_CITACION.find(h => h.val === d.citacionHora)?.l || d.citacionHora;
-  const citFmt  = d.citacionFecha
-    ? (_isoAFecha(d.citacionFecha) + (horaFmt ? ' · ' + horaFmt : ''))
-    : '';
+  const citFmt  = d.noCitacion
+    ? 'No se deja citación'
+    : (d.citacionFecha
+        ? (_isoAFecha(d.citacionFecha) + (horaFmt ? ' · ' + horaFmt : ''))
+        : '');
 
   // Relación: si es "Otro", enviar el texto del campo libre
   const relacionFinal = d.atiendeRelacion === 'Otro'
@@ -345,7 +350,7 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     '',                                           // V  DIAS
     d.estadoObra || '',                           // W  ESTADO OBRA
     d.infraccion || '',                           // X  TIPO DE INFRACCION
-    d.areaNoMedible ? '' : (d.area || ''),        // Y  AREA CONTRAVENCION m2
+    d.areaNoMedible ? 'No se pudo medir' : (d.area || ''),  // Y  AREA CONTRAVENCION m2
     d.quebrada || '',                             // Z  CUMPLE RETIRO QUEBRADA
     d.repLocativa || '',                          // AA REPARACION LOCATIVA
     d.habitado || '',                             // AB HABITADO
@@ -1498,13 +1503,15 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       sueloProt:      d.sueloProt,
       retiroQuebrada: d.quebrada,
       infraccion:     d.infraccion,
-      area:           d.areaNoMedible ? '' : d.area,
+      area:           d.areaNoMedible ? 'No se pudo medir' : d.area,
       obsConclusion:  d.obsConclusion || '',
       // Citación
       orden:          d.orden,
-      citacion:       d.citacionFecha
-        ? (_isoAFecha(d.citacionFecha) + (d.citacionHora ? ' · ' + (HORAS_CITACION.find(h => h.val === d.citacionHora)?.l || d.citacionHora) : ''))
-        : '',
+      citacion:       d.noCitacion
+        ? 'No se deja citación'
+        : (d.citacionFecha
+            ? (_isoAFecha(d.citacionFecha) + (d.citacionHora ? ' · ' + (HORAS_CITACION.find(h => h.val === d.citacionHora)?.l || d.citacionHora) : ''))
+            : ''),
       // Inspectores firmantes (por ahora: usuario logueado)
       inspector:      usuario?.usuario || '',
       cargo:          usuario?.cargo   || 'Inspector',

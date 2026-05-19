@@ -287,9 +287,16 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
   // Dirección de notificación: si es igual al inmueble, usar d.direccion
   const dirNotifFinal = d.dirNotifIgual ? (d.direccion || '') : (d.atiendeDir || '');
 
+  // Para oficio: la fecha radicado = fecha visita (no hay radicado externo previo,
+  // el "radicado" se genera al hacer la visita). Para PQR: lo que ingresó el inspector
+  // o lo que ya estaba en la fila pendiente del PQR original.
+  const fechaRadicadoFinal = d.esOficio
+    ? _isoAFecha(d.fechaVisita)
+    : (_isoAFecha(d.fechaRadicado) || fpRadicado);
+
   return [
     radicado,                                     // B  RADICADO
-    _isoAFecha(d.fechaRadicado) || fpRadicado,    // C  FECHA RADICADO
+    fechaRadicadoFinal,                           // C  FECHA RADICADO
     d.direccion || '',                            // D  DIRECCION INFRACCION
     d.barrio || '',                               // E  BARRIO/VEREDA
     d.comuna || '',                               // F  COMUNA

@@ -1503,12 +1503,20 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     ? 'Continuar visita'
     : (d.esOficio ? 'Visita de oficio' : 'Nueva visita');
 
+  const tieneInfoSticky = d.direccion || d.radicado || d.esOficio;
+
   return (
     <div className="pantalla activa pad-bottom">
-      {/* Barra sticky de título + botones (z-index 101, encima de la barra de dirección) */}
-      <div className="nv-title-sticky-bar">
-        <div className="page-title-row" style={{ marginBottom: 0, marginTop: 0 }}>
-          <div className="page-title" style={{ marginBottom: 0, marginTop: 0 }}>{tituloPantalla}</div>
+      {/* Header unificado (NO sticky) — título + Volver + info radicado/dirección/N° visita */}
+      <div style={{
+        background: 'var(--fondo)', paddingBottom: 12, marginBottom: 14,
+        borderBottom: '1px solid var(--borde)',
+      }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          gap: 12, marginBottom: tieneInfoSticky ? 10 : 0,
+        }}>
+          <div className="page-title" style={{ margin: 0 }}>{tituloPantalla}</div>
           {onSalir && (
             <button onClick={onSalir} style={{
               background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
@@ -1516,30 +1524,41 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             }}>&#8592; Volver</button>
           )}
         </div>
-      </div>
-
-      {/* Panel sticky con dirección, radicado y N° visita (z-index 100) */}
-      {(d.direccion || d.radicado || d.esOficio) && (
-        <div className="nv-address-sticky-bar visible">
-          {d.direccion && (
-            <>
-              <span className="dir-label">Visita en</span>
-              <span className="dir-valor">{d.direccion}{d.barrio && d.barrio !== '__otro__' ? ' · ' + d.barrio : ''}</span>
-            </>
-          )}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: d.direccion ? 2 : 0 }}>
-            {d.radicado && <span className="dir-radicado" style={{ margin: 0 }}>RAD {d.radicado}</span>}
-            {d.esOficio && d.orden && <span className="dir-radicado" style={{ margin: 0 }}>OFICIO {d.orden}</span>}
-            {d.nVisita > 1 && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                background: 'var(--brand-bg)', color: 'var(--brand-ink)',
-                border: '1px solid var(--brand-accent)',
-              }}>Visita N°{d.nVisita}</span>
+        {tieneInfoSticky && (
+          <div style={{
+            background: 'var(--superficie)', borderRadius: 'var(--r-md)',
+            border: '0.5px solid var(--borde)', padding: '10px 14px',
+            display: 'flex', flexDirection: 'column', gap: 4,
+          }}>
+            {d.direccion && (
+              <div>
+                <span style={{
+                  color: 'var(--texto-suave)', fontSize: 10, textTransform: 'uppercase',
+                  letterSpacing: '0.5px', fontWeight: 600, marginRight: 6,
+                }}>Visita en</span>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>
+                  {d.direccion}{d.barrio && d.barrio !== '__otro__' ? ' · ' + d.barrio : ''}
+                </span>
+              </div>
             )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {d.radicado && <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brand-accent)', fontWeight: 600,
+              }}>RAD {d.radicado}</span>}
+              {d.esOficio && d.orden && <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brand-accent)', fontWeight: 600,
+              }}>OFICIO {d.orden}</span>}
+              {d.nVisita > 1 && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  background: 'var(--brand-bg)', color: 'var(--brand-ink)',
+                  border: '1px solid var(--brand-accent)',
+                }}>Visita N°{d.nVisita}</span>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 1. IDENTIFICACIÓN ───────────────────────────────── */}
       <_Seccion titulo="Identificación del caso" color="azul">
@@ -1625,14 +1644,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             </div>
             <div className="gps-dir">{d.direccion || '—'}</div>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexDirection: 'column' }}>
-            <_BtnAccion busy={busyGeo} onClick={ejecutarGeocode}>
-              {busyGeo ? '...' : 'Buscar coordenadas'}
-            </_BtnAccion>
-            <_BtnAccion busy={busyGeo} onClick={usarMiUbicacion}>
-              {busyGeo ? '...' : 'Mi ubicación'}
-            </_BtnAccion>
-          </div>
+          <_BtnAccion busy={busyGeo} onClick={usarMiUbicacion}>
+            {busyGeo ? 'Capturando...' : '📍 Capturar mi ubicación'}
+          </_BtnAccion>
         </div>
         {d.lat != null && d.lon != null && (
           <div style={{ gridColumn: '1 / -1' }}>
@@ -1950,16 +1964,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         </_Campo>
       </_Seccion>
 
-      {/* 9. OBSERVACIONES Y CONCLUSIONES ──────────────────── */}
-      <_Seccion titulo="Observaciones y conclusiones" color="gris">
-        <_Campo label="Conclusiones generales del inspector" fullWidth
-          hint="Dictamen técnico, observaciones sobre la situación encontrada y su relación con la normativa aplicable.">
-          <_TextArea value={d.obsConclusion} onChange={v => setCampo('obsConclusion', v)} rows={6}
-            placeholder="Describa las conclusiones de la visita, hallazgos relevantes y recomendaciones..." />
-        </_Campo>
-      </_Seccion>
-
-      {/* 10. CONSULTA NORMA POT ──────────────────────────── */}
+      {/* 9. CONSULTA NORMA POT ──────────────────────────── */}
       <_Seccion titulo="Consulta norma POT" color="gris">
         <_Campo label="Código catastral">
           <_Input mono value={d.catastral} onChange={v => setCampo('catastral', v)} />
@@ -2022,6 +2027,15 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             {busyPOT ? '...' : 'Consultar POT por coordenadas'}
           </_BtnAccion>
         </div>
+      </_Seccion>
+
+      {/* 10. OBSERVACIONES Y CONCLUSIONES (al final) ───────── */}
+      <_Seccion titulo="Observaciones y conclusiones" color="gris">
+        <_Campo label="Conclusiones generales del inspector" fullWidth
+          hint="Dictamen técnico, observaciones sobre la situación encontrada y su relación con la normativa aplicable.">
+          <_TextArea value={d.obsConclusion} onChange={v => setCampo('obsConclusion', v)} rows={6}
+            placeholder="Describa las conclusiones de la visita, hallazgos relevantes y recomendaciones..." />
+        </_Campo>
       </_Seccion>
 
       {/* ── Botón guardar ──────────────────────────────────── */}

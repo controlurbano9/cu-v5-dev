@@ -35,33 +35,55 @@
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDzMA8veDuEp3yBTBjjLS7y0k5XUu8rchc&libraries=geocoding" async defer></script>
 
 
-<!-- Cliente webhook (JS plano) -->
-<script src="api.js"></script>
-<script src="utils.js"></script>
+<!-- Cliente webhook (JS plano) — bump ?v= cuando cambie el código para invalidar caché del SW -->
+<script src="api.js?v=11"></script>
+<script src="utils.js?v=11"></script>
 
 <!-- Componentes React (cada uno expone su componente en window) -->
-<script type="text/babel" src="modal.jsx"></script>
-<script type="text/babel" src="informe-modal.jsx"></script>
-<script type="text/babel" src="login.jsx"></script>
-<script type="text/babel" src="home.jsx"></script>
-<script type="text/babel" src="mis-visitas.jsx"></script>
-<script type="text/babel" src="buscar.jsx"></script>
-<script type="text/babel" src="agenda.jsx"></script>
-<script type="text/babel" src="gestion.jsx"></script>
-<script type="text/babel" src="nueva-visita.jsx?v=9"></script>
-<script type="text/babel" src="consulta-norma.jsx"></script>
-<script type="text/babel" src="admin.jsx"></script>
+<script type="text/babel" src="modal.jsx?v=11"></script>
+<script type="text/babel" src="informe-modal.jsx?v=11"></script>
+<script type="text/babel" src="login.jsx?v=11"></script>
+<script type="text/babel" src="home.jsx?v=11"></script>
+<script type="text/babel" src="mis-visitas.jsx?v=11"></script>
+<script type="text/babel" src="buscar.jsx?v=11"></script>
+<script type="text/babel" src="agenda.jsx?v=11"></script>
+<script type="text/babel" src="gestion.jsx?v=11"></script>
+<script type="text/babel" src="nueva-visita.jsx?v=11"></script>
+<script type="text/babel" src="consulta-norma.jsx?v=11"></script>
+<script type="text/babel" src="admin.jsx?v=11"></script>
 
 <!-- App principal (último: usa LoginScreen, HomeScreen, AdminScreen del window) -->
-<script type="text/babel" src="app.jsx?v=2"></script>
+<script type="text/babel" src="app.jsx?v=11"></script>
 
 <!-- Registro del Service Worker (cache de assets estáticos) -->
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./sw.js')
-      .then(function(r) { console.log('[SW] registrado, scope:', r.scope); })
+      .then(function(reg) {
+        console.log('[SW] registrado, scope:', reg.scope);
+        // Si hay un SW nuevo esperando, recargar automáticamente cuando tome control
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.addEventListener('updatefound', function() {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function() {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              console.log('[SW] versión nueva instalada, recargando...');
+              window.location.reload();
+            }
+          });
+        });
+      })
       .catch(function(e) { console.warn('[SW] fallo registro:', e); });
+
+    // Si el SW cambia de controller (activate de nuevo SW), recargar
+    var refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
   });
 }
 </script>

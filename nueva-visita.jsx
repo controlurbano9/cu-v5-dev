@@ -967,6 +967,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [ordenConsecutivo, setOrdenConsecutivo] = useStateNV(() =>
     _extraerConsecutivoOrden((datosIniciales || {})['N° ORDEN DE POLICIA'] || (datosIniciales || {})['N ORDEN DE POLICIA'] || '')
   );
+  // Referencia estable al recognition de voz (debe estar ANTES del early return de fase=modal,
+  // de lo contrario React lanza error #310 al cambiar de modal a formulario).
+  const recognitionRef = React.useRef(null);
 
   // ── Callback del modal: configura el formulario según la elección ──
   function handleModalResult(res) {
@@ -1075,8 +1078,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }
 
   // ── Dictado por voz (Web Speech API) ───────────────────────
-  // Referencia estable al recognition para poder detenerlo
-  const recognitionRef = React.useRef(null);
+  // recognitionRef se declara arriba (antes del early return) para evitar React #310.
 
   function toggleDictado() {
     // Si ya está dictando, detener

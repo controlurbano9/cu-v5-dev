@@ -282,7 +282,7 @@ async function consultarPOT(lat, lon) {
       .catch(() => null),
   ]);
 
-  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '' };
+  const result = { poligono: '', sueloProt: 'NO', amenaza: 'NO', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '' };
 
   // 1. Polígono uso del suelo
   if (usoSuelo) {
@@ -368,48 +368,85 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 6. Clasificación del suelo (urbano / rural / expansión)
-  const [clasifSuelo, tratUrb, franjaInt] = await Promise.all([
-    _cargarGeoJSON('ClasificacionSuelo.geojson').catch(() => null),
+  // 6. Clasificación del suelo (urbano / rural / expansión) + tratamiento + franja + comuna
+  const [clasifSuelo, tratUrb, franjaInt, comunas] = await Promise.all([
+    _cargarGeoJSON('ClasificacionSueloMunicipal.geojson')
+      .catch(() => _cargarGeoJSON('ClasificacionSuelo.geojson'))
+      .catch(() => null),
     _cargarGeoJSON('TratamientoUrbanistico.geojson').catch(() => null),
     _cargarGeoJSON('FranjaIntensidad.geojson').catch(() => null),
+    _cargarGeoJSON('Comunas.geojson').catch(() => null),
   ]);
+
+  // 6c. Comuna (point-in-polygon contra Comunas.geojson)
+  if (comunas) {
+    for (const feat of comunas.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          // Preferir CODIGO_COM ('06') sobre Nombre ('COMUNA 6') porque el resto del sistema usa el código
+          var cod = p.CODIGO_COM || p.codigo_com || p.CODIGO || p.codigo || '';
+          var nom = p.Nombre || p.NOMBRE || p.nombre || '';
+          if (cod) {
+            // Quitar ceros a la izquierda: '06' → '6'
+            result.comuna = String(cod).replace(/^0+/, '') || cod;
+          } else if (nom) {
+            // Si solo hay nombre tipo 'COMUNA 6', extraer el número
+            var m = String(nom).match(/(\d+)/);
+            result.comuna = m ? m[1] : nom;
+          }
+          result.comunaNombre = nom;
+          break;
+        }
+      } catch (e) {}
+    }
+  }
 
   if (clasifSuelo) {
     for (const feat of clasifSuelo.features) {
       try {
         if (turf.booleanPointInPolygon(punto, feat)) {
           const p = feat.properties || {};
-          result.clasificacion = p.CLASIFICAC || p.clasificac || p.CLASE || p.clase ||
-            p.TIPO || p.tipo || p.NOMBRE || p.nombre || '';
+          result.clasificacion = p.CLASE || p.clase || p.CLASIFICAC || p.clasificac ||
+            p.TIPO || p.tipo || p.NOMBRE || p.nombre || p.MOMBRE || '';
           break;
         }
       } catch (e) {}
     }
   }
 
-  // 7. Tratamiento urbanístico
+  // 7. Tratamiento urbanístico (urbano + rural fusionados en TratamientoUrbanistico.geojson)
+  //    Atributos del export: TRATAMIENTO, TIPO, CODIGO_TRAT, COMUNA, AMBITO ('Urbano'|'Rural')
   if (tratUrb) {
     for (const feat of tratUrb.features) {
       try {
         if (turf.booleanPointInPolygon(punto, feat)) {
           const p = feat.properties || {};
-          result.tratamiento = p.TRATAMIENT || p.tratamient || p.NOMBRE || p.nombre ||
+          result.tratamiento = p.TRATAMIENTO || p.tratamiento || p.TRATAMIENT ||
+            p.tratamient || p.NOMBRE || p.nombre || p.DESCRIPCION || p.descripcion ||
             p.TIPO || p.tipo || '';
+          result.tratamientoTipo = p.TIPO || p.tipo || p.Tipo_Tratamiento_Urbanistico || '';
+          result.tratamientoCodigo = p.CODIGO_TRAT || p.Codigo_Tratamiento || '';
+          result.tratamientoAmbito = p.AMBITO || p.ambito || '';
           break;
         }
       } catch (e) {}
     }
   }
 
-  // 8. Franja de intensidad
+  // 8. Franja de intensidad / Densidades urbanas (NMG = nombre macro-grupo, Densidad_Vivha = viv/ha)
   if (franjaInt) {
     for (const feat of franjaInt.features) {
       try {
         if (turf.booleanPointInPolygon(punto, feat)) {
           const p = feat.properties || {};
-          result.intensidad = p.FRANJA || p.franja || p.INTENSIDAD || p.intensidad ||
-            p.NOMBRE || p.nombre || '';
+          var nombre = p.NMG || p.nmg || p.FRANJA || p.franja || p.INTENSIDAD ||
+            p.intensidad || p.NOMBRE || p.nombre || '';
+          var dens = p.Densidad_Vivha != null ? p.Densidad_Vivha
+                   : (p.DENSIDAD_VIVHA != null ? p.DENSIDAD_VIVHA : null);
+          result.intensidad = nombre + (dens != null ? ' (' + dens + ' viv/ha)' : '');
+          result.intensidadNombre = nombre;
+          result.intensidadDensidad = dens;
           break;
         }
       } catch (e) {}

@@ -354,7 +354,14 @@ function ConsultaNormaScreen() {
             Consultando norma POT...
           </div>
         )}
-        {resultado && !busyPOT && (
+        {resultado && !busyPOT && (() => {
+          // Comuna: preferir el valor del Comunas.geojson (point-in-polygon, más exacto);
+          // si no está, derivar del barrio sugerido.
+          var comuna = resultado.comuna ||
+            ((typeof window._lookupComunaPorBarrio === 'function')
+              ? window._lookupComunaPorBarrio(resultado.barrioSugerido) : '');
+          var comunaLabel = comuna ? (comuna === 'Vereda' ? 'Vereda' : 'Comuna ' + comuna) : '—';
+          return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
             <CampoResultado label="Clasificación del suelo" valor={resultado.clasificacion || '—'} />
             <CampoResultado label="Polígono uso suelo" valor={resultado.poligono || '—'} />
@@ -363,9 +370,11 @@ function ConsultaNormaScreen() {
             <CampoResultado label="Suelo de protección" valor={resultado.sueloProt || 'NO'} />
             <CampoResultado label="Amenaza natural" valor={resultado.amenaza || 'NO'} />
             <CampoResultado label="Retiro corrientes" valor={resultado.enRetiro || 'NO'} />
-            <CampoResultado label="Barrio / Vereda" valor={resultado.barrioSugerido || '—'} span={2} />
+            <CampoResultado label="Comuna" valor={comunaLabel} />
+            <CampoResultado label="Barrio / Vereda" valor={resultado.barrioSugerido || '—'} />
           </div>
-        )}
+          );
+        })()}
 
         <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={limpiar} style={{

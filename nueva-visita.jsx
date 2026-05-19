@@ -101,6 +101,19 @@ const _BARRIO_A_COMUNA = {};
 BARRIOS_POR_COMUNA.forEach(g => {
   g.barrios.forEach(b => { _BARRIO_A_COMUNA[b.toUpperCase()] = g.comuna; });
 });
+// Variante sin tildes para tolerar barrios provenientes del GeoJSON con/sin acentos
+const _BARRIO_A_COMUNA_NORM = {};
+function _quitarTildes(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+Object.keys(_BARRIO_A_COMUNA).forEach(k => {
+  _BARRIO_A_COMUNA_NORM[_quitarTildes(k).toUpperCase()] = _BARRIO_A_COMUNA[k];
+});
+window._BARRIO_A_COMUNA = _BARRIO_A_COMUNA;
+window._BARRIO_A_COMUNA_NORM = _BARRIO_A_COMUNA_NORM;
+window._lookupComunaPorBarrio = function(barrio) {
+  if (!barrio) return '';
+  var k = _quitarTildes(barrio).toUpperCase().trim();
+  return _BARRIO_A_COMUNA_NORM[k] || '';
+};
 
 // ── Catálogo: Usos actuales (chips multi-select) ──────────────
 const USOS_OPCIONES = ['Residencial', 'Comercial', 'Industrial', 'Servicios', 'Institucional', 'Otro'];

@@ -459,7 +459,10 @@ const SESSION = {
 
 // ── CATASTRO — búsqueda por GPS ───────────────────────────────
 // catastro.json: array de [lat, lon, ficha, catastral_sin_05088, direccion]
-// Ordenado por lat → búsqueda binaria + filtro por distancia.
+// Estructura del JSON:
+//   { p: [[tcod, lat_min, lon_min, lat_max, lon_max, [[lat,lon],...]], ...],
+//     f: { tcod: [[ficha, npn_sufijo, direccion], ...] } }
+// Búsqueda: filtro por bbox (rápido) + point-in-polygon estricto con turf.
 let _catastroData = null;
 let _catastroLoading = null;
 
@@ -473,39 +476,52 @@ async function _cargarCatastro() {
   return _catastroLoading;
 }
 
-async function buscarCatastroGPS(lat, lon, radioM) {
-  radioM = radioM || 80;
+// Point-in-polygon ray casting (sin dependencias).
+// poly: [[lat,lon], [lat,lon], ...]
+function _pointInPolygon(lat, lon, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const lat_i = poly[i][0], lon_i = poly[i][1];
+    const lat_j = poly[j][0], lon_j = poly[j][1];
+    const intersect = ((lat_i > lat) !== (lat_j > lat)) &&
+      (lon < (lon_j - lon_i) * (lat - lat_i) / (lat_j - lat_i) + lon_i);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Devuelve TODAS las fichas del polígono que contiene exactamente el punto GPS.
+// En propiedades horizontales (PH), un mismo polígono tiene N unidades (apartamentos)
+// — devuelve todas para que el inspector elija la correcta.
+async function buscarCatastroGPS(lat, lon) {
   const data = await _cargarCatastro();
-  // ~111,000 m por grado de lat; ~cos(6.35°)*111,000 ≈ 110,320 m por grado de lon
-  const dLat = radioM / 111000;
-  const dLon = radioM / 110320;
-  const latMin = lat - dLat, latMax = lat + dLat;
-  const lonMin = lon - dLon, lonMax = lon + dLon;
+  const polys = data.p, fichasMap = data.f;
 
-  // Búsqueda binaria para encontrar rango de latitudes
-  let lo = 0, hi = data.length;
-  while (lo < hi) { const m = (lo + hi) >> 1; data[m][0] < latMin ? lo = m + 1 : hi = m; }
-  const start = lo;
-  hi = data.length;
-  while (lo < hi) { const m = (lo + hi) >> 1; data[m][0] <= latMax ? lo = m + 1 : hi = m; }
-  const end = lo;
+  // Filtro por bbox: descarta rápidamente los polígonos que no contienen el punto.
+  const candidatos = [];
+  for (let i = 0; i < polys.length; i++) {
+    const p = polys[i];
+    // p = [tcod, lat_min, lon_min, lat_max, lon_max, [[lat,lon],...]]
+    if (lat < p[1] || lat > p[3] || lon < p[2] || lon > p[4]) continue;
+    if (_pointInPolygon(lat, lon, p[5])) {
+      candidatos.push(p[0]); // terreno_codigo
+    }
+  }
 
+  // Para cada terreno encontrado, expandir todas sus fichas
   const results = [];
-  for (let i = start; i < end; i++) {
-    const r = data[i];
-    if (r[1] < lonMin || r[1] > lonMax) continue;
-    const distM = Math.sqrt(Math.pow((r[0] - lat) * 111000, 2) + Math.pow((r[1] - lon) * 110320, 2));
-    if (distM <= radioM) {
+  for (const tcod of candidatos) {
+    const fichas = fichasMap[tcod] || [];
+    for (const [ficha, npnSufijo, direccion] of fichas) {
       results.push({
-        ficha: r[2],
-        catastral: '05088' + r[3],
-        direccion: r[4],
-        distancia: Math.round(distM),
-        lat: r[0], lon: r[1],
+        ficha: ficha,
+        catastral: tcod + npnSufijo,  // NPN completo de 30 chars
+        direccion: direccion || '',
+        terrenoCodigo: tcod,
+        npnSufijo: npnSufijo,
       });
     }
   }
-  results.sort((a, b) => a.distancia - b.distancia);
   return results;
 }
 

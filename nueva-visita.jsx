@@ -1184,14 +1184,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setBusyCat(true);
     setCatRes(null);
     try {
-      const res = await buscarCatastroGPS(lat, lon, 100);
+      const res = await buscarCatastroGPS(lat, lon);
       if (!res.length) {
-        await appAlert('No se encontraron predios en un radio de 100m.', { titulo: 'Sin resultados' });
+        await appAlert('La ubicación GPS no cae dentro de ningún predio registrado en el catastro 2026 de Bello.', { titulo: 'Sin resultados' });
       } else if (res.length === 1) {
         setCampo('catastral', res[0].catastral);
         setCampo('ficha', String(res[0].ficha));
       } else {
-        setCatRes(res.slice(0, 10));
+        // En propiedad horizontal puede haber muchas unidades en el mismo polígono.
+        // Sin tope: el inspector debe poder ver todas y elegir.
+        setCatRes(res);
       }
     } catch (e) {
       await appAlert('Error: ' + e.message, { titulo: 'Catastro' });
@@ -1911,30 +1913,31 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         {catResultados && catResultados.length > 0 && (
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
-              {catResultados.length} predios encontrados — selecciona uno:
+              {catResultados.length === 1
+                ? '1 unidad en este predio:'
+                : catResultados.length + ' unidades en este predio (propiedad horizontal) — selecciona la correcta:'}
             </div>
-            {catResultados.map((r, i) => (
-              <button key={i} type="button" onClick={() => seleccionarCatastral(r)}
-                style={{
-                  textAlign: 'left', padding: '10px 12px', borderRadius: 8,
-                  border: '1px solid var(--borde)', background: 'var(--superficie)',
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
-                  transition: 'background 0.15s',
-                }}>
-                <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                  Ficha {r.ficha}
-                  <span style={{ fontWeight: 400, color: 'var(--texto-suave)', marginLeft: 8 }}>
-                    {r.distancia}m
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                  {r.direccion || 'Sin dirección'}
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--texto-suave)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                  {r.catastral}
-                </div>
-              </button>
-            ))}
+            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {catResultados.map((r, i) => (
+                <button key={i} type="button" onClick={() => seleccionarCatastral(r)}
+                  style={{
+                    textAlign: 'left', padding: '10px 12px', borderRadius: 8,
+                    border: '1px solid var(--borde)', background: 'var(--superficie)',
+                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
+                    transition: 'background 0.15s',
+                  }}>
+                  <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    Ficha {r.ficha}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
+                    {r.direccion || 'Sin dirección'}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--texto-suave)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                    {r.catastral}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

@@ -25,10 +25,23 @@ function _isoAFecha(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
-function _fechaAIso(ddmmyyyy) {
-  if (!ddmmyyyy) return '';
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(ddmmyyyy);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : ddmmyyyy;
+function _fechaAIso(valor) {
+  if (!valor) return '';
+  // Date object → ISO local
+  if (valor instanceof Date && !isNaN(valor)) {
+    const yyyy = valor.getFullYear();
+    const mm = String(valor.getMonth() + 1).padStart(2, '0');
+    const dd = String(valor.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const s = String(valor);
+  // DD/MM/YYYY → YYYY-MM-DD
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  // ISO timestamp o YYYY-MM-DD → YYYY-MM-DD
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return '';
 }
 
 // ── Capitalización utilitaria ──────────────────────────────────

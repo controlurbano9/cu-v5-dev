@@ -508,21 +508,37 @@ async function buscarCatastroGPS(lat, lon) {
     }
   }
 
-  // Para cada terreno encontrado, expandir todas sus fichas
+  // Para cada terreno encontrado, expandir todas sus fichas con datos completos.
+  // Formato del registro en data.f: [ficha, npn_sufijo, dir, prop, matric, dest, avaluo, municipal]
+  // prop con prefijo '@' = razón social; sin prefijo = persona natural (Nombres + Apellidos).
   const results = [];
   for (const tcod of candidatos) {
     const fichas = fichasMap[tcod] || [];
-    for (const [ficha, npnSufijo, direccion] of fichas) {
+    for (const rec of fichas) {
+      const [ficha, npnSufijo, direccion, prop, matric, dest, avaluo, municipal] = rec;
+      const esRazonSocial = (prop || '').startsWith('@');
       results.push({
         ficha: ficha,
-        catastral: tcod + npnSufijo,  // NPN completo de 30 chars
+        catastral: tcod + npnSufijo,  // NPN completo 30 chars
         direccion: direccion || '',
+        propietario: esRazonSocial ? prop.slice(1) : prop,
+        esRazonSocial: esRazonSocial,
+        matricula: matric || null,
+        destinacion: dest || '',
+        avaluo: avaluo || 0,
+        municipal: !!municipal,
         terrenoCodigo: tcod,
         npnSufijo: npnSufijo,
       });
     }
   }
   return results;
+}
+
+// Formateador de moneda colombiana (sin decimales para avalúos grandes)
+function formatearCOP(valor) {
+  if (!valor || valor <= 0) return '—';
+  return '$' + Number(valor).toLocaleString('es-CO');
 }
 
 // Exportar al global para que los componentes JSX (cada uno con su scope)
@@ -536,7 +552,7 @@ Object.assign(window, {
   geocodeDireccion, crearCarpetaVisita, guardarVisita,
   mejorarTexto,
   subirFotoConDescripcion, describirFotoConIA, consultarPOT,
-  buscarCatastroGPS,
+  buscarCatastroGPS, formatearCOP,
   SESSION_V6: SESSION,
   invalidarCache,
 });

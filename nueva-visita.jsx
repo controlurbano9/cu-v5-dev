@@ -651,6 +651,69 @@ function _MapaGPS({ lat, lon, onMove }) {
   );
 }
 
+// Tarjeta de ficha catastral con datos completos. Click → onSeleccionar.
+// Reutilizable entre Nueva visita y Consulta de norma.
+function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
+  const [abierta, setAbierta] = useStateNV(!!expandida);
+  const titular = r.propietario || '—';
+  return (
+    <div style={{
+      borderRadius: 8, border: '1px solid ' + (r.municipal ? '#fca5a5' : 'var(--borde)'),
+      background: r.municipal ? '#fef2f2' : 'var(--superficie)',
+      overflow: 'hidden',
+    }}>
+      <div style={{ padding: '10px 12px', cursor: 'pointer' }} onClick={() => setAbierta(!abierta)}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 2 }}>
+              {r.municipal && <span style={{ color: '#dc2626', marginRight: 4 }}>🏛</span>}
+              Ficha <span style={{ fontFamily: 'var(--font-mono)' }}>{r.ficha}</span>
+              <span style={{ fontWeight: 400, color: 'var(--texto-suave)', marginLeft: 8, fontSize: 11 }}>
+                · {r.destinacion || 'Sin destinación'}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
+              {r.direccion || 'Sin dirección'}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 2 }}>
+              <span style={{ color: 'var(--texto-suave)' }}>{r.esRazonSocial ? 'Razón social: ' : 'Titular: '}</span>
+              <span style={{ fontWeight: 500 }}>{titular}</span>
+            </div>
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--texto-suave)', whiteSpace: 'nowrap' }}>
+            {abierta ? '▴' : '▾'}
+          </span>
+        </div>
+      </div>
+      {abierta && (
+        <div style={{
+          borderTop: '1px solid var(--borde)', padding: '10px 12px',
+          background: 'var(--gris-bg)', fontSize: 11,
+          display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '4px 12px', alignItems: 'baseline',
+        }}>
+          <span style={{ color: 'var(--texto-suave)' }}>NPN:</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{r.catastral}</span>
+          <span style={{ color: 'var(--texto-suave)' }}>Matrícula:</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{r.matricula || '—'}</span>
+          <span style={{ color: 'var(--texto-suave)' }}>Avalúo:</span>
+          <span style={{ fontWeight: 600 }}>{formatearCOP(r.avaluo)}</span>
+          {onSeleccionar && (
+            <>
+              <span></span>
+              <button type="button" onClick={(e) => { e.stopPropagation(); onSeleccionar(); }}
+                className="btn-principal verde"
+                style={{ margin: 0, marginTop: 6, padding: '6px 14px', fontSize: 12, justifySelf: 'start' }}>
+                Usar esta ficha
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+window._TarjetaFichaCatastral = _TarjetaFichaCatastral;
+
 // ══════════════════════════════════════════════════════════════
 //   MODAL INICIO — Elige tipo de visita y busca radicado
 // ══════════════════════════════════════════════════════════════
@@ -1911,31 +1974,31 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         </div>
 
         {catResultados && catResultados.length > 0 && (
-          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* Alerta si alguna ficha es del Municipio de Bello */}
+            {catResultados.some(r => r.municipal) && (
+              <div style={{
+                padding: '12px 14px', borderRadius: 'var(--r-md)',
+                background: '#fef2f2', border: '1.5px solid #dc2626',
+                color: '#991b1b', fontSize: 13, fontWeight: 600,
+                display: 'flex', alignItems: 'flex-start', gap: 8,
+              }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+                <div>
+                  Predio del <strong>Municipio de Bello</strong> —
+                  coordinar con jurídica antes de actuar.
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
               {catResultados.length === 1
                 ? '1 unidad en este predio:'
                 : catResultados.length + ' unidades en este predio (propiedad horizontal) — selecciona la correcta:'}
             </div>
-            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
               {catResultados.map((r, i) => (
-                <button key={i} type="button" onClick={() => seleccionarCatastral(r)}
-                  style={{
-                    textAlign: 'left', padding: '10px 12px', borderRadius: 8,
-                    border: '1px solid var(--borde)', background: 'var(--superficie)',
-                    cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
-                    transition: 'background 0.15s',
-                  }}>
-                  <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                    Ficha {r.ficha}
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                    {r.direccion || 'Sin dirección'}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--texto-suave)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                    {r.catastral}
-                  </div>
-                </button>
+                <_TarjetaFichaCatastral key={i} r={r}
+                  onSeleccionar={() => seleccionarCatastral(r)} />
               ))}
             </div>
           </div>

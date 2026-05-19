@@ -8,6 +8,10 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateCN, useEffect: useEffectCN, useRef: useRefCN } = React;
 
+// Reutiliza la tarjeta de ficha catastral definida en nueva-visita.jsx
+// (se carga antes que este archivo, así que window._TarjetaFichaCatastral existe).
+const _TarjetaFichaCatastral = window._TarjetaFichaCatastral;
+
 const BELLO_BBOX = { latMin: 6.18, latMax: 6.55, lonMin: -75.75, lonMax: -75.40 };
 const BELLO_CENTRO = { lat: 6.337, lng: -75.557 };
 
@@ -56,6 +60,8 @@ function ConsultaNormaScreen() {
   const [busyGeo, setBusyGeo] = useStateCN(false);
   const [busyGPS, setBusyGPS] = useStateCN(false);
   const [busyPOT, setBusyPOT] = useStateCN(false);
+  const [busyCat, setBusyCat] = useStateCN(false);
+  const [catastro, setCatastro] = useStateCN(null);  // array de fichas o null
   const [error, setError] = useStateCN('');
 
   const mapDivRef = useRefCN(null);
@@ -197,19 +203,21 @@ function ConsultaNormaScreen() {
   }
 
   async function consultarNorma(lat, lon) {
-    setBusyPOT(true); setResultado(null);
-    try {
-      var r = await consultarPOT(lat, lon);
-      setResultado(r);
-    } catch (e) {
-      setError('Error consultando POT: ' + e.message);
-    }
-    setBusyPOT(false);
+    setBusyPOT(true); setBusyCat(true); setResultado(null); setCatastro(null);
+    // Consultar POT y catastro en paralelo (independientes)
+    consultarPOT(lat, lon)
+      .then(r => setResultado(r))
+      .catch(e => setError('Error consultando POT: ' + e.message))
+      .finally(() => setBusyPOT(false));
+    buscarCatastroGPS(lat, lon)
+      .then(r => setCatastro(r))
+      .catch(e => { console.warn('Catastro:', e); setCatastro([]); })
+      .finally(() => setBusyCat(false));
   }
 
   function limpiar() {
     setDireccion(''); setError('');
-    setPunto(null); setResultado(null);
+    setPunto(null); setResultado(null); setCatastro(null);
     if (markerRef.current) {
       markerRef.current.setMap(null);
       markerRef.current = null;
@@ -285,6 +293,57 @@ function ConsultaNormaScreen() {
           borderColor: 'rgba(180,58,46,0.3)', marginBottom: 12, fontSize: 13,
         }}>
           {error}
+        </div>
+      )}
+
+      {/* Resultado catastral (alerta municipal + fichas) */}
+      {(busyCat || catastro) && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="card-titulo" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Catastro 2026
+            {catastro && catastro.length > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
+              }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
+            )}
+          </div>
+          {busyCat && (
+            <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
+              Consultando catastro...
+            </div>
+          )}
+          {!busyCat && catastro && catastro.length === 0 && (
+            <div style={{ color: 'var(--texto-suave)', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
+              El punto no cae dentro de ningún predio del catastro 2026.
+            </div>
+          )}
+          {!busyCat && catastro && catastro.length > 0 && (
+            <>
+              {catastro.some(r => r.municipal) && (
+                <div style={{
+                  padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 10,
+                  background: '#fef2f2', border: '1.5px solid #dc2626',
+                  color: '#991b1b', fontSize: 13, fontWeight: 600,
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                }}>
+                  <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+                  <div>Predio del <strong>Municipio de Bello</strong> — coordinar con jurídica antes de actuar.</div>
+                </div>
+              )}
+              <div style={{ maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {catastro.map((r, i) => (
+                  <_TarjetaFichaCatastral key={i} r={r}
+                    expandida={catastro.length === 1} />
+                ))}
+              </div>
+              {catastro.length > 1 && (
+                <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 8, textAlign: 'center' }}>
+                  Toca cualquier ficha para ver el detalle (NPN, matrícula, avalúo).
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

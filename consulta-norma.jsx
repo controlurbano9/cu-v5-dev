@@ -63,6 +63,7 @@ function ConsultaNormaScreen() {
   const [busyPOT, setBusyPOT] = useStateCN(false);
   const [busyCat, setBusyCat] = useStateCN(false);
   const [catastro, setCatastro] = useStateCN(null);  // array de fichas o null
+  const [catastroOpen, setCatastroOpen] = useStateCN(true);
   const [error, setError] = useStateCN('');
 
   const mapDivRef = useRefCN(null);
@@ -297,51 +298,20 @@ function ConsultaNormaScreen() {
         </div>
       )}
 
-      {/* Resultado catastral (alerta municipal + fichas) */}
-      {(busyCat || catastro) && (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div className="card-titulo" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            Catastro 2026
-            {catastro && catastro.length > 0 && (
-              <span style={{
-                fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
-              }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
-            )}
-          </div>
-          {busyCat && (
-            <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
-              Consultando catastro...
-            </div>
-          )}
-          {!busyCat && catastro && catastro.length === 0 && (
-            <div style={{ color: 'var(--texto-suave)', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
-              El punto no cae dentro de ningún predio del catastro 2026.
-            </div>
-          )}
-          {!busyCat && catastro && catastro.length > 0 && (
-            <>
-              {catastro.some(r => r.municipal) && (
-                <div style={{
-                  padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 10,
-                  background: '#fef2f2', border: '1.5px solid #dc2626',
-                  color: '#991b1b', fontSize: 13, fontWeight: 600,
-                  display: 'flex', alignItems: 'flex-start', gap: 8,
-                }}>
-                  <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
-                  <div>Predio del <strong>Municipio de Bello</strong></div>
-                </div>
-              )}
-              {catastro.length === 1
-                ? <_TarjetaFichaCatastral r={catastro[0]} expandida={true} />
-                : <_ListaFichasCatastrales fichas={catastro} maxAlto={420} />
-              }
-            </>
-          )}
+      {/* Alerta predio municipal: fuera del panel de catastro, justo después del mapa */}
+      {!busyCat && catastro && catastro.some(r => r.municipal) && (
+        <div style={{
+          padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 12,
+          background: '#fef2f2', border: '1.5px solid #dc2626',
+          color: '#991b1b', fontSize: 13, fontWeight: 600,
+          display: 'flex', alignItems: 'flex-start', gap: 8,
+        }}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+          <div>Predio del <strong>Municipio de Bello</strong></div>
         </div>
       )}
 
-      {/* Resultado POT */}
+      {/* Resultado POT — siempre visible */}
       <div className="card">
         <div className="card-titulo" style={{ marginBottom: 12 }}>Norma POT</div>
         {!resultado && !busyPOT && (
@@ -404,6 +374,50 @@ function ConsultaNormaScreen() {
           }}>Limpiar</button>
         </div>
       </div>
+
+      {/* Consulta Catastro — acordeón, al final, debajo del panel POT */}
+      {(busyCat || catastro) && (
+        <div className="card" style={{ marginTop: 12, padding: 0, overflow: 'hidden' }}>
+          <div onClick={() => setCatastroOpen(!catastroOpen)} style={{
+            padding: '14px 16px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            borderBottom: catastroOpen ? '1px solid var(--borde)' : 'none',
+            userSelect: 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div className="card-titulo" style={{ margin: 0 }}>Consulta Catastro</div>
+              {catastro && catastro.length > 0 && (
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                  background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
+                }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
+              )}
+            </div>
+            <span style={{ color: 'var(--texto-suave)', fontSize: 12 }}>
+              {catastroOpen ? '▲' : '▼'}
+            </span>
+          </div>
+          {catastroOpen && (
+            <div style={{ padding: '12px 16px' }}>
+              {busyCat && (
+                <div style={{ textAlign: 'center', padding: '14px 0', color: 'var(--texto-suave)', fontSize: 13 }}>
+                  Consultando catastro...
+                </div>
+              )}
+              {!busyCat && catastro && catastro.length === 0 && (
+                <div style={{ color: 'var(--texto-suave)', fontSize: 13, textAlign: 'center', padding: '14px 0' }}>
+                  El punto no cae dentro de ningún predio del catastro 2026.
+                </div>
+              )}
+              {!busyCat && catastro && catastro.length > 0 && (
+                catastro.length === 1
+                  ? <_TarjetaFichaCatastral r={catastro[0]} expandida={true} />
+                  : <_ListaFichasCatastrales fichas={catastro} maxAlto={420} />
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

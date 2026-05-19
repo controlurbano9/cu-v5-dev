@@ -762,11 +762,22 @@ window._TarjetaFichaCatastral = _TarjetaFichaCatastral;
 // Si hay >10 fichas, muestra input para filtrar por ficha, dirección o titular.
 function _ListaFichasCatastrales({ fichas, onSeleccionar, maxAlto }) {
   const [filtro, setFiltro] = useStateNV('');
-  // Ordenar: municipales primero (predios del Municipio de Bello), después el resto en su orden original
+  // Ordenar por prioridad descendente:
+  //   1) fichas con matrícula inmobiliaria (más útiles para el inspector)
+  //   2) predios municipales (Municipio de Bello)
+  //   3) orden original (estable)
   const fichasOrdenadas = React.useMemo(() => {
-    const muni = []; const otros = [];
-    (fichas || []).forEach(r => (r && r.municipal ? muni : otros).push(r));
-    return muni.concat(otros);
+    const lista = (fichas || []).map((r, i) => ({ r, i }));
+    lista.sort((a, b) => {
+      const ma = !!(a.r && String(a.r.matricula || '').trim());
+      const mb = !!(b.r && String(b.r.matricula || '').trim());
+      if (ma !== mb) return ma ? -1 : 1;
+      const mua = !!(a.r && a.r.municipal);
+      const mub = !!(b.r && b.r.municipal);
+      if (mua !== mub) return mua ? -1 : 1;
+      return a.i - b.i;
+    });
+    return lista.map(x => x.r);
   }, [fichas]);
   const mostrarFiltro = fichasOrdenadas.length > 10;
   const filtroNorm = filtro.trim().toLowerCase();

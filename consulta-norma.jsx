@@ -384,11 +384,14 @@ function ConsultaNormaScreen() {
             <CampoResultado label="Retiro corrientes" valor={resultado.enRetiro || 'NO'} />
             <CampoResultado label="Comuna" valor={comunaLabel} />
             <CampoResultado label="Barrio / Vereda" valor={resultado.barrioSugerido || '—'} />
-            <CampoResultado
-              label="DRMI Quitasol-La Holanda"
-              valor={resultado.enDRMI === 'SI' ? (resultado.drmiNombre || 'SI') : 'NO'}
-              span={2}
-            />
+            {/* DRMI: solo se muestra cuando el predio cae dentro */}
+            {resultado.enDRMI === 'SI' && (
+              <CampoResultado
+                label="DRMI"
+                valor={resultado.drmiNombre || 'Cerro Quitasol - La Holanda'}
+                span={2}
+              />
+            )}
           </div>
           );
         })()}

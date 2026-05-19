@@ -212,6 +212,7 @@ function _estadoInicial(datosIniciales) {
     radicado:       d['RADICADO']             || '',
     fechaRadicado:  _fechaAIso(d['FECHA RADICADO'] || ''),
     fechaVisita:    _fechaAIso(d['FECHA DE VISITA'] || '') || _hoyISO(),
+    denunciante:    d['DENUNCIANTE/REMITENTE'] || d['DENUNCIANTE'] || '',
     nVisita:        d['N° VISITA']           || d['N VISITA']           || 1,
     esOficio:       !!d['_oficio'],
     // Ubicación
@@ -296,7 +297,9 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     ? (d.orden ? 'OFICIO-' + d.orden : '')
     : (d.radicado || '');
   const fpRadicado = filaPendiente?.['FECHA RADICADO'] || '';
-  const fpDenunc   = filaPendiente?.['DENUNCIANTE/REMITENTE'] || filaPendiente?.[6] || '';
+  // Prioridad: state d.denunciante (que se inicializa desde datosIniciales y se conserva
+  // a través del modal) → filaPendiente prop como fallback.
+  const fpDenunc   = d.denunciante || filaPendiente?.['DENUNCIANTE/REMITENTE'] || filaPendiente?.[6] || '';
   const fpFechaAsig= filaPendiente?.['FECHA ASIGNACION VISITA'] || filaPendiente?.[14] || '';
   const fpFechaDev = filaPendiente?.['FECHA DEVOLUCION'] || filaPendiente?.[20] || '';
 
@@ -1506,7 +1509,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       area:           d.areaNoMedible ? 'No se pudo medir' : d.area,
       obsConclusion:  d.obsConclusion || '',
       // Citación
-      orden:          d.orden,
+      orden:          (d.orden && String(d.orden).trim()) ? d.orden : 'N/A',
       citacion:       d.noCitacion
         ? 'No se deja citación'
         : (d.citacionFecha

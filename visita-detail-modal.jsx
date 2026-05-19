@@ -206,8 +206,51 @@ function VisitaDetailUI({ f, onCerrar }) {
               <_CampoLargo v={obsConclusion} />
             </_Seccion>
           )}
+
+          {/* Debug: muestra todos los campos no vacíos para diagnosticar
+              cuando algunas secciones aparezcan en blanco. Hay que tocar
+              "Ver datos crudos" para expandirlo. */}
+          <_DebugRaw f={f} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function _DebugRaw({ f }) {
+  const [open, setOpen] = useStateVD(false);
+  if (!f) return null;
+  // Recolectar pares (clave, valor) — saltar claves numéricas (duplicado)
+  // y vacíos. Si los nombres no encajan con los que busca el modal, la
+  // lista revela cómo están escritos los headers reales del Sheet.
+  const pares = Object.keys(f)
+    .filter(k => isNaN(Number(k)) && k !== '_idx')
+    .map(k => [k, f[k]])
+    .filter(([, v]) => v != null && v !== '');
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button onClick={() => setOpen(!open)} style={{
+        background: 'transparent', border: '1px dashed var(--borde-med, rgba(31,27,22,0.16))',
+        borderRadius: 8, padding: '6px 10px', fontFamily: 'var(--font-mono)',
+        fontSize: 11, color: 'var(--texto-suave, #5C5142)', cursor: 'pointer',
+      }}>{open ? '▾' : '▸'} Debug — ver datos crudos del Sheet ({pares.length} columnas con valor)</button>
+      {open && (
+        <div style={{
+          marginTop: 8, padding: 10, background: 'var(--gris-bg, #F5F1EB)',
+          borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 11,
+          color: 'var(--texto, #1F1B16)', maxHeight: 280, overflowY: 'auto',
+        }}>
+          {pares.length === 0
+            ? <div style={{ color: 'var(--texto-suave)' }}>La fila no contiene datos por nombre — revisa los headers del Sheet.</div>
+            : pares.map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', gap: 8, padding: '2px 0', borderBottom: '1px dashed rgba(31,27,22,0.06)' }}>
+                <span style={{ fontWeight: 600, minWidth: 220, color: 'var(--brand-ink, #8A3F26)' }}>{k}</span>
+                <span style={{ flex: 1, wordBreak: 'break-word' }}>{String(v).slice(0, 200)}</span>
+              </div>
+            ))
+          }
+        </div>
+      )}
     </div>
   );
 }

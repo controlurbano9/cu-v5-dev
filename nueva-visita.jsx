@@ -1678,17 +1678,19 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       await appAlert('Primero guarda la visita.', { titulo: 'Visita no guardada' });
       return;
     }
-    // Validar todos los campos antes de generar el acta
+    // Validar todos los campos antes de generar el acta. Estricto:
+    // si falta cualquier dato obligatorio, NO se permite generar.
     const faltan = _validarAntesDeActa();
     if (faltan.length > 0) {
-      const lista = faltan.slice(0, 15).map(s => '• ' + s).join('\n');
-      const extra = faltan.length > 15 ? '\n... y ' + (faltan.length - 15) + ' más' : '';
-      const seguir = await appConfirm(
-        'Faltan campos por diligenciar (' + faltan.length + '):\n\n' + lista + extra +
-        '\n\n¿Generar el acta de todos modos? Los campos vacíos saldrán en blanco.',
-        { titulo: 'Datos incompletos', btnOk: 'Generar igual', btnCancel: 'Volver al form' }
+      const lista = faltan.slice(0, 20).map(s => '• ' + s).join('\n');
+      const extra = faltan.length > 20 ? '\n... y ' + (faltan.length - 20) + ' más' : '';
+      await appAlert(
+        'No se puede generar el acta: faltan ' + faltan.length + ' campo(s) por diligenciar:\n\n' +
+        lista + extra +
+        '\n\nVuelve al formulario, complétalos y guarda antes de generar el acta.',
+        { titulo: 'Datos incompletos', btnOk: 'Volver al formulario' }
       );
-      if (!seguir) return;
+      return;
     }
     const ok = await appConfirm(
       '¿Generar el acta F-GGO-46 (Sheet de caracterización)? El registro fotográfico se genera aparte.',

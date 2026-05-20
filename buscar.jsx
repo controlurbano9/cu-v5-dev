@@ -467,12 +467,13 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
 function FilaVisitaBase({ f, usuario, onContinuar,
   esAdmin, inspectores, busy, abierto, onAbrirAsignar, onAsignar, onDesasignar, onCompletar }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-  const tono = {
-    PENDIENTE:  { bg: 'rgba(184,135,58,0.14)',  fg: '#8A6628' },
-    ASIGNADO:   { bg: 'rgba(74,108,140,0.14)',  fg: '#3F5C78' },
-    INICIADO:   { bg: 'rgba(74,108,140,0.14)',  fg: '#3F5C78' },
-    COMPLETADO: { bg: 'rgba(107,122,58,0.14)',  fg: '#516028' },
-  }[est] || { bg: 'var(--gris-bg)', fg: 'var(--texto-suave)' };
+  // Badge usando tokens de paleta editorial (no hardcoded RGBA)
+  const tonoCls = {
+    PENDIENTE:  'badge-amarillo',
+    ASIGNADO:   'badge-azul',
+    INICIADO:   'badge-azul',
+    COMPLETADO: 'badge-verde',
+  }[est] || '';
 
   return (
     <div style={{ padding: '12px 14px', borderTop: '1px solid var(--borde)' }}>
@@ -491,10 +492,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
             {f['FECHA ASIGNACION VISITA'] && <span><span style={{ opacity: 0.7 }}>Asignado:</span> {formatearFecha(f['FECHA ASIGNACION VISITA'])}</span>}
           </div>
         </div>
-        <span style={{
-          background: tono.bg, color: tono.fg, fontSize: 10, fontWeight: 700,
-          padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-        }}>{est || '—'}</span>
+        <span className={'badge-suave ' + tonoCls}>{est || '—'}</span>
       </div>
 
       {/* ── Botones de acción ── */}

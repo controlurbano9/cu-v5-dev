@@ -6,19 +6,19 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateMV, useEffect: useEffectMV, useMemo: useMemoMV } = React;
 
-// Tonos por estado para badges y contadores
+// Mapeo estado → clase de badge (definidos en styles.css)
 const TONOS_MV = {
-  PENDIENTE:  { bg: 'rgba(184,135,58,0.14)', fg: '#8A6628', label: 'Pendiente' },
-  ASIGNADO:   { bg: 'rgba(74,108,140,0.14)', fg: '#3F5C78', label: 'Asignada' },
-  INICIADO:   { bg: 'rgba(74,108,140,0.20)', fg: '#2E4A5E', label: 'Iniciada' },
-  COMPLETADO: { bg: 'rgba(107,122,58,0.14)', fg: '#516028', label: 'Completada' },
+  PENDIENTE:  { cls: 'badge-amarillo', label: 'Pendiente' },
+  ASIGNADO:   { cls: 'badge-amarillo', label: 'Asignada' },
+  INICIADO:   { cls: 'badge-azul',     label: 'Iniciada' },
+  COMPLETADO: { cls: 'badge-verde',    label: 'Completada' },
 };
 
-// Colores para los badges de conteo de cada sección
+// Colores de contador por sección (cada acordeón)
 const SECCION_COLORES = {
-  asignadas:   { bg: 'rgba(184,135,58,0.18)', fg: '#8A6628' },
-  iniciadas:   { bg: 'rgba(74,108,140,0.22)', fg: '#2E4A5E' },
-  completadas: { bg: 'rgba(107,122,58,0.18)', fg: '#516028' },
+  asignadas:   'badge-amarillo',
+  iniciadas:   'badge-azul',
+  completadas: 'badge-verde',
 };
 
 // Iconos SVG minimalistas para cada sección del acordeón
@@ -283,12 +283,7 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--texto-2)' }}>
             {titulo}
           </span>
-          <span style={{
-            background: color.bg, color: color.fg,
-            fontSize: 11, fontWeight: 700,
-            padding: '2px 8px', borderRadius: 10,
-            minWidth: 20, textAlign: 'center',
-          }}>
+          <span className={'badge-suave ' + color} style={{ minWidth: 22, textAlign: 'center' }}>
             {count}
           </span>
         </div>
@@ -310,7 +305,7 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
 // ═══════════════════════════════════════════════════════════════
 function TarjetaVisitaMV({ f, onContinuar }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-  const tono = TONOS_MV[est] || { bg: 'var(--gris-bg)', fg: 'var(--texto-suave)', label: est };
+  const tono = TONOS_MV[est] || { cls: '', label: est };
 
   // Fecha de visita formateada
   const fechaVisita = formatearFecha(f['FECHA DE VISITA'] || f['FECHA ASIGNACION VISITA'] || '');
@@ -356,15 +351,8 @@ function TarjetaVisitaMV({ f, onContinuar }) {
           )}
         </div>
 
-        {/* Badge de estado */}
-        <span style={{
-          background: tono.bg, color: tono.fg,
-          fontSize: 10, fontWeight: 700,
-          padding: '3px 8px', borderRadius: 10,
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}>
-          {tono.label}
-        </span>
+        {/* Badge de estado (clases palette en styles.css) */}
+        <span className={'badge-suave ' + tono.cls}>{tono.label}</span>
       </div>
 
       {/* Botón de acción */}

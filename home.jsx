@@ -162,45 +162,28 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
 
       {/* ── Alertas urgentes ── */}
       {!cargando && alertas.total > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{
-            fontSize: 13, fontWeight: 700, marginBottom: 8,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            ⚠️ Alertas
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-              background: alertas.rojas.length > 0 ? '#fecaca' : '#fef3c7',
-              color: alertas.rojas.length > 0 ? '#991b1b' : '#92400e',
-            }}>{alertas.total}</span>
-          </div>
-
-          {/* Alertas rojas: audiencia próxima */}
+        <div style={{ marginBottom: 18 }}>
+          <SeccionHeader
+            titulo="Alertas"
+            count={alertas.total}
+            tono={alertas.rojas.length > 0 ? 'rojo' : 'amarillo'}
+          />
           {alertas.rojas.map((a, i) => (
-            <AlertaCard key={'r' + i} alerta={a} tipo="rojo" onContinuar={onContinuar} />
+            <AlertaCard key={'r' + (a.f._idx || i)} alerta={a} tipo="rojo" onContinuar={onContinuar} />
           ))}
-
-          {/* Alertas amarillas: muchos días sin completar */}
           {alertas.amarillas.map((a, i) => (
-            <AlertaCard key={'a' + i} alerta={a} tipo="amarillo" onContinuar={onContinuar} />
+            <AlertaCard key={'a' + (a.f._idx || i)} alerta={a} tipo="amarillo" onContinuar={onContinuar} />
           ))}
         </div>
       )}
 
       {/* ── Asignadas hoy ── */}
       <div style={{ marginBottom: 8 }}>
-        <div style={{
-          fontSize: 13, fontWeight: 700, marginBottom: 8,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          📋 Asignadas hoy
-          {!cargando && (
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
-              background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
-            }}>{asignadasHoy.length}</span>
-          )}
-        </div>
+        <SeccionHeader
+          titulo="Asignadas hoy"
+          count={cargando ? null : asignadasHoy.length}
+          tono="acento"
+        />
 
         {cargando && <div className="cargando"><div className="spinner"></div>Cargando...</div>}
 
@@ -225,10 +208,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
                   {f['COMUNA'] && ' · C' + f['COMUNA']}
                 </div>
               </div>
-              <span style={{
-                background: 'rgba(184,135,58,0.14)', color: '#8A6628',
-                fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap',
-              }}>Asignada</span>
+              <span className="badge-suave badge-amarillo">Asignada</span>
             </div>
             <div style={{ marginTop: 10 }}>
               <button type="button" onClick={() => onContinuar(f._idx, f)}
@@ -252,39 +232,112 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
   );
 }
 
-// ── Tarjeta de alerta (roja o amarilla) ───────────────────────
+// ── Header de sección (Alertas, Asignadas hoy, etc.) ──────────
+// Estilo editorial: tipografía serif, contador en chip suave.
+function SeccionHeader({ titulo, count, tono }) {
+  const tonos = {
+    rojo:     { bg: 'var(--rojo-bg)',    fg: 'var(--rojo)',    border: 'rgba(180,58,46,0.18)' },
+    amarillo: { bg: 'var(--amarillo-bg)',fg: 'var(--cafe)',    border: 'rgba(184,135,58,0.22)' },
+    acento:   { bg: 'var(--brand-bg)',   fg: 'var(--brand-ink)', border: 'rgba(201,100,66,0.18)' },
+    neutro:   { bg: 'var(--gris-bg)',    fg: 'var(--texto-suave)', border: 'var(--borde)' },
+  };
+  const t = tonos[tono] || tonos.neutro;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10,
+      paddingBottom: 6, borderBottom: '0.5px solid var(--borde)',
+    }}>
+      <h2 style={{
+        fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600,
+        color: 'var(--texto)', margin: 0, letterSpacing: '-0.2px',
+      }}>{titulo}</h2>
+      {count != null && (
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+          background: t.bg, color: t.fg, border: '0.5px solid ' + t.border,
+          fontFamily: 'var(--font-mono)', letterSpacing: '0.02em',
+        }}>{count}</span>
+      )}
+    </div>
+  );
+}
+
+// ── Tarjeta de alerta — estilo editorial palette terracota/crema ────
+// rojo (urgencia alta: audiencia ≤3 días hábiles), amarillo (más de 5 días sin completar).
 function AlertaCard({ alerta, tipo, onContinuar }) {
   const f = alerta.f;
   const esRojo = tipo === 'rojo';
+  const c = esRojo
+    ? { fg: 'var(--rojo)',     bg: 'var(--rojo-bg)',     stripe: 'var(--rojo)',     border: 'rgba(180,58,46,0.18)', glow: 'rgba(180,58,46,0.06)' }
+    : { fg: 'var(--cafe)',     bg: 'var(--amarillo-bg)', stripe: 'var(--amarillo)', border: 'rgba(184,135,58,0.22)', glow: 'rgba(184,135,58,0.06)' };
+
   return (
-    <div style={{
-      padding: '10px 14px', marginBottom: 6,
-      borderRadius: 'var(--r-md)', border: '1px solid ' + (esRojo ? '#fecaca' : '#fde68a'),
-      borderLeft: '4px solid ' + (esRojo ? '#ef4444' : '#f59e0b'),
-      background: esRojo ? '#fef2f2' : '#fffbeb',
+    <article style={{
+      position: 'relative', overflow: 'hidden',
+      background: 'var(--superficie)', borderRadius: 'var(--r-md)',
+      border: '0.5px solid ' + c.border,
+      boxShadow: '0 1px 2px ' + c.glow,
+      marginBottom: 8,
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: esRojo ? '#991b1b' : '#92400e', marginBottom: 2 }}>
-            {esRojo ? '🔴' : '🟡'} {alerta.mensaje}
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>
-            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-            {f['RADICADO'] || '—'}
-            {f['BARRIO/VEREDA'] && ' · ' + (f['BARRIO/VEREDA'] || '')}
-            {f['VISITADOR(ES)'] && ' · ' + (f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}
-          </div>
+      {/* franja vertical de acento */}
+      <span aria-hidden="true" style={{
+        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
+        background: c.stripe,
+      }} />
+      <div style={{ padding: '12px 14px 12px 17px' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+        }}>
+          <span aria-hidden="true" style={{
+            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+            background: c.stripe, flexShrink: 0,
+          }} />
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+            textTransform: 'uppercase', color: c.fg,
+            fontFamily: 'var(--font-mono)',
+          }}>{alerta.mensaje}</span>
         </div>
-        <button type="button" onClick={() => onContinuar(f._idx, f)} style={{
-          background: 'none', border: '1px solid ' + (esRojo ? '#fca5a5' : '#fcd34d'),
-          borderRadius: 8, padding: '6px 10px', fontFamily: 'inherit', fontSize: 11,
-          fontWeight: 600, cursor: 'pointer', color: esRojo ? '#991b1b' : '#92400e',
-          whiteSpace: 'nowrap',
-        }}>Continuar ▶</button>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          alignItems: 'flex-end', gap: 10,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600,
+              lineHeight: 1.3, color: 'var(--texto)',
+              overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
+            </div>
+            <div style={{
+              fontSize: 11, color: 'var(--texto-suave)',
+              marginTop: 3, display: 'flex', gap: 6, flexWrap: 'wrap',
+            }}>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--brand-ink)' }}>
+                {f['RADICADO'] || '—'}
+              </span>
+              {f['BARRIO/VEREDA'] && <span aria-hidden="true">·</span>}
+              {f['BARRIO/VEREDA'] && <span>{f['BARRIO/VEREDA']}</span>}
+              {f['VISITADOR(ES)'] && <span aria-hidden="true">·</span>}
+              {f['VISITADOR(ES)'] && <span>{(f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}</span>}
+            </div>
+          </div>
+          <button type="button" onClick={() => onContinuar(f._idx, f)} style={{
+            background: c.bg, color: c.fg,
+            border: '0.5px solid ' + c.border,
+            borderRadius: 'var(--r-sm)', padding: '6px 11px',
+            fontFamily: 'inherit', fontSize: 11, fontWeight: 600,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            transition: 'background .15s, transform .1s',
+          }}
+          onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+          onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+          >Continuar →</button>
+        </div>
       </div>
-    </div>
+    </article>
   );
 }
 

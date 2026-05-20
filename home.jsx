@@ -218,7 +218,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
                   {f['RADICADO'] || '—'}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-                  {f['DIRECCION'] || 'Sin dirección'}
+                  {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
                   {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}
@@ -269,7 +269,7 @@ function AlertaCard({ alerta, tipo, onContinuar }) {
             {esRojo ? '🔴' : '🟡'} {alerta.mensaje}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600 }}>
-            {f['DIRECCION'] || 'Sin dirección'}
+            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
           </div>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
             {f['RADICADO'] || '—'}

@@ -222,14 +222,18 @@ function _estadoInicial(datosIniciales) {
     lat:            d['LATITUD']              || null,
     lon:            d['LONGITUD']             || null,
     // Persona
+    noAtiende:      (d['NOMBRE PERSONA ATIENDE'] || '').includes('No se atiende'),
     atiendeNombre:  d['NOMBRE PERSONA ATIENDE']  || '',
     atiendeId:      d['ID PERSONA ATIENDE']       || '',
     atiendeTel:     d['TELEFONO PERSONA ATIENDE']  || '',
+    telNoAporta:    (d['TELEFONO PERSONA ATIENDE'] || '').includes('No aporta') || (d['TELEFONO PERSONA ATIENDE'] || '').includes('No se atiende'),
     atiendeRelacion: d['RELACION CON EL EVENTO']  || '',
-    atiendeRelacionOtro: '', // texto libre cuando relación = "Otro"
+    atiendeRelacionOtro: '',
     atiendeDir:     d['DIR NOTIFICACION']         || '',
+    dirNoAporta:    (d['DIR NOTIFICACION'] || '').includes('No aporta') || (d['DIR NOTIFICACION'] || '').includes('No se atiende'),
     atiendeEmail:   d['CORREO ELECTRONICO']       || '',
-    dirNotifIgual:  true, // checkbox "Misma dirección del inmueble"
+    emailNoAporta:  (d['CORREO ELECTRONICO'] || '').includes('No aporta') || (d['CORREO ELECTRONICO'] || '').includes('No se atiende'),
+    dirNotifIgual:  true,
     // Características
     estadoObra:     d['ESTADO OBRA']          || '',
     repLocativa:    d['REPARACION LOCATIVA']  || '',
@@ -336,12 +340,12 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.barrio || '',                               // E  BARRIO/VEREDA
     d.comuna || '',                               // F  COMUNA
     denunc,                                       // G  DENUNCIANTE/REMITENTE
-    _capPalabras(d.atiendeNombre),                // H  NOMBRE PERSONA ATIENDE
-    d.atiendeId || '',                            // I  ID PERSONA ATIENDE
-    d.atiendeTel || '',                           // J  TELEFONO PERSONA ATIENDE
-    relacionFinal,                                // K  RELACION CON EL EVENTO
-    dirNotifFinal,                                // L  DIR NOTIFICACION
-    _soloMin(d.atiendeEmail),                     // M  CORREO ELECTRONICO
+    d.noAtiende ? 'No se atiende / No suministra datos' : _capPalabras(d.atiendeNombre),  // H
+    d.noAtiende ? 'No se atiende / No suministra datos' : (d.atiendeId || ''),             // I
+    d.noAtiende ? 'No se atiende / No suministra datos' : (d.telNoAporta ? 'No aporta' : (d.atiendeTel || '')), // J
+    d.noAtiende ? '' : relacionFinal,             // K  RELACION CON EL EVENTO
+    d.noAtiende ? 'No se atiende / No suministra datos' : (d.dirNoAporta ? 'No aporta' : dirNotifFinal), // L
+    d.noAtiende ? 'No se atiende / No suministra datos' : (d.emailNoAporta ? 'No aporta' : _soloMin(d.atiendeEmail)), // M
     estado,                                       // N  ESTADO VISITA
     fpFechaAsig || _hoyDDMMYYYY_nv(),             // O  FECHA ASIGNACION VISITA
     _isoAFecha(d.fechaVisita),                    // P  FECHA DE VISITA
@@ -410,6 +414,18 @@ function _Campo({ label, children, hint, fullWidth }) {
   );
 }
 
+function _CheckNoAporta({ checked, onChange }) {
+  return (
+    <span style={{ float: 'right', fontWeight: 400 }}>
+      <label style={{ fontSize: 11, color: 'var(--texto-suave)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)}
+          style={{ cursor: 'pointer', accentColor: 'var(--texto-suave)' }} />
+        No aporta
+      </label>
+    </span>
+  );
+}
+
 function _Input({ value, onChange, placeholder, type, mono, ...rest }) {
   return (
     <input
@@ -458,42 +474,40 @@ function _Radio({ value, onChange, opciones }) {
 // Soporta opción "Otro" que muestra campo de texto libre.
 function _ChipsMulti({ opciones, value, onChange, separador, otroLabel }) {
   const sep = separador || ' · ';
-  // Parsear valores actuales desde el string combinado
-  const seleccionados = useMemoNV(() => {
+  // Parsear SIN trim para preservar espacios durante la escritura del campo "Otro"
+  const partes = useMemoNV(() => {
     if (!value) return [];
-    return value.split(sep).map(s => s.trim()).filter(Boolean);
+    return value.split(sep).filter(Boolean);
   }, [value, sep]);
 
-  // Determinar si hay un valor "Otro" activo (un valor que no está en opciones normales)
   const opcionesNormales = opciones.filter(o => o !== 'Otro');
-  const valoresOtro = seleccionados.filter(s => !opcionesNormales.includes(s) && s !== 'Otro');
-  const otroActivo = seleccionados.includes('Otro') || valoresOtro.length > 0;
+  const isActive = (opt) => partes.some(s => s.trim() === opt);
+  const valoresOtro = partes.filter(s => !opcionesNormales.includes(s.trim()) && s.trim() !== 'Otro');
+  const otroActivo = partes.some(s => s.trim() === 'Otro') || valoresOtro.length > 0;
   const textoOtro = valoresOtro.join(sep);
 
   function toggle(opt) {
     let next;
     if (opt === 'Otro') {
-      // Toggle "Otro": si se desactiva, quitar valores no estándar
       if (otroActivo) {
-        next = seleccionados.filter(s => opcionesNormales.includes(s));
+        next = partes.filter(s => opcionesNormales.includes(s.trim()));
       } else {
-        next = [...seleccionados.filter(s => opcionesNormales.includes(s)), 'Otro'];
+        next = [...partes.filter(s => opcionesNormales.includes(s.trim())), 'Otro'];
       }
     } else {
-      if (seleccionados.includes(opt)) {
-        next = seleccionados.filter(s => s !== opt);
+      if (isActive(opt)) {
+        next = partes.filter(s => s.trim() !== opt);
       } else {
-        next = [...seleccionados, opt];
+        next = [...partes, opt];
       }
     }
     onChange(next.join(sep));
   }
 
   function setTextoOtro(texto) {
-    // Reemplazar valores no estándar con el nuevo texto
-    const base = seleccionados.filter(s => opcionesNormales.includes(s));
-    if (texto.trim()) {
-      base.push(texto.trim());
+    const base = partes.filter(s => opcionesNormales.includes(s.trim()));
+    if (texto) {
+      base.push(texto);
     }
     onChange(base.join(sep));
   }
@@ -503,7 +517,7 @@ function _ChipsMulti({ opciones, value, onChange, separador, otroLabel }) {
       <div className="chips">
         {opciones.map(opt => (
           <div key={opt}
-            className={'chip' + ((opt === 'Otro' ? otroActivo : seleccionados.includes(opt)) ? ' activo' : '')}
+            className={'chip' + ((opt === 'Otro' ? otroActivo : isActive(opt)) ? ' activo' : '')}
             onClick={() => toggle(opt)}>
             {opt}
           </div>
@@ -650,40 +664,55 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
   );
 }
 
-// Mapa Google Maps con pin arrastrable para corregir coordenadas
+// Mapa Google Maps con pin arrastrable para corregir coordenadas.
+// Sin coordenadas muestra vista general de Bello; con coords, zoom 18 + pin.
 function _MapaGPS({ lat, lon, onMove }) {
   const mapRef = React.useRef(null);
   const gMapRef = React.useRef(null);
   const markerRef = React.useRef(null);
+  const tieneCoords = lat != null && lon != null;
 
   useEffectNV(() => {
     if (!mapRef.current || typeof google === 'undefined' || !google.maps) return;
-    const pos = { lat: Number(lat), lng: Number(lon) };
+    const pos = tieneCoords
+      ? { lat: Number(lat), lng: Number(lon) }
+      : { lat: 6.338, lng: -75.556 };
+    const zoom = tieneCoords ? 18 : 14;
 
     if (!gMapRef.current) {
       gMapRef.current = new google.maps.Map(mapRef.current, {
-        center: pos, zoom: 18, mapTypeId: 'satellite',
+        center: pos, zoom, mapTypeId: 'satellite',
         disableDefaultUI: true, zoomControl: true,
         gestureHandling: 'greedy',
       });
-      markerRef.current = new google.maps.Marker({
-        position: pos, map: gMapRef.current, draggable: true,
-        title: 'Arrastra para corregir ubicación',
-      });
-      markerRef.current.addListener('dragend', () => {
-        const p = markerRef.current.getPosition();
-        if (onMove) onMove(p.lat(), p.lng());
-      });
     } else {
       gMapRef.current.setCenter(pos);
-      markerRef.current.setPosition(pos);
+      gMapRef.current.setZoom(zoom);
+    }
+
+    if (tieneCoords) {
+      if (!markerRef.current) {
+        markerRef.current = new google.maps.Marker({
+          position: pos, map: gMapRef.current, draggable: true,
+          title: 'Arrastra para corregir ubicación',
+        });
+        markerRef.current.addListener('dragend', () => {
+          const p = markerRef.current.getPosition();
+          if (onMove) onMove(p.lat(), p.lng());
+        });
+      } else {
+        markerRef.current.setPosition(pos);
+        markerRef.current.setMap(gMapRef.current);
+      }
+    } else if (markerRef.current) {
+      markerRef.current.setMap(null);
     }
   }, [lat, lon]);
 
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
-        Arrastra el pin para corregir la ubicación
+        {tieneCoords ? 'Arrastra el pin para corregir la ubicación' : 'Captura tu ubicación para colocar el pin'}
       </div>
       <div ref={mapRef} style={{
         width: '100%', height: 220, borderRadius: 10,
@@ -1510,12 +1539,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       barrio:         barrioFinal,
       comuna:         d.comuna,
       // Persona
-      atiendeNombre:  d.atiendeNombre,
-      atiendeId:      d.atiendeId,
-      atiendeTel:     d.atiendeTel,
-      atiendeRelacion: relacionFinal,
-      atiendeDir:     dirNotifFinal,
-      atiendeEmail:   d.atiendeEmail,
+      atiendeNombre:  d.noAtiende ? 'No se atiende / No suministra datos' : d.atiendeNombre,
+      atiendeId:      d.noAtiende ? 'No se atiende / No suministra datos' : d.atiendeId,
+      atiendeTel:     d.noAtiende ? 'No se atiende / No suministra datos' : (d.telNoAporta ? 'No aporta' : d.atiendeTel),
+      atiendeRelacion: d.noAtiende ? '' : relacionFinal,
+      atiendeDir:     d.noAtiende ? 'No se atiende / No suministra datos' : (d.dirNoAporta ? 'No aporta' : dirNotifFinal),
+      atiendeEmail:   d.noAtiende ? 'No se atiende / No suministra datos' : (d.emailNoAporta ? 'No aporta' : d.atiendeEmail),
       // Licencia
       licenciaN:       d.licencia,
       licenciaFecha:   _isoAFecha(d.fechaLicencia),
@@ -1778,29 +1807,40 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             {busyGeo ? 'Capturando...' : '📍 Capturar mi ubicación'}
           </_BtnAccion>
         </div>
-        {d.lat != null && d.lon != null && (
-          <div style={{ gridColumn: '1 / -1' }}>
-            <_MapaGPS lat={d.lat} lon={d.lon} onMove={(lat, lon) => {
-              setCampo('lat', lat); setCampo('lon', lon);
-            }} />
-          </div>
-        )}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <_MapaGPS lat={d.lat} lon={d.lon} onMove={(lat, lon) => {
+            setCampo('lat', lat); setCampo('lon', lon);
+          }} />
+        </div>
       </_Seccion>
 
       {/* 3. PERSONA QUE ATIENDE ──────────────────────────── */}
       <_Seccion titulo="Persona que atiende" color="azul">
+        <div style={{ gridColumn: '1 / -1', marginBottom: 4 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: d.noAtiende ? 'var(--rojo, #dc2626)' : 'var(--texto-2)' }}>
+            <input type="checkbox"
+              checked={d.noAtiende}
+              onChange={e => setCampo('noAtiende', e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: 'var(--rojo, #dc2626)', cursor: 'pointer' }}
+            />
+            No se atiende / No suministra datos
+          </label>
+        </div>
+        {!d.noAtiende && (<>
         <_Campo label="Nombre completo">
           <_Input value={d.atiendeNombre} onChange={v => setCampo('atiendeNombre', v)} />
         </_Campo>
         <_Campo label="Cédula">
           <_Input mono value={d.atiendeId} onChange={v => setCampo('atiendeId', v)} />
         </_Campo>
-        <_Campo label="Teléfono">
-          <_Input mono value={d.atiendeTel} onChange={v => setCampo('atiendeTel', v)} />
+        <_Campo label={<>Teléfono <_CheckNoAporta checked={d.telNoAporta} onChange={v => setCampo('telNoAporta', v)} /></>}>
+          <_Input mono value={d.atiendeTel} onChange={v => setCampo('atiendeTel', v)}
+            disabled={d.telNoAporta} placeholder={d.telNoAporta ? 'No aporta' : '3000000000'} />
         </_Campo>
-        <_Campo label="Correo electrónico">
+        <_Campo label={<>Correo electrónico <_CheckNoAporta checked={d.emailNoAporta} onChange={v => setCampo('emailNoAporta', v)} /></>}>
           <_Input type="email" value={d.atiendeEmail}
-            onChange={v => setCampo('atiendeEmail', v)} />
+            onChange={v => setCampo('atiendeEmail', v)}
+            disabled={d.emailNoAporta} placeholder={d.emailNoAporta ? 'No aporta' : 'correo@ejemplo.com'} />
         </_Campo>
         <_Campo label="Relación con el evento" fullWidth>
           <_Radio value={d.atiendeRelacion} onChange={v => setCampo('atiendeRelacion', v)}
@@ -1816,22 +1856,25 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             />
           )}
         </_Campo>
-        <_Campo label="Dirección de notificación" fullWidth>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, color: 'var(--texto-suave)', cursor: 'pointer' }}>
-            <input type="checkbox"
-              checked={d.dirNotifIgual}
-              onChange={e => setCampo('dirNotifIgual', e.target.checked)}
-              style={{ accentColor: 'var(--brand-accent)' }}
-            />
-            Misma dirección del inmueble
-          </label>
+        <_Campo label={<>Dirección de notificación <_CheckNoAporta checked={d.dirNoAporta} onChange={v => { setCampo('dirNoAporta', v); if (v) setCampo('dirNotifIgual', false); }} /></>} fullWidth>
+          {!d.dirNoAporta && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, color: 'var(--texto-suave)', cursor: 'pointer' }}>
+              <input type="checkbox"
+                checked={d.dirNotifIgual}
+                onChange={e => setCampo('dirNotifIgual', e.target.checked)}
+                style={{ accentColor: 'var(--brand-accent)' }}
+              />
+              Misma dirección del inmueble
+            </label>
+          )}
           <_Input
-            value={d.dirNotifIgual ? d.direccion : d.atiendeDir}
+            value={d.dirNoAporta ? '' : (d.dirNotifIgual ? d.direccion : d.atiendeDir)}
             onChange={v => setCampo('atiendeDir', v)}
-            disabled={d.dirNotifIgual}
-            placeholder={d.dirNotifIgual ? '' : 'Dirección de notificación'}
+            disabled={d.dirNoAporta || d.dirNotifIgual}
+            placeholder={d.dirNoAporta ? 'No aporta' : (d.dirNotifIgual ? '' : 'Dirección de notificación')}
           />
         </_Campo>
+        </>)}
       </_Seccion>
 
       {/* 4. CARACTERÍSTICAS ──────────────────────────────── */}
@@ -2206,6 +2249,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               fila: filaEditando,
               idCarpeta: d.idCarpetaVisita,
               radicado: d.radicado,
+              fechaVisita: _isoAFecha(d.fechaVisita),
               direccion: d.direccion,
               barrio: d.barrio,
               comuna: d.comuna,
@@ -2222,6 +2266,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               cubierta:         d.cubierta,
               sist:             d.sistema,
               obsLicencia:      d.obsLicencia,
+              poligono:         d.poligono,
+              amenaza:          d.amenaza,
+              sueloProt:        d.sueloProt,
+              observaciones:    d.actuacion,
+              areas:            d.area,
             });
           }} style={{
             background: 'transparent', color: 'var(--brand-accent)',
@@ -2248,6 +2297,20 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           className="btn-principal" style={{ fontSize: 15, marginTop: 14 }}>
           {generandoRF ? 'Generando registro fotográfico...' : 'Generar registro fotográfico'}
         </button>
+      )}
+
+      {/* Botón "Ver carpeta Drive" al final del formulario */}
+      {d.linkDrive && (
+        <a href={d.linkDrive} target="_blank" rel="noopener noreferrer" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          marginTop: 16, padding: '14px 16px',
+          background: 'var(--gris-bg)', color: 'var(--texto)',
+          border: '1.5px solid var(--borde-med)',
+          borderRadius: 12, fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
+          textDecoration: 'none', cursor: 'pointer',
+        }}>
+          📂 Ver carpeta Drive de la visita
+        </a>
       )}
     </div>
   );

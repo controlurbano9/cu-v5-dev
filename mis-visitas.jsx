@@ -339,7 +339,7 @@ function TarjetaVisitaMV({ f, onContinuar }) {
 
           {/* Dirección */}
           <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-            {f['DIRECCION'] || 'Sin dirección'}
+            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
           </div>
 
           {/* Barrio · Comuna */}

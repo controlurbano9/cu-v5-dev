@@ -185,7 +185,7 @@ function BuscarScreen({ usuario, onContinuar }) {
     const lq = q.trim().toUpperCase();
     return datos.filter(f => {
       if (lq) {
-        const hay = ['RADICADO', 'DIRECCION', 'BARRIO/VEREDA', 'BARRIO']
+        const hay = ['RADICADO', 'DIRECCION INFRACCION', 'DIRECCION', 'BARRIO/VEREDA', 'BARRIO']
           .some(k => (f[k] || '').toString().toUpperCase().includes(lq));
         if (!hay) return false;
       }
@@ -387,11 +387,12 @@ function paramsInformeF43(f, usuario) {
   if (f._idx)        p.fila       = String(f._idx);
   if (idCarpeta)     p.idCarpeta  = idCarpeta;
   if (f['RADICADO']) p.radicado   = f['RADICADO'];
-  if (f['DIRECCION'])p.direccion  = f['DIRECCION'];
+  if (f['FECHA DE VISITA'])      p.fechaVisita = f['FECHA DE VISITA'];
+  if (f['DIRECCION INFRACCION'] || f['DIRECCION']) p.direccion = f['DIRECCION INFRACCION'] || f['DIRECCION'];
   var barrio = f['BARRIO/VEREDA'] || f['BARRIO'] || '';
   if (barrio)        p.barrio     = barrio;
   if (f['COMUNA'])   p.comuna     = f['COMUNA'];
-  if (f['CATASTRAL'])p.catastral  = f['CATASTRAL'];
+  if (f['CODIGO CATASTRAL'] || f['CATASTRAL']) p.catastral = f['CODIGO CATASTRAL'] || f['CATASTRAL'];
   if (f['LATITUD'])  p.lat        = f['LATITUD'];
   if (f['LONGITUD']) p.lon        = f['LONGITUD'];
   if (usuario && usuario.usuario) p.inspector = usuario.usuario;
@@ -405,6 +406,18 @@ function paramsInformeF43(f, usuario) {
   if (f['CUBIERTA LICENCIA'])     p.cubierta         = f['CUBIERTA LICENCIA'];
   if (f['SISTEMA ESTRUCT'])       p.sist             = f['SISTEMA ESTRUCT'];
   if (f['OBS LICENCIA'])          p.obsLicencia      = f['OBS LICENCIA'];
+  // POT
+  if (f['POLIGONO USO SUELO'])    p.poligono         = f['POLIGONO USO SUELO'];
+  if (f['AMENAZA'])               p.amenaza          = f['AMENAZA'];
+  if (f['SUELO DE PROTECCION'])   p.sueloProt        = f['SUELO DE PROTECCION'];
+  // Observaciones
+  var rawAct = f['ACTUACION / OBSERVACIONES'] || f['ACTUACION'] || '';
+  var partsAct = rawAct.split('\n══CONCLUSIONES══\n');
+  if (partsAct[0]) p.observaciones = partsAct[0];
+  if (f['AREA CONTRAVENCION m2'] || f['AREA CONTRAVENCION M2']) {
+    var areaVal = (f['AREA CONTRAVENCION m2'] || f['AREA CONTRAVENCION M2'] || '').toString().trim();
+    if (areaVal && areaVal !== 'No se pudo medir') p.areas = areaVal;
+  }
   return p;
 }
 
@@ -466,7 +479,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
-            {f['DIRECCION'] || 'Sin dirección'}
+            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
           </div>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
             {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}

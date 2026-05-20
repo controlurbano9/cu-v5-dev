@@ -94,6 +94,26 @@ function BuscarScreen({ usuario, onContinuar }) {
     setBusyFila(null);
   }
 
+  // Crea una fila nueva en BD clonando los datos fijos del radicado y
+  // dejándola ASIGNADA al inspector elegido. Útil para asignar una segunda
+  // visita a un radicado ya COMPLETADO.
+  async function adminAsignarNuevaVisita(filaOrigen, inspector) {
+    setBusyFila(filaOrigen);
+    try {
+      const r = await gasGet({
+        accion: 'crearNuevaVisitaAsignada',
+        fila: filaOrigen, inspector,
+      });
+      if (r && r.ok === false) throw new Error(r.error || 'Error desconocido');
+      invalidarCache('visitas');
+      setAsignandoFila(null);
+      await cargar(true);
+      await appAlert('Visita N°' + (r.nVisita || '?') + ' creada y asignada a ' + inspector + '.',
+        { titulo: 'Nueva visita asignada' });
+    } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
+    setBusyFila(null);
+  }
+
   async function adminDesasignar(fila, rad) {
     const ok = await appConfirm(
       '¿Quitar asignación de ' + (rad || 'este radicado') + '?\nVolverá a estado PENDIENTE.',
@@ -347,7 +367,8 @@ function BuscarScreen({ usuario, onContinuar }) {
               <GrupoRadicado key={rad} radicado={rad} filas={filas} usuario={usuario} onContinuar={onContinuar}
                 esAdmin={esAdmin} inspectores={inspectores} busyFila={busyFila}
                 asignandoFila={asignandoFila} setAsignandoFila={setAsignandoFila}
-                onAsignar={adminAsignar} onDesasignar={adminDesasignar} onCompletar={adminCompletar} />
+                onAsignar={adminAsignar} onDesasignar={adminDesasignar} onCompletar={adminCompletar}
+                onAsignarNuevaVisita={adminAsignarNuevaVisita} />
             ))}
             {ocultos > 0 && (
               <button
@@ -433,7 +454,7 @@ function urlInformeF43(f, usuario) {
 // reduce filtros ya no rerenderea todas las tarjetas visibles.
 function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
   esAdmin, inspectores, busyFila, asignandoFila, setAsignandoFila,
-  onAsignar, onDesasignar, onCompletar }) {
+  onAsignar, onDesasignar, onCompletar, onAsignarNuevaVisita }) {
   const [open, setOpen] = useStateB(filas.length === 1);
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -457,7 +478,8 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
             busy={busyFila === f._idx}
             abierto={asignandoFila === f._idx}
             onAbrirAsignar={() => setAsignandoFila(asignandoFila === f._idx ? null : f._idx)}
-            onAsignar={onAsignar} onDesasignar={onDesasignar} onCompletar={onCompletar} />)}
+            onAsignar={onAsignar} onDesasignar={onDesasignar} onCompletar={onCompletar}
+            onAsignarNuevaVisita={onAsignarNuevaVisita} />)}
         </div>
       )}
     </div>
@@ -465,7 +487,8 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
 }
 
 function FilaVisitaBase({ f, usuario, onContinuar,
-  esAdmin, inspectores, busy, abierto, onAbrirAsignar, onAsignar, onDesasignar, onCompletar }) {
+  esAdmin, inspectores, busy, abierto, onAbrirAsignar, onAsignar, onDesasignar, onCompletar,
+  onAsignarNuevaVisita }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
   // Badge usando tokens de paleta editorial (no hardcoded RGBA)
   const tonoCls = {
@@ -568,22 +591,37 @@ function FilaVisitaBase({ f, usuario, onContinuar,
             {linkDrive && <a href={linkDrive} target="_blank" rel="noopener noreferrer" style={btnSty}>📂 Carpeta</a>}
             {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}>📄 Acta</a>}
             {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}>📝 Informe</a>}
+            {esAdmin && onAsignarNuevaVisita && (
+              <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
+                flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
+                border: '1px dashed var(--brand-accent)', borderRadius: 10, padding: '8px 12px',
+                fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+                cursor: busy ? 'not-allowed' : 'pointer',
+              }}>{abierto ? 'Cancelar' : '+ Nueva visita'}</button>
+            )}
           </>;
         })()}
       </div>
 
-      {/* ── Panel de selección de inspector (asignar/reasignar) ── */}
+      {/* ── Panel de selección de inspector (asignar/reasignar/nueva visita) ── */}
       {abierto && esAdmin && inspectores && inspectores.length > 0 && (
         <div style={{
           marginTop: 10, padding: 10, background: 'var(--gris-bg)', borderRadius: 8,
           display: 'flex', flexDirection: 'column', gap: 6,
         }}>
           <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
-            Asignar a:
+            {est === 'COMPLETADO' ? 'Crear nueva visita y asignar a:' : 'Asignar a:'}
           </div>
           {inspectores.map(i => (
             <button key={i.nombre} type="button"
-              onClick={() => onAsignar(f._idx, i.nombre)} disabled={busy} style={{
+              onClick={() => {
+                // Para COMPLETADO crea fila nueva; para los demás re-asigna la misma fila.
+                if (est === 'COMPLETADO' && onAsignarNuevaVisita) {
+                  onAsignarNuevaVisita(f._idx, i.nombre);
+                } else {
+                  onAsignar(f._idx, i.nombre);
+                }
+              }} disabled={busy} style={{
               background: 'var(--superficie)', border: '1px solid var(--borde)', borderRadius: 6,
               padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, textAlign: 'left',
               cursor: busy ? 'not-allowed' : 'pointer',

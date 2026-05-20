@@ -1968,9 +1968,13 @@ function _hoyLocal() {
 // ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 (function() {
   var hoy = _hoyLocal();
-  cargar();
-  if (!document.getElementById('fechaVisita').value) document.getElementById('fechaVisita').value = hoy;
-  if (!document.getElementById('fechaInforme').value) document.getElementById('fechaInforme').value = hoy;
+  var hayParams = new URLSearchParams(window.location.search).toString().length > 0;
+  // Si vienen params en la URL (apertura desde V6), saltamos cargar() para evitar
+  // que datos viejos del localStorage contaminen el prefill. Caso contrario,
+  // restauramos lo último guardado.
+  if (!hayParams) cargar();
+  document.getElementById('fechaVisita').value = hoy;
+  document.getElementById('fechaInforme').value = hoy;
   CAMPOS.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) { el.addEventListener('input', guardar); el.addEventListener('change', guardar); }

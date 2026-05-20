@@ -279,6 +279,8 @@ function _estadoInicial(datosIniciales) {
     linkDrive:       d['LINK_DRIVE']          || '',
     idCarpetaVisita: _idCarpetaDeLink(d['LINK_DRIVE'] || ''),
     idCarpetaFotos:  '',
+    linkXlsxActa:    d['LINK_XLSX_ACTA']      || '',
+    linkPdfActa:     d['LINK_PDF_ACTA']       || '',
   };
 }
 function _idCarpetaDeLink(url) {
@@ -1702,6 +1704,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const r = await gasPost(Object.assign({ accion: 'generarActa' }, _construirDatosF46()));
       const link = r.linkSheet || r.linkActa;
       if (link) {
+        // Guardar link en state para que el boton se convierta en "Ver acta"
+        // sin tener que recargar la pantalla.
+        setCampo('linkXlsxActa', link);
+        if (r.linkPdf) setCampo('linkPdfActa', r.linkPdf);
         await appAlert(
           (r.yaExistia ? 'El acta ya existía en la carpeta.' : 'Acta generada correctamente.') +
           '\n\nSe abrirá la hoja de caracterización en una pestaña nueva.',
@@ -2343,11 +2349,20 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {/* Botones de documentos generados (solo con fila guardada) */}
       {filaEditando && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* Acta F-GGO-46: estilo principal (relleno color marca) */}
-          <button onClick={generarActa} disabled={generandoActa} className="btn-principal"
-            style={{ fontSize: 15 }}>
-            {generandoActa ? 'Generando acta...' : 'Generar acta F-GGO-46'}
-          </button>
+          {/* Acta F-GGO-46: si ya hay acta generada (link guardado en BD),
+              el boton se convierte en "Ver acta" y abre el Sheet existente.
+              Si no, lanza el flujo de generacion con validacion estricta. */}
+          {d.linkXlsxActa ? (
+            <button type="button" onClick={() => window.open(d.linkXlsxActa, '_blank', 'noopener')}
+              className="btn-principal" style={{ fontSize: 15 }}>
+              👁 Ver acta F-GGO-46
+            </button>
+          ) : (
+            <button onClick={generarActa} disabled={generandoActa} className="btn-principal"
+              style={{ fontSize: 15 }}>
+              {generandoActa ? 'Generando acta...' : 'Generar acta F-GGO-46'}
+            </button>
+          )}
 
           {/* Informe F-GGO-43: estilo outlined para diferenciarlo del acta */}
           <button onClick={async () => {

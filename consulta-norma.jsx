@@ -54,9 +54,70 @@ function geocodeConGoogle(direccion) {
   });
 }
 
+// Intenta parsear un texto como coordenadas. Soporta:
+//   Grados decimales (DD): "6.337, -75.557"  "6.337 -75.557"
+//   DMS: "6°20'13.2\"N 75°33'25.2\"W"  "6°20'13.2\"N, 75°33'25.2\"W"
+//   DMM: "6°20.220'N 75°33.420'W"
+//   Google Maps URL: "...@6.337,-75.557,17z..."
+// Retorna {lat,lon} o null si no es coordenada.
+function _parsearCoordenadas(texto) {
+  var txt = texto.trim();
+  if (!txt) return null;
+
+  // 1. Extraer de URL de Google Maps (...@lat,lon,zoom...)
+  var urlMatch = txt.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (urlMatch) {
+    var la = parseFloat(urlMatch[1]), lo = parseFloat(urlMatch[2]);
+    if (!isNaN(la) && !isNaN(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) return { lat: la, lon: lo };
+  }
+
+  // 2. DMS: 6°20'13.2"N 75°33'25.2"W  (con o sin coma entre pares)
+  var dmsRe = /(\d+)[°º]\s*(\d+)[''′]\s*([\d.]+)[""″]?\s*([NSns])\s*[,;]?\s*(\d+)[°º]\s*(\d+)[''′]\s*([\d.]+)[""″]?\s*([EWOewo])/;
+  var dmsM = txt.match(dmsRe);
+  if (dmsM) {
+    var lat = parseInt(dmsM[1]) + parseInt(dmsM[2]) / 60 + parseFloat(dmsM[3]) / 3600;
+    if (dmsM[4].toUpperCase() === 'S') lat = -lat;
+    var lon = parseInt(dmsM[5]) + parseInt(dmsM[6]) / 60 + parseFloat(dmsM[7]) / 3600;
+    if (dmsM[8].toUpperCase() === 'W' || dmsM[8].toUpperCase() === 'O') lon = -lon;
+    return { lat: lat, lon: lon };
+  }
+
+  // 3. DMM: 6°20.220'N 75°33.420'W
+  var dmmRe = /(\d+)[°º]\s*([\d.]+)[''′]\s*([NSns])\s*[,;]?\s*(\d+)[°º]\s*([\d.]+)[''′]\s*([EWOewo])/;
+  var dmmM = txt.match(dmmRe);
+  if (dmmM) {
+    var lat = parseInt(dmmM[1]) + parseFloat(dmmM[2]) / 60;
+    if (dmmM[3].toUpperCase() === 'S') lat = -lat;
+    var lon = parseInt(dmmM[4]) + parseFloat(dmmM[5]) / 60;
+    if (dmmM[6].toUpperCase() === 'W' || dmmM[6].toUpperCase() === 'O') lon = -lon;
+    return { lat: lat, lon: lon };
+  }
+
+  // 4. Grados decimales: "6.337, -75.557" o "6.337 -75.557"
+  //    También acepta con N/S/E/W/O: "6.337N 75.557W"
+  var ddCardinal = txt.match(/([\d.]+)\s*([NSns])\s*[,;\s]+\s*([\d.]+)\s*([EWOewo])/);
+  if (ddCardinal) {
+    var lat = parseFloat(ddCardinal[1]);
+    if (ddCardinal[2].toUpperCase() === 'S') lat = -lat;
+    var lon = parseFloat(ddCardinal[3]);
+    if (ddCardinal[4].toUpperCase() === 'W' || ddCardinal[4].toUpperCase() === 'O') lon = -lon;
+    if (!isNaN(lat) && !isNaN(lon)) return { lat: lat, lon: lon };
+  }
+
+  // 5. DD simple: dos números separados por coma/espacio
+  var partes = txt.split(/[,;\s]+/).filter(Boolean);
+  if (partes.length >= 2) {
+    var a = parseFloat(partes[0]), b = parseFloat(partes[1]);
+    if (!isNaN(a) && !isNaN(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180) {
+      return { lat: a, lon: b };
+    }
+  }
+
+  return null;
+}
+
 function ConsultaNormaScreen() {
-  const [direccion, setDireccion] = useStateCN('');
-  const [coordInput, setCoordInput] = useStateCN('');
+  const [consulta, setConsulta] = useStateCN('');
   const [punto, setPunto] = useStateCN(null);
   const [resultado, setResultado] = useStateCN(null);
   const [busyGeo, setBusyGeo] = useStateCN(false);
@@ -169,34 +230,34 @@ function ConsultaNormaScreen() {
     );
   }
 
-  // Buscar por coordenadas pegadas (lat, lon)
-  function buscarPorCoordenadas() {
-    setError('');
-    var txt = coordInput.trim();
-    if (!txt) { setError('Ingresa coordenadas (latitud, longitud).'); return; }
-    // Acepta "6.337, -75.557" o "6.337 -75.557" o "6.337,-75.557"
-    var partes = txt.split(/[,\s]+/).filter(Boolean);
-    if (partes.length < 2) { setError('Formato inválido. Ej: 6.337, -75.557'); return; }
-    var lat = parseFloat(partes[0]), lon = parseFloat(partes[1]);
-    if (isNaN(lat) || isNaN(lon)) { setError('Coordenadas no numéricas.'); return; }
-    if (!dentroDeBello(lat, lon)) { setError('Las coordenadas están fuera de Bello.'); return; }
-    colocarPin(lat, lon, true);
-  }
-
-  async function buscarPorDireccion() {
+  // Búsqueda unificada: detecta automáticamente si es coordenada o dirección
+  async function buscar() {
     setError(''); setResultado(null);
-    var dir = direccion.trim();
-    if (!dir) { setError('Ingresa una dirección.'); return; }
+    var txt = consulta.trim();
+    if (!txt) { setError('Ingresa una dirección o coordenadas.'); return; }
+
+    // Intentar parsear como coordenadas primero
+    var coords = _parsearCoordenadas(txt);
+    if (coords) {
+      if (!dentroDeBello(coords.lat, coords.lon)) {
+        setError('Las coordenadas están fuera del municipio de Bello.');
+        return;
+      }
+      colocarPin(coords.lat, coords.lon, true);
+      return;
+    }
+
+    // No son coordenadas → geocodificar como dirección
     setBusyGeo(true);
     try {
-      var res = await geocodeConGoogle(dir);
+      var res = await geocodeConGoogle(txt);
       colocarPin(res.lat, res.lon, true);
     } catch (e1) {
       try {
         var variantes = [
-          normalizarDireccionGoogle(dir) + ', Bello, Antioquia, Colombia',
-          dir + ', Bello, Antioquia, Colombia',
-          dir + ', Bello',
+          normalizarDireccionGoogle(txt) + ', Bello, Antioquia, Colombia',
+          txt + ', Bello, Antioquia, Colombia',
+          txt + ', Bello',
         ];
         var encontrado = null;
         for (var q of variantes) {
@@ -210,10 +271,10 @@ function ConsultaNormaScreen() {
         if (encontrado) {
           colocarPin(encontrado.lat, encontrado.lon, true);
         } else {
-          setError('No se encontró la dirección dentro de Bello. Verifica el formato (ej: CL 50 32-10) o coloca el pin en el mapa.');
+          setError('No se encontró dentro de Bello. Verifica la dirección (ej: CL 50 32-10) o pega coordenadas (ej: 6.337, -75.557).');
         }
       } catch (e2) {
-        setError('Error geocodificando: ' + (e1.message || e2.message));
+        setError('Error buscando: ' + (e1.message || e2.message));
       }
     }
     setBusyGeo(false);
@@ -233,7 +294,7 @@ function ConsultaNormaScreen() {
   }
 
   function limpiar() {
-    setDireccion(''); setError('');
+    setConsulta(''); setError('');
     setPunto(null); setResultado(null); setCatastro(null);
     if (markerRef.current) {
       markerRef.current.setMap(null);
@@ -249,30 +310,33 @@ function ConsultaNormaScreen() {
     <div className="pantalla activa pad-bottom">
       <div className="page-title" style={{ marginBottom: 6 }}>Consultar norma POT</div>
       <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 14 }}>
-        Ingresa la dirección, pega coordenadas, captura tu ubicación GPS o toca el mapa.
+        Busca por dirección o coordenadas, captura tu ubicación GPS o toca el mapa.
       </div>
 
-      {/* Dirección + GPS */}
+      {/* Campo unificado: dirección o coordenadas */}
       <div className="card" style={{ marginBottom: 12 }}>
         <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
-          Dirección
+          Dirección o coordenadas
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
-            value={direccion}
-            onChange={e => setDireccion(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') buscarPorDireccion(); }}
-            placeholder="Ej: CL 50 32-10"
+            value={consulta}
+            onChange={e => setConsulta(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') buscar(); }}
+            placeholder="CL 50 32-10 · 6.337, -75.557 · 6°20'13\"N 75°33'25\"W"
             style={{
               flex: 1, padding: '10px 12px', borderRadius: 8,
               border: '1px solid var(--borde)', background: 'var(--superficie)',
               fontFamily: 'inherit', fontSize: 14,
             }}
           />
-          <button onClick={buscarPorDireccion} disabled={busyGeo} className="btn-principal"
+          <button onClick={buscar} disabled={busyGeo} className="btn-principal"
             style={{ padding: '0 18px', fontSize: 13, width: 'auto' }}>
             {busyGeo ? '...' : 'Buscar'}
           </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
+          Acepta dirección, grados decimales, DMS (6°20'13"N 75°33'25"W), DMM o link de Google Maps.
         </div>
         <button onClick={capturarGPS} disabled={busyGPS} style={{
           marginTop: 8, width: '100%', padding: '10px 14px', borderRadius: 8,
@@ -283,30 +347,6 @@ function ConsultaNormaScreen() {
         }}>
           {busyGPS ? 'Obteniendo ubicación...' : '📍 Capturar mis coordenadas'}
         </button>
-
-        {/* Búsqueda por coordenadas */}
-        <div style={{ marginTop: 10, borderTop: '1px solid var(--borde)', paddingTop: 10 }}>
-          <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
-            Coordenadas (latitud, longitud)
-          </label>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={coordInput}
-              onChange={e => setCoordInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') buscarPorCoordenadas(); }}
-              placeholder="Ej: 6.337, -75.557"
-              style={{
-                flex: 1, padding: '10px 12px', borderRadius: 8,
-                border: '1px solid var(--borde)', background: 'var(--superficie)',
-                fontFamily: 'var(--font-mono)', fontSize: 13,
-              }}
-            />
-            <button onClick={buscarPorCoordenadas} className="btn-principal"
-              style={{ padding: '0 18px', fontSize: 13, width: 'auto' }}>
-              Ir
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Mapa Google Maps */}

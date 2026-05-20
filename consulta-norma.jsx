@@ -56,6 +56,7 @@ function geocodeConGoogle(direccion) {
 
 function ConsultaNormaScreen() {
   const [direccion, setDireccion] = useStateCN('');
+  const [coordInput, setCoordInput] = useStateCN('');
   const [punto, setPunto] = useStateCN(null);
   const [resultado, setResultado] = useStateCN(null);
   const [busyGeo, setBusyGeo] = useStateCN(false);
@@ -168,6 +169,20 @@ function ConsultaNormaScreen() {
     );
   }
 
+  // Buscar por coordenadas pegadas (lat, lon)
+  function buscarPorCoordenadas() {
+    setError('');
+    var txt = coordInput.trim();
+    if (!txt) { setError('Ingresa coordenadas (latitud, longitud).'); return; }
+    // Acepta "6.337, -75.557" o "6.337 -75.557" o "6.337,-75.557"
+    var partes = txt.split(/[,\s]+/).filter(Boolean);
+    if (partes.length < 2) { setError('Formato inválido. Ej: 6.337, -75.557'); return; }
+    var lat = parseFloat(partes[0]), lon = parseFloat(partes[1]);
+    if (isNaN(lat) || isNaN(lon)) { setError('Coordenadas no numéricas.'); return; }
+    if (!dentroDeBello(lat, lon)) { setError('Las coordenadas están fuera de Bello.'); return; }
+    colocarPin(lat, lon, true);
+  }
+
   async function buscarPorDireccion() {
     setError(''); setResultado(null);
     var dir = direccion.trim();
@@ -234,7 +249,7 @@ function ConsultaNormaScreen() {
     <div className="pantalla activa pad-bottom">
       <div className="page-title" style={{ marginBottom: 6 }}>Consultar norma POT</div>
       <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 14 }}>
-        Ingresa la dirección, captura tus coordenadas o toca el mapa.
+        Ingresa la dirección, pega coordenadas, captura tu ubicación GPS o toca el mapa.
       </div>
 
       {/* Dirección + GPS */}
@@ -268,6 +283,30 @@ function ConsultaNormaScreen() {
         }}>
           {busyGPS ? 'Obteniendo ubicación...' : '📍 Capturar mis coordenadas'}
         </button>
+
+        {/* Búsqueda por coordenadas */}
+        <div style={{ marginTop: 10, borderTop: '1px solid var(--borde)', paddingTop: 10 }}>
+          <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
+            Coordenadas (latitud, longitud)
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={coordInput}
+              onChange={e => setCoordInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') buscarPorCoordenadas(); }}
+              placeholder="Ej: 6.337, -75.557"
+              style={{
+                flex: 1, padding: '10px 12px', borderRadius: 8,
+                border: '1px solid var(--borde)', background: 'var(--superficie)',
+                fontFamily: 'var(--font-mono)', fontSize: 13,
+              }}
+            />
+            <button onClick={buscarPorCoordenadas} className="btn-principal"
+              style={{ padding: '0 18px', fontSize: 13, width: 'auto' }}>
+              Ir
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Mapa Google Maps */}

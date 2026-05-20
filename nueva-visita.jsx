@@ -349,7 +349,7 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.dirNoAporta ? 'No aporta' : dirNotifFinal), // L
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.emailNoAporta ? 'No aporta' : _soloMin(d.atiendeEmail)), // M
     estado,                                       // N  ESTADO VISITA
-    fpFechaAsig || _hoyDDMMYYYY_nv(),             // O  FECHA ASIGNACION VISITA
+    fpFechaAsig || _isoAFecha(d.fechaVisita) || _hoyDDMMYYYY_nv(), // O  FECHA ASIGNACION VISITA (si no existe, = fecha de visita)
     _isoAFecha(d.fechaVisita),                    // P  FECHA DE VISITA
     d.nVisita || 1,                               // Q  N° VISITA
     d.visitador || '',                            // R  VISITADOR(ES)
@@ -1485,7 +1485,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       let idCarpetaFotos  = d.idCarpetaFotos  || '';
       if (!linkDrive && d.comuna && d.direccion && d.fechaVisita) {
         try {
-          const c = await crearCarpetaVisita(d.comuna, d.direccion, d.fechaVisita, d.nVisita || 1);
+          const c = await crearCarpetaVisita(d.comuna, d.direccion, d.fechaVisita, d.nVisita || 1, {
+            barrio:  barrioFinal,
+            persona: d.atiendeNombre || '',
+            lat:     d.lat  || '',
+            lon:     d.lon  || '',
+          });
           linkDrive       = c.linkCarpeta || '';
           idCarpetaFotos  = c.idFotos     || '';
           idCarpetaVisita = _idCarpetaDeLink(linkDrive);
@@ -1548,6 +1553,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       atiendeDir:     d.noAtiende ? 'No se atiende / No suministra datos' : (d.dirNoAporta ? 'No aporta' : dirNotifFinal),
       atiendeEmail:   d.noAtiende ? 'No se atiende / No suministra datos' : (d.emailNoAporta ? 'No aporta' : d.atiendeEmail),
       // Licencia
+      licenciaAportada: d.licenciaAportada || 'NO',
       licenciaN:       d.licencia,
       licenciaFecha:   _isoAFecha(d.fechaLicencia),
       licenciaTipo:    d.tipoLicencia,
@@ -1555,6 +1561,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       licenciaDest:    d.destinaciones,
       licenciaCubierta:d.cubierta,
       licenciaSistema: d.sistema,
+      licenciaObs:     d.obsLicencia || '',
       // Caracterización
       estadoObra:     d.estadoObra,
       repLocativa:    d.repLocativa,
@@ -1667,8 +1674,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     req(d.sueloProt, '¿Suelo de protección? (SI/NO)');
     req(d.quebrada, '¿Cumple retiro de quebrada? (SI/NO)');
 
-    // Observaciones (sección 10)
-    req(d.obsConclusion, 'Observaciones y conclusiones');
+    // Observaciones (sección 10) — opcional, no bloquea acta
 
     return faltan;
   }
@@ -1694,22 +1700,46 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       );
       return;
     }
-    const ok = await appConfirm(
-      '¿Generar el acta F-GGO-46 (Sheet de caracterización)? El registro fotográfico se genera aparte.',
-      { titulo: 'Generar acta', btnOk: 'Generar' }
-    );
-    if (!ok) return;
+    await _ejecutarGenerarActa(false);
+  }
+
+  // Regenera el acta reemplazando la existente. Misma validacion estricta
+  // que generarActa pero pasa flag regenerar=true al webhook para que
+  // mande a papelera el acta vieja antes de crear la nueva.
+  async function regenerarActa() {
+    if (!filaEditando) {
+      await appAlert('Primero guarda la visita.', { titulo: 'Visita no guardada' });
+      return;
+    }
+    const faltan = _validarAntesDeActa();
+    if (faltan.length > 0) {
+      const lista = faltan.slice(0, 20).map(s => '• ' + s).join('\n');
+      const extra = faltan.length > 20 ? '\n... y ' + (faltan.length - 20) + ' más' : '';
+      await appAlert(
+        'No se puede regenerar el acta: faltan ' + faltan.length + ' campo(s):\n\n' +
+        lista + extra +
+        '\n\nVuelve al formulario, complétalos y guarda antes de regenerar.',
+        { titulo: 'Datos incompletos', btnOk: 'Volver al formulario' }
+      );
+      return;
+    }
+    await _ejecutarGenerarActa(true);
+  }
+
+  async function _ejecutarGenerarActa(regenerar) {
     setGA(true);
     try {
-      const r = await gasPost(Object.assign({ accion: 'generarActa' }, _construirDatosF46()));
+      const payload = Object.assign({ accion: 'generarActa' }, _construirDatosF46());
+      if (regenerar) payload.regenerar = true;
+      const r = await gasPost(payload);
       const link = r.linkSheet || r.linkActa;
       if (link) {
-        // Guardar link en state para que el boton se convierta en "Ver acta"
-        // sin tener que recargar la pantalla.
         setCampo('linkXlsxActa', link);
         if (r.linkPdf) setCampo('linkPdfActa', r.linkPdf);
         await appAlert(
-          (r.yaExistia ? 'El acta ya existía en la carpeta.' : 'Acta generada correctamente.') +
+          (regenerar
+            ? 'Acta regenerada correctamente.'
+            : (r.yaExistia ? 'El acta ya existía en la carpeta.' : 'Acta generada correctamente.')) +
           '\n\nSe abrirá la hoja de caracterización en una pestaña nueva.',
           { titulo: 'Acta lista' }
         );
@@ -1718,7 +1748,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         await appAlert('El acta se generó pero no recibí link. Revisa Drive.', { titulo: 'Acta generada' });
       }
     } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Generar acta' });
+      await appAlert('Error: ' + e.message, { titulo: regenerar ? 'Regenerar acta' : 'Generar acta' });
     }
     setGA(false);
   }
@@ -1734,11 +1764,6 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       await appAlert('La visita aún no tiene subcarpeta de fotos. Sube fotos primero.', { titulo: 'Sin fotos' });
       return;
     }
-    const ok = await appConfirm(
-      '¿Generar el registro fotográfico F-GGO-46 con las fotos subidas?',
-      { titulo: 'Generar registro fotográfico', btnOk: 'Generar' }
-    );
-    if (!ok) return;
     setGRF(true);
     try {
       const r = await gasPost(Object.assign({ accion: 'generarRegistroFotos' }, _construirDatosF46()));
@@ -2349,14 +2374,27 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {/* Botones de documentos generados (solo con fila guardada) */}
       {filaEditando && (
         <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {/* Acta F-GGO-46: si ya hay acta generada (link guardado en BD),
-              el boton se convierte en "Ver acta" y abre el Sheet existente.
-              Si no, lanza el flujo de generacion con validacion estricta. */}
+          {/* Acta F-GGO-46:
+              - Sin acta: un solo boton 'Generar acta F-GGO-46' (relleno).
+              - Con acta: dos botones lado a lado — 'Ver acta' (relleno) y
+                'Regenerar' (outlined punteado, llama backend con regenerar=true). */}
           {d.linkXlsxActa ? (
-            <button type="button" onClick={() => window.open(d.linkXlsxActa, '_blank', 'noopener')}
-              className="btn-principal" style={{ fontSize: 15 }}>
-              👁 Ver acta F-GGO-46
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={() => window.open(d.linkXlsxActa, '_blank', 'noopener')}
+                className="btn-principal" style={{ fontSize: 15, flex: 2 }}>
+                👁 Ver acta F-GGO-46
+              </button>
+              <button type="button" onClick={regenerarActa} disabled={generandoActa}
+                style={{
+                  background: 'transparent', color: 'var(--brand-accent)',
+                  border: '1.5px dashed var(--brand-accent)', borderRadius: 10,
+                  padding: '12px 14px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
+                  cursor: generandoActa ? 'not-allowed' : 'pointer',
+                  opacity: generandoActa ? 0.6 : 1, flex: 1,
+                }}>
+                {generandoActa ? '...' : '🔄 Regenerar'}
+              </button>
+            </div>
           ) : (
             <button onClick={generarActa} disabled={generandoActa} className="btn-principal"
               style={{ fontSize: 15 }}>
@@ -2604,7 +2642,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
             background: 'var(--gris-bg)', fontSize: 13, color: 'var(--texto-suave)',
           }}>
             Toca para seleccionar una foto
-            <input type="file" accept="image/*" capture="environment"
+            <input type="file" accept="image/*"
               onChange={alSeleccionar} style={{ display: 'none' }} />
           </label>
         )}

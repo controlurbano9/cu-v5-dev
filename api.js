@@ -192,14 +192,22 @@ async function geocodeDireccion(query) {
 }
 
 // Crea carpeta de la visita en Drive y devuelve { linkCarpeta, idFotos }.
-async function crearCarpetaVisita(comuna, direccion, fechaVisita, nvisita) {
-  return gasGet({
+async function crearCarpetaVisita(comuna, direccion, fechaVisita, nvisita, opts) {
+  var p = {
     accion: 'crearCarpeta',
     comuna,
     direccion,
     fecha: fechaVisita,
     nvisita: nvisita || 1,
-  });
+  };
+  // Datos extra para carpetas rurales
+  if (opts) {
+    if (opts.barrio)  p.barrio  = opts.barrio;
+    if (opts.persona) p.persona = opts.persona;
+    if (opts.lat)     p.lat     = opts.lat;
+    if (opts.lon)     p.lon     = opts.lon;
+  }
+  return gasGet(p);
 }
 
 // Recupera el id de la subcarpeta de fotos a partir de la carpeta de visita.

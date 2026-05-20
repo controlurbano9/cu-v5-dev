@@ -2240,16 +2240,44 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           </button>
 
           {/* Informe F-GGO-43: estilo outlined para diferenciarlo del acta */}
-          <button onClick={() => {
+          <button onClick={async () => {
             if (typeof window.abrirInformeF43 !== 'function') {
               appAlert('El generador de informe no cargó.', { titulo: 'Error' });
               return;
+            }
+            // Si hay coordenadas, consultar POT completo para enriquecer
+            // (clasificacion, tratamiento, intensidad) además de los campos de BD.
+            let potExtra = {};
+            if (d.lat != null && d.lon != null && typeof consultarPOT === 'function') {
+              try {
+                const r = await consultarPOT(d.lat, d.lon);
+                potExtra = {
+                  poligono:      d.poligono || r.poligono || '',
+                  amenaza:       d.amenaza || r.amenaza || '',
+                  sueloProt:     d.sueloProt || r.sueloProt || '',
+                  clasificacion: r.clasificacion || '',
+                  tratamiento:   r.tratamiento || '',
+                  franja:        r.intensidad || '',
+                };
+                // Derivar proteccion para el <select> del informe
+                if (r.sueloProt === 'SI' && r.sueloProtCategoria) {
+                  potExtra.proteccion = 'Si - area protegida';
+                } else if (r.amenaza === 'SI') {
+                  const tipo = (r.amenazaTipo || '').toLowerCase();
+                  if (tipo.includes('inunda')) potExtra.proteccion = 'Si - amenaza por inundacion';
+                  else if (tipo.includes('movim') || tipo.includes('masa')) potExtra.proteccion = 'Si - amenaza por movimiento en masa';
+                } else if (r.enRetiro === 'SI') {
+                  potExtra.proteccion = 'Si - ronda hidrica';
+                } else if (r.sueloProt === 'NO' && r.amenaza === 'NO') {
+                  potExtra.proteccion = 'No';
+                }
+              } catch(e) { /* silencioso: el informe queda sin POT auto */ }
             }
             window.abrirInformeF43({
               fila: filaEditando,
               idCarpeta: d.idCarpetaVisita,
               radicado: d.radicado,
-              fechaVisita: _isoAFecha(d.fechaVisita),
+              fechaVisita: d.fechaVisita,
               direccion: d.direccion,
               barrio: d.barrio,
               comuna: d.comuna,
@@ -2259,7 +2287,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               cargo: usuario?.cargo || '',
               seAportoLicencia: d.licenciaAportada,
               numRes:           d.licencia,
-              fechaEjec:        _isoAFecha(d.fechaLicencia),
+              fechaEjec:        d.fechaLicencia,
               tipoModalidad:    d.tipoLicencia,
               pisos:            d.pisos,
               dest:             d.destinaciones,
@@ -2271,6 +2299,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               sueloProt:        d.sueloProt,
               observaciones:    d.actuacion,
               areas:            d.area,
+              ...potExtra,
             });
           }} style={{
             background: 'transparent', color: 'var(--brand-accent)',

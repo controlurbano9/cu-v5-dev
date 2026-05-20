@@ -1571,6 +1571,14 @@ var CHK_GROUPS = [
   { sel: '.hallazgo',   key: 'hallazgos'     },
   { sel: '.comp-ac',    key: 'comp_ac'       }
 ];
+// Clave de localStorage: por-visita si hay fila en URL, global si no.
+// Esto permite que cada visita tenga sus propios checkboxes (comportamientos
+// Art. 135, hallazgos, modalidades) persistidos independientemente.
+function _storageKey() {
+  var p = new URLSearchParams(window.location.search);
+  var fila = p.get('fila');
+  return fila ? ('fggo43_datos_' + fila) : 'fggo43_datos';
+}
 function guardar() {
   var data = {};
   CAMPOS.forEach(function(id) {
@@ -1586,11 +1594,11 @@ function guardar() {
     document.querySelectorAll(g.sel + ':checked').forEach(function(c) { arr.push(c.value); });
     data[g.key] = arr;
   });
-  try { localStorage.setItem('fggo43_datos', JSON.stringify(data)); } catch(e) {}
+  try { localStorage.setItem(_storageKey(), JSON.stringify(data)); } catch(e) {}
 }
 function cargar() {
   var raw;
-  try { raw = localStorage.getItem('fggo43_datos'); } catch(e) {}
+  try { raw = localStorage.getItem(_storageKey()); } catch(e) {}
   if (!raw) return;
   var data;
   try { data = JSON.parse(raw); } catch(e) { return; }
@@ -1618,7 +1626,7 @@ function cargar() {
 }
 function nuevoInforme() {
   if (!confirm('¿Crear un nuevo informe? Se borraran todos los datos actuales.')) return;
-  try { localStorage.removeItem('fggo43_datos'); } catch(e) {}
+  try { localStorage.removeItem(_storageKey()); } catch(e) {}
   CAMPOS.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
@@ -1968,11 +1976,11 @@ function _hoyLocal() {
 // ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 (function() {
   var hoy = _hoyLocal();
-  var hayParams = new URLSearchParams(window.location.search).toString().length > 0;
-  // Si vienen params en la URL (apertura desde V6), saltamos cargar() para evitar
-  // que datos viejos del localStorage contaminen el prefill. Caso contrario,
-  // restauramos lo último guardado.
-  if (!hayParams) cargar();
+  // Cargar SIEMPRE: la key es por-visita (fggo43_datos_<fila>), así que cada
+  // visita restaura solo sus propios datos. Los comportamientos Art. 135 y
+  // demás checkboxes quedan persistidos por visita.
+  cargar();
+  // Las fechas siempre se setean a hoy (fecha local, no UTC)
   document.getElementById('fechaVisita').value = hoy;
   document.getElementById('fechaInforme').value = hoy;
   CAMPOS.forEach(function(id) {
@@ -2044,9 +2052,6 @@ function prefillDesdeURL() {
   var p = new URLSearchParams(window.location.search);
   if (!p.toString()) return;
 
-  // Limpiar localStorage para evitar contaminación de sesiones previas
-  try { localStorage.removeItem('fggo43_datos'); } catch(e) {}
-
   // Contexto para subir el docx después
   V6_CTX.fila      = p.get('fila') || null;
   V6_CTX.idCarpeta = p.get('idCarpeta') || null;
@@ -2055,9 +2060,18 @@ function prefillDesdeURL() {
   V6_CTX.lat       = p.get('lat') || null;
   V6_CTX.lon       = p.get('lon') || null;
 
+  // Convertir DD/MM/YYYY → YYYY-MM-DD (input type=date requiere ISO)
+  function _aISOdate(s) {
+    if (!s) return '';
+    var m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/.exec(s);
+    if (m) return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+    return s;
+  }
+
   // Datos del caso (paso 1) + POT (paso 4) — mapeo param → id del input
   var map = {
-    fechaVisita:    p.get('fechaVisita'),
+    fechaVisita:    _aISOdate(p.get('fechaVisita')),
     cargo:          p.get('cargo'),
     numRadicado:    p.get('radicado'),
     direccion:      p.get('direccion'),

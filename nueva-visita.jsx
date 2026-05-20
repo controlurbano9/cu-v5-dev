@@ -1578,7 +1578,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         : (d.citacionFecha
             ? (_isoAFecha(d.citacionFecha) + (d.citacionHora ? ' · ' + (HORAS_CITACION.find(h => h.val === d.citacionHora)?.l || d.citacionHora) : ''))
             : ''),
-      // Inspectores firmantes (por ahora: usuario logueado)
+      // Inspectores firmantes: array con todos los seleccionados en
+      // los chips "Visitador(es)". AS los expande en filas A47-A50 del
+      // acta cruzando con USUARIOS para sacar el cargo.
+      visitadores:    (d.visitador || '').split(/\s*\/\s*/).map(s => s.trim()).filter(Boolean),
+      // Fallback inspector / cargo del usuario logueado (compat con código viejo).
       inspector:      usuario?.usuario || '',
       cargo:          usuario?.cargo   || 'Inspector',
       // Carpeta de la visita
@@ -1588,12 +1592,103 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     };
   }
 
+  // Devuelve [] si el formulario está completo para generar acta;
+  // si faltan datos retorna un array con los nombres legibles de los
+  // campos pendientes. El usuario puede cancelar o continuar igualmente.
+  function _validarAntesDeActa() {
+    const faltan = [];
+    function req(cond, nombre) { if (!cond) faltan.push(nombre); }
+
+    // Identificación
+    if (d.esOficio) {
+      req(d.orden, 'N° Orden de policía');
+    } else {
+      req(d.radicado, 'Radicado');
+      req(d.fechaRadicado, 'Fecha del radicado');
+    }
+    req(d.fechaVisita, 'Fecha de la visita');
+
+    // Ubicación
+    req(d.direccion, 'Dirección');
+    req(d.barrio && d.barrio !== '__otro__', 'Barrio / Vereda');
+    req(d.comuna, 'Comuna');
+    req(d.lat != null && d.lon != null, 'Coordenadas GPS (capturar ubicación)');
+
+    // Persona que atiende
+    req(d.atiendeNombre, 'Nombre de la persona que atiende');
+    req(d.atiendeId, 'Identificación de la persona que atiende');
+    req(d.atiendeRelacion, 'Relación con el evento');
+
+    // Características de la edificación
+    req(d.estadoObra, 'Estado de la obra');
+    req(d.habitado, 'Habitado');
+    req(d.alturaPisos, 'Altura en pisos');
+    req(d.destActuales, 'N° destinaciones actuales');
+    req(d.usos, 'Usos actuales');
+    req(d.cubiertaActual, 'Tipo cubierta actual');
+
+    // Verificación documental
+    req(d.licenciaAportada, '¿Se aportó licencia? (SI/NO)');
+    if (d.licenciaAportada === 'SI') {
+      req(d.licencia, 'N° de licencia');
+      req(d.fechaLicencia, 'Fecha de licencia');
+      req(d.tipoLicencia, 'Tipo y modalidad de licencia');
+      req(d.pisos, 'Pisos aprobados');
+      req(d.destinaciones, 'Destinaciones de licencia');
+      req(d.cubierta, 'Cubierta de licencia');
+      req(d.sistema, 'Sistema estructural');
+    }
+
+    // Descripción / conclusiones
+    req(d.actuacion, 'Descripción de la situación encontrada');
+    req(d.infraccion, 'Tipo de contravención');
+    req(d.area || d.areaNoMedible, 'Área de contravención (m² o marca "no se pudo medir")');
+
+    // Suspensión / citación
+    if (d.estadoObra !== 'Terminada') {
+      req(d.suspension, '¿Se decreta suspensión?');
+      if (d.suspension === 'SI') req(d.orden, 'N° Orden de policía');
+    }
+    if (!d.noCitacion) {
+      req(d.citacionFecha, 'Fecha de citación (o marca "no se deja citación")');
+      req(d.citacionHora,  'Hora de citación');
+    }
+
+    // Funcionarios
+    req(d.visitador, 'Visitador(es) que realizan la inspección');
+
+    // POT
+    req(d.catastral, 'Código catastral');
+    req(d.ficha, 'N° ficha predial');
+    req(d.poligono, 'Polígono de uso del suelo');
+    req(d.amenaza, '¿Amenaza? (SI/NO)');
+    req(d.sueloProt, '¿Suelo de protección? (SI/NO)');
+    req(d.quebrada, '¿Cumple retiro de quebrada? (SI/NO)');
+
+    // Observaciones (sección 10)
+    req(d.obsConclusion, 'Observaciones y conclusiones');
+
+    return faltan;
+  }
+
   // Paso 1 del F-GGO-46: Sheet de CARACTERIZACIÓN.
   // No inserta fotos — para el registro fotográfico usar el botón aparte.
   async function generarActa() {
     if (!filaEditando) {
       await appAlert('Primero guarda la visita.', { titulo: 'Visita no guardada' });
       return;
+    }
+    // Validar todos los campos antes de generar el acta
+    const faltan = _validarAntesDeActa();
+    if (faltan.length > 0) {
+      const lista = faltan.slice(0, 15).map(s => '• ' + s).join('\n');
+      const extra = faltan.length > 15 ? '\n... y ' + (faltan.length - 15) + ' más' : '';
+      const seguir = await appConfirm(
+        'Faltan campos por diligenciar (' + faltan.length + '):\n\n' + lista + extra +
+        '\n\n¿Generar el acta de todos modos? Los campos vacíos saldrán en blanco.',
+        { titulo: 'Datos incompletos', btnOk: 'Generar igual', btnCancel: 'Volver al form' }
+      );
+      if (!seguir) return;
     }
     const ok = await appConfirm(
       '¿Generar el acta F-GGO-46 (Sheet de caracterización)? El registro fotográfico se genera aparte.',

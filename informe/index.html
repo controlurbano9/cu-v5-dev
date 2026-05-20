@@ -821,35 +821,25 @@ function toggleModalidades() {
 // Inspectores firmantes — se carga desde la hoja USUARIOS al iniciar.
 // Hardcodeada la lista de quienes firman informes; los demás usuarios
 // del sistema no aparecen aquí.
-var INSPECTORES_FIRMANTES = [
-  'ALEJANDRO HERNANDEZ MUÑOZ',
-  'MAURICIO HERRERA LOPERA',
-  'DANIEL PEDRAZA ARANGO'
-];
-var INSPECTORES_CARGOS = {}; // nombre -> cargo (col D de USUARIOS)
+var INSPECTORES_CARGOS = {};
 
 async function cargarInspectoresDesdeBD() {
   var sel = document.getElementById('inspector');
   if (!sel) return;
   try {
-    // Acción pública: solo nombre, cargo y rol — sin hashes ni datos sensibles.
     var r = await fetch(WH + '?accion=listarInspectoresActivos');
     var d = await r.json();
     if (!d.ok) throw new Error(d.error || 'Sin datos');
     var inspectores = d.inspectores || [];
     sel.innerHTML = '<option value="">Seleccione...</option>';
-    INSPECTORES_FIRMANTES.forEach(function(nombre) {
-      var u = inspectores.find(function(x) {
-        return (x.nombre || '').toString().toUpperCase() === nombre;
-      });
-      if (u) {
-        INSPECTORES_CARGOS[nombre] = u.cargo || 'Inspector';
-        var opt = document.createElement('option');
-        opt.value = nombre; opt.textContent = nombre;
-        sel.appendChild(opt);
-      }
+    inspectores.forEach(function(u) {
+      var nombre = (u.nombre || '').toString().toUpperCase();
+      if (!nombre) return;
+      INSPECTORES_CARGOS[nombre] = u.cargo || 'Inspector';
+      var opt = document.createElement('option');
+      opt.value = nombre; opt.textContent = nombre;
+      sel.appendChild(opt);
     });
-    // Si llegó por prefill un nombre que coincide, mantenerlo seleccionado
     var pendiente = sel.getAttribute('data-prefill');
     if (pendiente) {
       sel.value = pendiente;
@@ -1647,7 +1637,7 @@ function nuevoInforme() {
   var prev = document.getElementById('prev-area');
   if (prev) prev.classList.add('hidden');
   tglobal = null;
-  var hoy = new Date().toISOString().split('T')[0];
+  var hoy = _hoyLocal();
   document.getElementById('fechaVisita').value = hoy;
   document.getElementById('fechaInforme').value = hoy;
   ir(1);
@@ -1959,9 +1949,25 @@ function borrarImagenLocalizacion() {
 //  La generación es 100% cliente con docx UMD y la subida a Drive se hace
 //  desde la función descargarDocx original.)
 
+// ── Contexto V6: visita asociada (si aplica) ─────────────────────
+var V6_CTX = {
+  fila: null,
+  idCarpeta: null,
+  radicado: null,
+  direccion: null,
+  lat: null,
+  lon: null
+};
+var locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '' };
+
+function _hoyLocal() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 (function() {
-  var hoy = new Date().toISOString().split('T')[0];
+  var hoy = _hoyLocal();
   cargar();
   if (!document.getElementById('fechaVisita').value) document.getElementById('fechaVisita').value = hoy;
   if (!document.getElementById('fechaInforme').value) document.getElementById('fechaInforme').value = hoy;
@@ -2010,21 +2016,6 @@ function borrarImagenLocalizacion() {
   //  esté seteado y se aplique cuando termine el fetch.
   cargarInspectoresDesdeBD();
 })();
-
-// ── Contexto V6: visita asociada (si aplica) ─────────────────────
-var V6_CTX = {
-  fila: null,           // número de fila en BD VISITAS
-  idCarpeta: null,      // id de carpeta Drive de la visita
-  radicado: null,
-  direccion: null,
-  lat: null,            // coordenadas opcionales para la imagen de localización
-  lon: null
-};
-
-// Imagen de localización para la sección LOCALIZACIÓN del docx.
-// fuente: 'maps' (Google Maps Static) o 'qgis' (subida manual por inspector).
-// base64 es lo que se inserta en el docx.
-var locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '' };
 
 function setSelectByText(id, valor) {
   var el = document.getElementById(id);

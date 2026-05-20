@@ -2156,17 +2156,30 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
       {/* 9. CONSULTA NORMA POT ──────────────────────────── */}
       <_Seccion titulo="Consulta norma POT" color="gris">
+        {/* Búsqueda automática primero (al inicio del bloque, ancho completo,
+            centrado y con icono que indica que rellena código catastral y ficha). */}
+        <div style={{ gridColumn: '1 / -1' }}>
+          <button type="button" onClick={() => ejecutarBusquedaCatastral()} disabled={busyCat}
+            style={{
+              width: '100%',
+              background: 'var(--brand-bg)', color: 'var(--brand-ink)',
+              border: '1.5px dashed var(--brand-accent)', borderRadius: 10,
+              padding: '12px 16px', fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
+              cursor: busyCat ? 'not-allowed' : 'pointer', opacity: busyCat ? 0.6 : 1,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+            {busyCat ? 'Buscando...' : 'Buscar datos catastrales'}
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center', marginTop: 4 }}>
+            Llena automáticamente código catastral y ficha usando las coordenadas GPS.
+          </div>
+        </div>
         <_Campo label="Código catastral">
           <_Input mono value={d.catastral} onChange={v => setCampo('catastral', v)} />
         </_Campo>
         <_Campo label="N° ficha predial">
           <_Input mono value={d.ficha} onChange={v => setCampo('ficha', v)} />
         </_Campo>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <_BtnAccion busy={busyCat} onClick={() => ejecutarBusquedaCatastral()}>
-            {busyCat ? 'Buscando...' : 'Buscar catastral por ubicación'}
-          </_BtnAccion>
-        </div>
 
         {catResultados && catResultados.length > 0 && (
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>

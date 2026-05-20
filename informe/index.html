@@ -640,24 +640,35 @@ body{
       <div class="f"><label>Poligono de tratamiento</label>
         <select id="poligTrat">
           <option value="">Seleccione</option>
-          <optgroup label="Consolidacion">
+          <optgroup label="Urbano - Consolidacion">
             <option>Consolidacion nivel 1</option>
             <option>Consolidacion nivel 2</option>
             <option>Consolidacion nivel 3</option>
           </optgroup>
-          <optgroup label="Mejoramiento">
+          <optgroup label="Urbano - Mejoramiento">
             <option>Mejoramiento integral</option>
           </optgroup>
-          <optgroup label="Renovacion">
+          <optgroup label="Urbano - Renovacion">
             <option>Renovacion urbana - redesarrollo</option>
             <option>Renovacion urbana - reactivacion</option>
           </optgroup>
-          <optgroup label="Desarrollo">
+          <optgroup label="Urbano - Desarrollo">
             <option>Desarrollo</option>
           </optgroup>
-          <optgroup label="Conservacion">
+          <optgroup label="Urbano - Conservacion">
             <option>Conservacion historica</option>
             <option>Conservacion arquitectonica</option>
+          </optgroup>
+          <optgroup label="Rural">
+            <option>Restauracion de actividades rurales</option>
+            <option>Mejoramiento integral rural</option>
+            <option>Recuperacion para la produccion forestal</option>
+            <option>Recuperacion ambiental</option>
+            <option>Conservacion activa</option>
+            <option>Conservacion estricta</option>
+            <option>Suburbanizacion restringida</option>
+            <option>Produccion agricola, ganadera y forestal</option>
+            <option>Desarrollo restringido</option>
           </optgroup>
         </select>
       </div>
@@ -2029,23 +2040,45 @@ function _hoyLocal() {
   cargarInspectoresDesdeBD();
 })();
 
-function setSelectByText(id, valor) {
-  var el = document.getElementById(id);
-  if (!el || !valor) return;
-  var v = valor.toString().trim().toLowerCase();
-  for (var i = 0; i < el.options.length; i++) {
-    if ((el.options[i].text || '').trim().toLowerCase() === v ||
-        (el.options[i].value || '').trim().toLowerCase() === v) {
-      el.selectedIndex = i;
-      return;
-    }
-  }
-}
-
 function normalizar(s) {
   return (s || '').toString().toLowerCase()
     .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
-    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').trim();
+    .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u')
+    .replace(/[^a-z0-9 ]/g,' ')   // descarta puntuación
+    .replace(/\s+/g,' ').trim();
+}
+
+// Match tolerante: exacto → normalizado → substring bidireccional → fallback
+// (agrega como opción nueva si no encuentra match).
+function setSelectByText(id, valor) {
+  var el = document.getElementById(id);
+  if (!el || !valor) return;
+  var v = valor.toString().trim();
+  var vNorm = normalizar(v);
+  if (!vNorm) return;
+
+  // 1. Match exacto normalizado (texto o value)
+  for (var i = 0; i < el.options.length; i++) {
+    var optTxt = normalizar(el.options[i].text);
+    var optVal = normalizar(el.options[i].value);
+    if (optTxt === vNorm || optVal === vNorm) {
+      el.selectedIndex = i; return;
+    }
+  }
+  // 2. Substring bidireccional (opt contiene v, o v contiene opt)
+  //    Solo si la opción no es vacía (saltar "Seleccione").
+  for (var i = 0; i < el.options.length; i++) {
+    var optTxt = normalizar(el.options[i].text);
+    if (!optTxt || optTxt === 'seleccione') continue;
+    if (optTxt.indexOf(vNorm) >= 0 || vNorm.indexOf(optTxt) >= 0) {
+      el.selectedIndex = i; return;
+    }
+  }
+  // 3. Fallback: agregar como opción nueva (asegura que TODA visita prefilla)
+  var nueva = document.createElement('option');
+  nueva.value = v; nueva.textContent = v;
+  el.appendChild(nueva);
+  el.value = v;
 }
 
 function prefillDesdeURL() {

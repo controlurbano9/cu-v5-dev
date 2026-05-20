@@ -2251,24 +2251,78 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             if (d.lat != null && d.lon != null && typeof consultarPOT === 'function') {
               try {
                 const r = await consultarPOT(d.lat, d.lon);
+                // ── Mapear valores GDB → opciones del <select> del informe ──
+                const _norm = s => (s||'').toString().toLowerCase()
+                  .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+                  .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u');
+
+                // Clasificación: "Suelo urbano" → "Urbano", etc.
+                let clas = '';
+                const cn = _norm(r.clasificacion);
+                if (cn.includes('expansion'))      clas = 'De expansion urbana';
+                else if (cn.includes('suburban'))  clas = 'Suburbano';
+                else if (cn.includes('urbano'))    clas = 'Urbano';
+                else if (cn.includes('rural'))     clas = 'Rural';
+                else                               clas = r.clasificacion || '';
+
+                // Tratamiento: GDB devuelve "CN3, Consolidación Nivel 3" o similar
+                let trat = '';
+                const tn = _norm(r.tratamiento);
+                if (tn.includes('consolid')) {
+                  if (tn.includes('1') || tn.includes('uno'))      trat = 'Consolidacion nivel 1';
+                  else if (tn.includes('2') || tn.includes('dos')) trat = 'Consolidacion nivel 2';
+                  else if (tn.includes('3') || tn.includes('tres'))trat = 'Consolidacion nivel 3';
+                  else                                              trat = 'Consolidacion nivel 3';
+                } else if (tn.includes('mejoram')) {
+                  trat = tn.includes('rural') ? 'Mejoramiento integral rural' : 'Mejoramiento integral';
+                } else if (tn.includes('renovac')) {
+                  if (tn.includes('redesarrollo')) trat = 'Renovacion urbana - redesarrollo';
+                  else if (tn.includes('reactiv')) trat = 'Renovacion urbana - reactivacion';
+                  else                              trat = 'Renovacion urbana - redesarrollo';
+                } else if (tn.includes('desarrollo')) {
+                  trat = tn.includes('restring') ? 'Desarrollo restringido' : 'Desarrollo';
+                } else if (tn.includes('conserv')) {
+                  if (tn.includes('historic'))      trat = 'Conservacion historica';
+                  else if (tn.includes('arquitect'))trat = 'Conservacion arquitectonica';
+                  else if (tn.includes('activ'))    trat = 'Conservacion activa';
+                  else if (tn.includes('estric'))   trat = 'Conservacion estricta';
+                  else                              trat = 'Conservacion activa';
+                } else if (tn.includes('restaur'))  trat = 'Restauracion de actividades rurales';
+                else if (tn.includes('recupera') && tn.includes('forest')) trat = 'Recuperacion para la produccion forestal';
+                else if (tn.includes('recupera'))   trat = 'Recuperacion ambiental';
+                else if (tn.includes('suburban'))   trat = 'Suburbanizacion restringida';
+                else if (tn.includes('produccion') || tn.includes('agric')) trat = 'Produccion agricola, ganadera y forestal';
+                else                                trat = r.tratamiento || '';
+
+                // Franja de intensidad: mapear NMG / densidad → baja/media/alta
+                let franja = '';
+                const fn = _norm(r.intensidad);
+                if (fn.includes('alta'))      franja = 'Franja alta';
+                else if (fn.includes('media'))franja = 'Franja media';
+                else if (fn.includes('baja')) franja = 'Franja baja';
+                else if (r.intensidad)        franja = r.intensidad;  // raw para fallback
+
                 potExtra = {
                   poligono:      d.poligono || r.poligono || '',
                   amenaza:       d.amenaza || r.amenaza || '',
                   sueloProt:     d.sueloProt || r.sueloProt || '',
-                  clasificacion: r.clasificacion || '',
-                  tratamiento:   r.tratamiento || '',
-                  franja:        r.intensidad || '',
+                  clasificacion: clas,
+                  tratamiento:   trat,
+                  franja:        franja,
                 };
                 // Derivar proteccion para el <select> del informe
-                if (r.sueloProt === 'SI' && r.sueloProtCategoria) {
-                  potExtra.proteccion = 'Si - area protegida';
-                } else if (r.amenaza === 'SI') {
-                  const tipo = (r.amenazaTipo || '').toLowerCase();
+                const sp = r.sueloProt === 'SI' || d.sueloProt === 'SI';
+                const am = r.amenaza === 'SI' || d.amenaza === 'SI';
+                if (am) {
+                  const tipo = _norm(r.amenazaTipo);
                   if (tipo.includes('inunda')) potExtra.proteccion = 'Si - amenaza por inundacion';
                   else if (tipo.includes('movim') || tipo.includes('masa')) potExtra.proteccion = 'Si - amenaza por movimiento en masa';
+                  else potExtra.proteccion = 'Si - amenaza por movimiento en masa';
+                } else if (sp) {
+                  potExtra.proteccion = 'Si - area protegida';
                 } else if (r.enRetiro === 'SI') {
                   potExtra.proteccion = 'Si - ronda hidrica';
-                } else if (r.sueloProt === 'NO' && r.amenaza === 'NO') {
+                } else {
                   potExtra.proteccion = 'No';
                 }
               } catch(e) { /* silencioso: el informe queda sin POT auto */ }

@@ -55,10 +55,10 @@ function geocodeConGoogle(direccion) {
 }
 
 // Intenta parsear un texto como coordenadas. Soporta:
-//   Grados decimales (DD): "6.337, -75.557"  "6.337 -75.557"
-//   DMS: "6°20'13.2\"N 75°33'25.2\"W"  "6°20'13.2\"N, 75°33'25.2\"W"
-//   DMM: "6°20.220'N 75°33.420'W"
-//   Google Maps URL: "...@6.337,-75.557,17z..."
+//   Grados decimales (DD): 6.337, -75.557
+//   DMS: 6d20m13.2sN 75d33m25.2sW
+//   DMM: 6d20.220mN 75d33.420mW
+//   Google Maps URL: @6.337,-75.557,17z
 // Retorna {lat,lon} o null si no es coordenada.
 function _parsearCoordenadas(texto) {
   var txt = texto.trim();
@@ -71,8 +71,8 @@ function _parsearCoordenadas(texto) {
     if (!isNaN(la) && !isNaN(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180) return { lat: la, lon: lo };
   }
 
-  // 2. DMS: 6°20'13.2"N 75°33'25.2"W  (con o sin coma entre pares)
-  var dmsRe = /(\d+)[°º]\s*(\d+)[''′]\s*([\d.]+)[""″]?\s*([NSns])\s*[,;]?\s*(\d+)[°º]\s*(\d+)[''′]\s*([\d.]+)[""″]?\s*([EWOewo])/;
+  // 2. DMS: grados minutos segundos con cardinal N/S/E/W/O
+  var dmsRe = new RegExp('(\\d+)[\\u00b0\\u00ba]\\s*(\\d+)[\\u0027\\u2018\\u2019\\u2032]\\s*([\\d.]+)[\\u0022\\u201c\\u201d\\u2033]?\\s*([NSns])\\s*[,;]?\\s*(\\d+)[\\u00b0\\u00ba]\\s*(\\d+)[\\u0027\\u2018\\u2019\\u2032]\\s*([\\d.]+)[\\u0022\\u201c\\u201d\\u2033]?\\s*([EWOewo])');
   var dmsM = txt.match(dmsRe);
   if (dmsM) {
     var lat = parseInt(dmsM[1]) + parseInt(dmsM[2]) / 60 + parseFloat(dmsM[3]) / 3600;
@@ -82,8 +82,8 @@ function _parsearCoordenadas(texto) {
     return { lat: lat, lon: lon };
   }
 
-  // 3. DMM: 6°20.220'N 75°33.420'W
-  var dmmRe = /(\d+)[°º]\s*([\d.]+)[''′]\s*([NSns])\s*[,;]?\s*(\d+)[°º]\s*([\d.]+)[''′]\s*([EWOewo])/;
+  // 3. DMM: grados minutos decimales con cardinal
+  var dmmRe = new RegExp('(\\d+)[\\u00b0\\u00ba]\\s*([\\d.]+)[\\u0027\\u2018\\u2019\\u2032]\\s*([NSns])\\s*[,;]?\\s*(\\d+)[\\u00b0\\u00ba]\\s*([\\d.]+)[\\u0027\\u2018\\u2019\\u2032]\\s*([EWOewo])');
   var dmmM = txt.match(dmmRe);
   if (dmmM) {
     var lat = parseInt(dmmM[1]) + parseFloat(dmmM[2]) / 60;
@@ -323,7 +323,7 @@ function ConsultaNormaScreen() {
             value={consulta}
             onChange={e => setConsulta(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') buscar(); }}
-            placeholder="CL 50 32-10 · 6.337, -75.557 · 6°20'13\"N 75°33'25\"W"
+            placeholder="CL 50 32-10 o 6.337, -75.557"
             style={{
               flex: 1, padding: '10px 12px', borderRadius: 8,
               border: '1px solid var(--borde)', background: 'var(--superficie)',
@@ -336,7 +336,7 @@ function ConsultaNormaScreen() {
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
-          Acepta dirección, grados decimales, DMS (6°20'13"N 75°33'25"W), DMM o link de Google Maps.
+          Acepta direccion, coordenadas decimales, DMS, DMM o link de Google Maps.
         </div>
         <button onClick={capturarGPS} disabled={busyGPS} style={{
           marginTop: 8, width: '100%', padding: '10px 14px', borderRadius: 8,

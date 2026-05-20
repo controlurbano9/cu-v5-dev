@@ -790,7 +790,10 @@ body{
   <div id="dl-status" class="hidden" style="margin-top:10px;font-size:12px;color:var(--texto-suave)"></div>
   <div id="prev-area" class="hidden">
     <div class="sep"></div>
-    <p style="font-size:11px;color:var(--texto-suave);margin-bottom:6px">Vista previa del texto generado:</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px;flex-wrap:wrap">
+      <p style="font-size:11px;color:var(--texto-suave);margin:0">Vista previa del texto generado:</p>
+      <button class="btn btn-p" id="btn-dl" onclick="descargarDocx()" style="padding:6px 12px;font-size:12px">⬇ Descargar Word</button>
+    </div>
     <div class="prev-box" id="prev-txt"></div>
   </div>
 </div>
@@ -1197,8 +1200,15 @@ async function generarInforme() {
     return;
   }
 
-  tglobal = ia.json;
+  // Defaults defensivos: si la IA omite alguna sección, evitar TypeError
+  // al construir el preview y el docx.
+  tglobal = ia.json || {};
+  tglobal.antecedentes         = tglobal.antecedentes         || '';
+  tglobal.observaciones        = tglobal.observaciones        || '';
+  tglobal.conclusiones_items   = Array.isArray(tglobal.conclusiones_items)   ? tglobal.conclusiones_items   : [];
+  tglobal.recomendaciones_items= Array.isArray(tglobal.recomendaciones_items)? tglobal.recomendaciones_items: [];
   tglobal._d = ctx.d;
+
   showStatus('ok', 'Informe generado correctamente', 'Revise la vista previa y descargue el Word.');
   document.getElementById('prev-txt').textContent =
       '=== ANTECEDENTES ===\n' + tglobal.antecedentes
@@ -1206,11 +1216,16 @@ async function generarInforme() {
     + '\n\n=== CONCLUSIONES ===\n' + tglobal.conclusiones_items.map(function(c,i){return (i+1)+'. '+c;}).join('\n')
     + '\n\n=== RECOMENDACIONES ===\n' + tglobal.recomendaciones_items.map(function(r,i){return (i+1)+'. '+r;}).join('\n');
   document.getElementById('prev-area').classList.remove('hidden');
-  // Descarga + subida automática para no requerir un segundo clic.
-  setTimeout(function() {
-    try { descargarDocx(); } catch(eDl) { console.warn('descargarDocx auto:', eDl.message); }
-  }, 300);
   btn.disabled = false;
+
+  // Descarga + subida automática para no requerir un segundo clic.
+  // Es Promise — capturar errores async con .catch (no try/catch).
+  setTimeout(function() {
+    descargarDocx().catch(function(eDl) {
+      console.warn('descargarDocx auto:', eDl);
+      showStatus('er', 'Auto-descarga falló', 'Usa el botón "Descargar Word" arriba. Detalle: ' + eDl.message);
+    });
+  }, 300);
 }
 function fmtFecha(iso) {
   if (!iso) return 'N/D';
@@ -2268,15 +2283,19 @@ async function subirInformeAlDrive(blob) {
     });
     var d = await r.json();
     if (!d.ok) throw new Error(d.error || 'Sin respuesta');
-    // Notificar a V6 (pestaña padre) que ya hay link
+    // Notificar a V6 (padre): window.parent si es iframe (modal V6),
+    // window.opener si es pestaña abierta con window.open.
     try {
-      if (window.opener && !window.opener.closed) {
-        window.opener.postMessage({
-          tipo: 'informe-f43-subido',
-          fila: V6_CTX.fila,
-          radicado: V6_CTX.radicado,
-          link: d.link
-        }, '*');
+      var msg = {
+        tipo: 'informe-f43-subido',
+        fila: V6_CTX.fila,
+        radicado: V6_CTX.radicado,
+        link: d.link
+      };
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(msg, '*');
+      } else if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(msg, '*');
       }
     } catch(eP) {}
     return d.link || null;

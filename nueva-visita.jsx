@@ -2914,7 +2914,22 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                           fontFamily: 'inherit',
                         }
                       })
-                    )
+                    ),
+                    // Eliminar foto
+                    React.createElement('button', {
+                      title: 'Quitar del registro',
+                      onClick: function(e) {
+                        e.stopPropagation();
+                        setModalFotos(function(prev) {
+                          return prev.filter(function(_, i) { return i !== idx; });
+                        });
+                      },
+                      style: {
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#c62828', fontSize: 18, lineHeight: 1,
+                        padding: '4px 6px', flexShrink: 0, borderRadius: 4,
+                      }
+                    }, '✕')
                   ),
                   // ── Línea de inserción ABAJO ──
                   showLineBelow && React.createElement('div', { style: {

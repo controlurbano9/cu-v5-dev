@@ -1271,6 +1271,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     }
   }, [d.estadoObra]);
 
+  // Limpiar geoWatch al desmontar (debe estar ANTES del early return para evitar React #310)
+  React.useEffect(function() {
+    return function() {
+      if (geoWatchRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchRef.current);
+        geoWatchRef.current = null;
+      }
+    };
+  }, []);
+
   // ── Si estamos en fase modal, mostrar solo el selector ──
   if (fase === 'modal') {
     return <ModalInicioVisita onResult={handleModalResult} onCancelar={onSalir} />;
@@ -1530,10 +1540,6 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     );
     geoWatchRef.current = watchId;
   }
-  // Limpiar watch al desmontar el componente
-  React.useEffect(function() {
-    return function() { _detenerGeoWatch(); };
-  }, []);
 
   // ── Validaciones mínimas antes de guardar ──────────────────
   function _validar() {

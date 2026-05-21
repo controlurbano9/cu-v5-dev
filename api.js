@@ -245,10 +245,11 @@ async function mejorarTexto(texto) {
 // No envolvemos en un wrapper consolidado para preservar la separación.
 
 // Sube una foto a la subcarpeta Fotos de la visita.
-async function subirFotoConDescripcion(idCarpetaFotos, base64, mime, descripcion) {
+async function subirFotoConDescripcion(idCarpetaFotos, base64, mime, descripcion, nombre) {
   return gasPost({
     accion: 'subirFoto',
     idCarpeta: idCarpetaFotos,
+    nombre: nombre || ('Foto_' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg'),
     base64,
     mime,
     descripcion: descripcion || '',

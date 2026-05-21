@@ -2793,7 +2793,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
         setProgreso('Subiendo ' + (i + 1) + '/' + cola.length + '...');
         try {
           var base64 = await _aBase64(cola[i]);
-          var r = await subirFotoConDescripcion(idCarpetaFotos, base64, cola[i].type, '');
+          var r = await subirFotoConDescripcion(idCarpetaFotos, base64, cola[i].type, '', cola[i].name);
           setFotos(function(prev) {
             return prev.concat([{
               nombre: r.nombre || cola[i].name,

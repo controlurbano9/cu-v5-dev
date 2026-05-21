@@ -686,10 +686,17 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
 
 // Mapa Google Maps con pin arrastrable para corregir coordenadas.
 // Sin coordenadas muestra vista general de Bello; con coords, zoom 18 + pin.
+// Incluye pre-carga offline: recorre Bello a zoom 16-17 para que el SW cachee tiles.
+
+// Bounding box de Bello — cubre zona urbana + expansión
+var BELLO_BOUNDS = { north: 6.395, south: 6.300, west: -75.600, east: -75.510 };
+
 function _MapaGPS({ lat, lon, onMove }) {
   const mapRef = React.useRef(null);
   const gMapRef = React.useRef(null);
   const markerRef = React.useRef(null);
+  const [precacheState, setPrecache] = useStateNV(null); // null | {progreso, total, fase}
+  const precacheCancelRef = React.useRef(false);
   const tieneCoords = lat != null && lon != null;
 
   useEffectNV(() => {
@@ -729,6 +736,64 @@ function _MapaGPS({ lat, lon, onMove }) {
     }
   }, [lat, lon]);
 
+  // Pre-cargar tiles de Bello para uso offline.
+  // Recorre la zona urbana a zoom 16 (y opcionalmente 17) haciendo pan
+  // sistemático. El SW intercepta los tiles y los cachea (cache-first).
+  function iniciarPrecache() {
+    var map = gMapRef.current;
+    if (!map) return;
+    precacheCancelRef.current = false;
+    // Generar grid de posiciones a visitar. A zoom 16, cada vista cubre ~0.006° lat × ~0.008° lon
+    var stepLat = 0.005;
+    var stepLon = 0.007;
+    var posiciones = [];
+    for (var la = BELLO_BOUNDS.south; la <= BELLO_BOUNDS.north; la += stepLat) {
+      for (var lo = BELLO_BOUNDS.west; lo <= BELLO_BOUNDS.east; lo += stepLon) {
+        posiciones.push({ lat: la, lng: lo });
+      }
+    }
+    var total = posiciones.length;
+    setPrecache({ progreso: 0, total: total, fase: 'Descargando tiles zoom 16' });
+
+    var origCenter = map.getCenter();
+    var origZoom = map.getZoom();
+    var idx = 0;
+
+    function siguiente() {
+      if (precacheCancelRef.current) {
+        // Restaurar vista original
+        map.setCenter(origCenter);
+        map.setZoom(origZoom);
+        setPrecache(null);
+        return;
+      }
+      if (idx >= total) {
+        // Terminó: restaurar vista
+        map.setCenter(origCenter);
+        map.setZoom(origZoom);
+        setPrecache({ progreso: total, total: total, fase: 'Completado' });
+        setTimeout(function() { setPrecache(null); }, 3000);
+        return;
+      }
+      var pos = posiciones[idx];
+      map.setCenter(pos);
+      map.setZoom(16);
+      idx++;
+      setPrecache({ progreso: idx, total: total, fase: 'Descargando tiles zoom 16' });
+      // Esperar a que Google Maps cargue los tiles antes de avanzar
+      google.maps.event.addListenerOnce(map, 'tilesloaded', function() {
+        setTimeout(siguiente, 100); // breve pausa entre posiciones
+      });
+      // Fallback si tilesloaded no dispara (red lenta)
+      setTimeout(function() { if (idx <= total) siguiente(); }, 3000);
+    }
+    siguiente();
+  }
+
+  function cancelarPrecache() {
+    precacheCancelRef.current = true;
+  }
+
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
@@ -738,6 +803,51 @@ function _MapaGPS({ lat, lon, onMove }) {
         width: '100%', height: 220, borderRadius: 10,
         border: '1px solid var(--borde)', overflow: 'hidden',
       }} />
+      {/* Pre-carga offline */}
+      {precacheState
+        ? React.createElement('div', { style: {
+            marginTop: 6, padding: '8px 10px', borderRadius: 8,
+            background: precacheState.fase === 'Completado' ? '#e8f5e9' : '#fff8e1',
+            border: '1px solid ' + (precacheState.fase === 'Completado' ? '#a5d6a7' : '#ffe082'),
+            fontSize: 12,
+          }},
+          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }},
+            React.createElement('span', { style: { fontWeight: 600 } },
+              precacheState.fase === 'Completado'
+                ? '✓ Mapa descargado para uso offline'
+                : precacheState.fase
+            ),
+            precacheState.fase !== 'Completado' && React.createElement('button', {
+              onClick: cancelarPrecache,
+              style: { background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 11, padding: '2px 6px' }
+            }, '✕ Cancelar')
+          ),
+          precacheState.fase !== 'Completado' && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 }},
+            React.createElement('div', { style: {
+              flex: 1, height: 4, borderRadius: 2, background: '#e0e0e0', overflow: 'hidden'
+            }},
+              React.createElement('div', { style: {
+                width: Math.round(precacheState.progreso / precacheState.total * 100) + '%',
+                height: '100%', background: 'var(--brand-accent)', borderRadius: 2,
+                transition: 'width 0.3s',
+              }})
+            ),
+            React.createElement('span', { style: { fontSize: 11, color: '#666', whiteSpace: 'nowrap' }},
+              precacheState.progreso + '/' + precacheState.total
+            )
+          )
+        )
+        : React.createElement('button', {
+            onClick: iniciarPrecache,
+            style: {
+              marginTop: 6, width: '100%', padding: '7px 12px', borderRadius: 8,
+              border: '1px dashed var(--borde-med)', background: 'var(--superficie)',
+              color: 'var(--texto-suave)', fontSize: 11, cursor: 'pointer',
+              fontFamily: 'inherit', display: 'flex', alignItems: 'center',
+              justifyContent: 'center', gap: 6,
+            }
+          }, '📥 Descargar mapa de Bello para uso offline')
+      }
     </div>
   );
 }
@@ -1180,6 +1290,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [modalFotos,  setModalFotos] = useStateNV(null); // null o [{id, nombre, link, descripcion, mimeType}]
   const [cargandoFotos, setCargandoFotos] = useStateNV(false);
   const [dragIdx, setDragIdx]   = useStateNV(null); // indice de la foto siendo arrastrada
+  const [dropTarget, setDropTarget] = useStateNV(null); // {idx, pos:'above'|'below'} — indicador de inserción
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [gpsAccuracy, setGpsAccuracy] = useStateNV(null); // precisión en metros
   const geoWatchRef = React.useRef(null); // id del watchPosition activo
@@ -2725,42 +2836,84 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               Registro fotografico
             </div>
             <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>
-              Arrastra para reordenar. Edita las descripciones generadas por IA.
+              Arrastra desde el icono ≡ para reordenar. La linea azul indica donde se insertara la foto.
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
               {modalFotos.map(function(foto, idx) {
                 var isDragging = dragIdx === idx;
-                return (
-                  <div key={foto.id}
-                    draggable
-                    onDragStart={function(e) {
+                // Indicador de inserción: línea azul arriba o abajo de este elemento
+                var showLineAbove = dropTarget && dropTarget.idx === idx && dropTarget.pos === 'above' && dragIdx !== idx;
+                var showLineBelow = dropTarget && dropTarget.idx === idx && dropTarget.pos === 'below' && dragIdx !== idx;
+
+                return React.createElement(React.Fragment, { key: foto.id },
+                  // ── Línea de inserción ARRIBA ──
+                  showLineAbove && React.createElement('div', { style: {
+                    height: 3, background: '#1976d2', borderRadius: 2, margin: '0 8px',
+                    boxShadow: '0 0 6px rgba(25,118,210,0.5)',
+                  }}),
+                  React.createElement('div', {
+                    draggable: true,
+                    onDragStart: function(e) {
                       setDragIdx(idx);
                       e.dataTransfer.effectAllowed = 'move';
-                      try { e.dataTransfer.setData('text/plain', idx); } catch(ex) {}
-                    }}
-                    onDragOver={function(e) {
+                      try { e.dataTransfer.setData('text/plain', String(idx)); } catch(ex) {}
+                      // Ghost image semi-transparente
+                      if (e.dataTransfer.setDragImage) {
+                        var ghost = e.currentTarget.cloneNode(true);
+                        ghost.style.opacity = '0.85';
+                        ghost.style.transform = 'scale(0.95)';
+                        ghost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25)';
+                        ghost.style.position = 'fixed';
+                        ghost.style.top = '-1000px';
+                        document.body.appendChild(ghost);
+                        e.dataTransfer.setDragImage(ghost, 40, 30);
+                        setTimeout(function() { document.body.removeChild(ghost); }, 0);
+                      }
+                    },
+                    onDragOver: function(e) {
                       e.preventDefault();
                       e.dataTransfer.dropEffect = 'move';
-                    }}
-                    onDrop={function(e) {
+                      if (dragIdx == null || dragIdx === idx) { setDropTarget(null); return; }
+                      // Calcular si el cursor está en la mitad superior o inferior del elemento
+                      var rect = e.currentTarget.getBoundingClientRect();
+                      var mid = rect.top + rect.height / 2;
+                      var pos = e.clientY < mid ? 'above' : 'below';
+                      setDropTarget({ idx: idx, pos: pos });
+                    },
+                    onDragLeave: function(e) {
+                      // Solo limpiar si se sale del elemento (no de un hijo)
+                      if (!e.currentTarget.contains(e.relatedTarget)) setDropTarget(null);
+                    },
+                    onDrop: function(e) {
                       e.preventDefault();
+                      setDropTarget(null);
                       if (dragIdx == null || dragIdx === idx) return;
+                      var fromIdx = dragIdx;
+                      var toIdx = idx;
+                      // Ajustar índice según posición (arriba/abajo)
                       setModalFotos(function(prev) {
                         var next = prev.slice();
-                        var item = next.splice(dragIdx, 1)[0];
-                        next.splice(idx, 0, item);
+                        var item = next.splice(fromIdx, 1)[0];
+                        var insertAt = toIdx;
+                        // Si venía de antes, al sacar uno los índices bajan
+                        if (fromIdx < toIdx) insertAt--;
+                        // Si se suelta abajo, insertar después
+                        if (dropTarget && dropTarget.pos === 'below') insertAt++;
+                        if (insertAt < 0) insertAt = 0;
+                        if (insertAt > next.length) insertAt = next.length;
+                        next.splice(insertAt, 0, item);
                         return next;
                       });
                       setDragIdx(null);
-                    }}
-                    onDragEnd={function() { setDragIdx(null); }}
-                    onTouchStart={function(e) {
-                      // Solo activar drag desde el handle (icono de arrastre)
+                    },
+                    onDragEnd: function() { setDragIdx(null); setDropTarget(null); },
+                    // ── Touch events (móvil) ──
+                    onTouchStart: function(e) {
                       if (!e.target.dataset.draghandle) return;
                       setDragIdx(idx);
-                    }}
-                    onTouchMove={function(e) {
+                    },
+                    onTouchMove: function(e) {
                       if (dragIdx == null) return;
                       e.preventDefault();
                       var touch = e.touches[0];
@@ -2769,70 +2922,109 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                         var row = el.closest('[data-fotoidx]');
                         if (row) {
                           var targetIdx = parseInt(row.dataset.fotoidx);
+                          // Calcular si estamos en mitad superior o inferior para mostrar indicador
+                          var rect = row.getBoundingClientRect();
+                          var mid = rect.top + rect.height / 2;
+                          var pos = touch.clientY < mid ? 'above' : 'below';
                           if (targetIdx !== dragIdx && !isNaN(targetIdx)) {
-                            setModalFotos(function(prev) {
-                              var next = prev.slice();
-                              var item = next.splice(dragIdx, 1)[0];
-                              next.splice(targetIdx, 0, item);
-                              return next;
-                            });
-                            setDragIdx(targetIdx);
+                            setDropTarget({ idx: targetIdx, pos: pos });
                           }
                         }
                       }
-                    }}
-                    onTouchEnd={function() { setDragIdx(null); }}
-                    data-fotoidx={idx}
-                    style={{
+                    },
+                    onTouchEnd: function() {
+                      // Ejecutar el drop con el dropTarget actual
+                      if (dragIdx != null && dropTarget && dropTarget.idx !== dragIdx) {
+                        var fromIdx = dragIdx;
+                        var toIdx = dropTarget.idx;
+                        var dropPos = dropTarget.pos;
+                        setModalFotos(function(prev) {
+                          var next = prev.slice();
+                          var item = next.splice(fromIdx, 1)[0];
+                          var insertAt = toIdx;
+                          if (fromIdx < toIdx) insertAt--;
+                          if (dropPos === 'below') insertAt++;
+                          if (insertAt < 0) insertAt = 0;
+                          if (insertAt > next.length) insertAt = next.length;
+                          next.splice(insertAt, 0, item);
+                          return next;
+                        });
+                      }
+                      setDragIdx(null);
+                      setDropTarget(null);
+                    },
+                    'data-fotoidx': idx,
+                    style: {
                       display: 'flex', gap: 10, alignItems: 'flex-start',
-                      padding: '10px 8px', borderRadius: 8,
-                      border: isDragging ? '2px dashed var(--brand-accent)' : '1px solid var(--borde)',
-                      background: isDragging ? 'var(--brand-bg)' : 'white',
-                      opacity: isDragging ? 0.7 : 1,
+                      padding: '10px 8px', margin: '2px 0', borderRadius: 8,
+                      border: isDragging ? '2px solid #1976d2' : '1px solid var(--borde)',
+                      background: isDragging ? '#e3f2fd' : 'white',
+                      opacity: isDragging ? 0.5 : 1,
+                      transform: isDragging ? 'scale(0.97)' : 'none',
+                      boxShadow: isDragging ? 'inset 0 0 0 1px #1976d2' : 'none',
                       cursor: 'grab', touchAction: 'none',
-                      transition: 'background 0.15s, opacity 0.15s',
-                    }}>
-                    {/* Handle de arrastre */}
-                    <div data-draghandle="1" style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      justifyContent: 'center', width: 24, flexShrink: 0,
-                      color: 'var(--texto-suave)', fontSize: 16, cursor: 'grab',
-                      userSelect: 'none', touchAction: 'none',
-                    }}>
-                      <span data-draghandle="1" style={{ lineHeight: 1 }}>{'≡'}</span>
-                      <span data-draghandle="1" style={{ fontSize: 10, marginTop: 2 }}>{idx + 1}</span>
-                    </div>
-                    {/* Thumbnail */}
-                    <img
-                      src={'https://drive.google.com/thumbnail?id=' + foto.id + '&sz=w160'}
-                      alt="" draggable={false} style={{
+                      transition: 'transform 0.15s, opacity 0.15s, background 0.15s, border-color 0.15s',
+                    },
+                  },
+                    // Handle de arrastre
+                    React.createElement('div', {
+                      'data-draghandle': '1',
+                      style: {
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        justifyContent: 'center', width: 28, flexShrink: 0,
+                        color: isDragging ? '#1976d2' : 'var(--texto-suave)',
+                        fontSize: 18, cursor: 'grab',
+                        userSelect: 'none', touchAction: 'none',
+                        borderRight: '1px solid var(--borde)',
+                        paddingRight: 6, marginRight: 2,
+                      }
+                    },
+                      React.createElement('span', { 'data-draghandle': '1', style: { lineHeight: 1 } }, '≡'),
+                      React.createElement('span', { 'data-draghandle': '1', style: {
+                        fontSize: 11, fontWeight: 700, marginTop: 3,
+                        color: isDragging ? '#1976d2' : 'var(--texto)',
+                        background: isDragging ? '#bbdefb' : 'var(--gris-bg)',
+                        borderRadius: '50%', width: 20, height: 20,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}, String(idx + 1))
+                    ),
+                    // Thumbnail
+                    React.createElement('img', {
+                      src: 'https://drive.google.com/thumbnail?id=' + foto.id + '&sz=w160',
+                      alt: '', draggable: false,
+                      style: {
                         width: 64, height: 64, objectFit: 'cover', borderRadius: 6,
                         flexShrink: 0, background: 'var(--gris-bg)',
-                      }}
-                    />
-                    {/* Descripcion */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <input
-                        type="text"
-                        value={foto.descripcion}
-                        placeholder={foto.descBusy ? 'Generando...' : 'Descripcion'}
-                        disabled={foto.descBusy}
-                        onChange={function(e) {
+                      }
+                    }),
+                    // Descripcion
+                    React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                      React.createElement('input', {
+                        type: 'text',
+                        value: foto.descripcion,
+                        placeholder: foto.descBusy ? 'Generando...' : 'Descripcion',
+                        disabled: foto.descBusy,
+                        onChange: function(e) {
                           var val = e.target.value;
                           setModalFotos(function(prev) {
                             var next = prev.slice();
                             next[idx] = Object.assign({}, next[idx], { descripcion: val });
                             return next;
                           });
-                        }}
-                        style={{
+                        },
+                        style: {
                           width: '100%', border: '1px solid var(--borde)', borderRadius: 6,
                           padding: '6px 8px', fontSize: 13, boxSizing: 'border-box',
                           fontFamily: 'inherit',
-                        }}
-                      />
-                    </div>
-                  </div>
+                        }
+                      })
+                    )
+                  ),
+                  // ── Línea de inserción ABAJO ──
+                  showLineBelow && React.createElement('div', { style: {
+                    height: 3, background: '#1976d2', borderRadius: 2, margin: '0 8px',
+                    boxShadow: '0 0 6px rgba(25,118,210,0.5)',
+                  }})
                 );
               })}
             </div>

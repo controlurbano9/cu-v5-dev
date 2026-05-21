@@ -4,7 +4,7 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v46';
+const CACHE_NAME = 'cu-v6-cache-v47';
 
 // Assets locales que se pre-cachean en install
 const PRECACHE_URLS = [
@@ -26,6 +26,12 @@ const CDN_PATTERNS = [
   'fonts.googleapis.com',
   'fonts.gstatic.com',
   'tile.openstreetmap.org',
+  // Google Maps tiles (satellite + hybrid + roads)
+  'khms0.googleapis.com', 'khms1.googleapis.com',
+  'khms2.googleapis.com', 'khms3.googleapis.com',
+  'mt0.googleapis.com', 'mt1.googleapis.com',
+  'mt2.googleapis.com', 'mt3.googleapis.com',
+  'maps.gstatic.com',
 ];
 
 // Patrones que NUNCA se cachean (datos dinámicos)

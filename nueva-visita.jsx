@@ -686,17 +686,10 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
 
 // Mapa Google Maps con pin arrastrable para corregir coordenadas.
 // Sin coordenadas muestra vista general de Bello; con coords, zoom 18 + pin.
-// Incluye pre-carga offline: recorre Bello a zoom 16-17 para que el SW cachee tiles.
-
-// Bounding box de Bello — cubre zona urbana + expansión
-var BELLO_BOUNDS = { north: 6.395, south: 6.300, west: -75.600, east: -75.510 };
-
 function _MapaGPS({ lat, lon, onMove }) {
   const mapRef = React.useRef(null);
   const gMapRef = React.useRef(null);
   const markerRef = React.useRef(null);
-  const [precacheState, setPrecache] = useStateNV(null); // null | {progreso, total, fase}
-  const precacheCancelRef = React.useRef(false);
   const tieneCoords = lat != null && lon != null;
 
   useEffectNV(() => {
@@ -736,64 +729,6 @@ function _MapaGPS({ lat, lon, onMove }) {
     }
   }, [lat, lon]);
 
-  // Pre-cargar tiles de Bello para uso offline.
-  // Recorre la zona urbana a zoom 16 (y opcionalmente 17) haciendo pan
-  // sistemático. El SW intercepta los tiles y los cachea (cache-first).
-  function iniciarPrecache() {
-    var map = gMapRef.current;
-    if (!map) return;
-    precacheCancelRef.current = false;
-    // Generar grid de posiciones a visitar. A zoom 16, cada vista cubre ~0.006° lat × ~0.008° lon
-    var stepLat = 0.005;
-    var stepLon = 0.007;
-    var posiciones = [];
-    for (var la = BELLO_BOUNDS.south; la <= BELLO_BOUNDS.north; la += stepLat) {
-      for (var lo = BELLO_BOUNDS.west; lo <= BELLO_BOUNDS.east; lo += stepLon) {
-        posiciones.push({ lat: la, lng: lo });
-      }
-    }
-    var total = posiciones.length;
-    setPrecache({ progreso: 0, total: total, fase: 'Descargando tiles zoom 16' });
-
-    var origCenter = map.getCenter();
-    var origZoom = map.getZoom();
-    var idx = 0;
-
-    function siguiente() {
-      if (precacheCancelRef.current) {
-        // Restaurar vista original
-        map.setCenter(origCenter);
-        map.setZoom(origZoom);
-        setPrecache(null);
-        return;
-      }
-      if (idx >= total) {
-        // Terminó: restaurar vista
-        map.setCenter(origCenter);
-        map.setZoom(origZoom);
-        setPrecache({ progreso: total, total: total, fase: 'Completado' });
-        setTimeout(function() { setPrecache(null); }, 3000);
-        return;
-      }
-      var pos = posiciones[idx];
-      map.setCenter(pos);
-      map.setZoom(16);
-      idx++;
-      setPrecache({ progreso: idx, total: total, fase: 'Descargando tiles zoom 16' });
-      // Esperar a que Google Maps cargue los tiles antes de avanzar
-      google.maps.event.addListenerOnce(map, 'tilesloaded', function() {
-        setTimeout(siguiente, 100); // breve pausa entre posiciones
-      });
-      // Fallback si tilesloaded no dispara (red lenta)
-      setTimeout(function() { if (idx <= total) siguiente(); }, 3000);
-    }
-    siguiente();
-  }
-
-  function cancelarPrecache() {
-    precacheCancelRef.current = true;
-  }
-
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
@@ -803,51 +738,6 @@ function _MapaGPS({ lat, lon, onMove }) {
         width: '100%', height: 220, borderRadius: 10,
         border: '1px solid var(--borde)', overflow: 'hidden',
       }} />
-      {/* Pre-carga offline */}
-      {precacheState
-        ? React.createElement('div', { style: {
-            marginTop: 6, padding: '8px 10px', borderRadius: 8,
-            background: precacheState.fase === 'Completado' ? '#e8f5e9' : '#fff8e1',
-            border: '1px solid ' + (precacheState.fase === 'Completado' ? '#a5d6a7' : '#ffe082'),
-            fontSize: 12,
-          }},
-          React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }},
-            React.createElement('span', { style: { fontWeight: 600 } },
-              precacheState.fase === 'Completado'
-                ? '✓ Mapa descargado para uso offline'
-                : precacheState.fase
-            ),
-            precacheState.fase !== 'Completado' && React.createElement('button', {
-              onClick: cancelarPrecache,
-              style: { background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 11, padding: '2px 6px' }
-            }, '✕ Cancelar')
-          ),
-          precacheState.fase !== 'Completado' && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 }},
-            React.createElement('div', { style: {
-              flex: 1, height: 4, borderRadius: 2, background: '#e0e0e0', overflow: 'hidden'
-            }},
-              React.createElement('div', { style: {
-                width: Math.round(precacheState.progreso / precacheState.total * 100) + '%',
-                height: '100%', background: 'var(--brand-accent)', borderRadius: 2,
-                transition: 'width 0.3s',
-              }})
-            ),
-            React.createElement('span', { style: { fontSize: 11, color: '#666', whiteSpace: 'nowrap' }},
-              precacheState.progreso + '/' + precacheState.total
-            )
-          )
-        )
-        : React.createElement('button', {
-            onClick: iniciarPrecache,
-            style: {
-              marginTop: 6, width: '100%', padding: '7px 12px', borderRadius: 8,
-              border: '1px dashed var(--borde-med)', background: 'var(--superficie)',
-              color: 'var(--texto-suave)', fontSize: 11, cursor: 'pointer',
-              fontFamily: 'inherit', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', gap: 6,
-            }
-          }, '📥 Descargar mapa de Bello para uso offline')
-      }
     </div>
   );
 }

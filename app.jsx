@@ -6,6 +6,101 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateApp, useEffect: useEffectApp, useRef: useRefApp } = React;
 
+// ═══════════════════════════════════════════════════════════════
+// Precarga automática de tiles Google Maps para uso offline.
+// Crea un mapa oculto (256×256, fuera de pantalla) y recorre la
+// zona urbana de Bello a zoom 16 (satellite). El SW intercepta
+// cada tile y lo cachea con estrategia cache-first.
+// Se ejecuta UNA VEZ tras el login; localStorage guarda el flag.
+// ═══════════════════════════════════════════════════════════════
+var MAP_PRECACHE_KEY = 'cu_map_precache_v2'; // bumpar si cambia la grilla
+var BELLO_BOUNDS = { north: 6.395, south: 6.300, west: -75.600, east: -75.510 };
+
+function _precacheMapTiles(onProgress, onDone, cancelRef) {
+  if (typeof google === 'undefined' || !google.maps) { onDone(false); return; }
+  // Div oculto para el mapa de precarga
+  var div = document.createElement('div');
+  div.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:512px;height:512px;visibility:hidden;';
+  document.body.appendChild(div);
+
+  var map = new google.maps.Map(div, {
+    center: { lat: 6.338, lng: -75.556 }, zoom: 16,
+    mapTypeId: 'satellite', disableDefaultUI: true,
+  });
+
+  // Grilla de posiciones. A zoom 16 cada viewport de 512px cubre ~0.008° lat × ~0.011° lon
+  var stepLat = 0.007, stepLon = 0.010;
+  var posiciones = [];
+  for (var la = BELLO_BOUNDS.south; la <= BELLO_BOUNDS.north; la += stepLat) {
+    for (var lo = BELLO_BOUNDS.west; lo <= BELLO_BOUNDS.east; lo += stepLon) {
+      posiciones.push({ lat: la, lng: lo });
+    }
+  }
+  var total = posiciones.length;
+  var idx = 0;
+
+  function siguiente() {
+    if (cancelRef && cancelRef.current) {
+      document.body.removeChild(div);
+      onDone(false);
+      return;
+    }
+    if (idx >= total) {
+      document.body.removeChild(div);
+      try { localStorage.setItem(MAP_PRECACHE_KEY, 'done'); } catch(e) {}
+      onDone(true);
+      return;
+    }
+    map.setCenter(posiciones[idx]);
+    idx++;
+    onProgress(idx, total);
+    // Esperar a que los tiles carguen, con timeout para red lenta
+    var moved = false;
+    google.maps.event.addListenerOnce(map, 'tilesloaded', function() {
+      if (moved) return;
+      moved = true;
+      setTimeout(siguiente, 80);
+    });
+    // Fallback 4s si tilesloaded no dispara (offline parcial o error)
+    setTimeout(function() { if (!moved) { moved = true; siguiente(); } }, 4000);
+  }
+
+  // Esperar a que el primer set de tiles cargue antes de empezar
+  google.maps.event.addListenerOnce(map, 'tilesloaded', function() {
+    setTimeout(siguiente, 200);
+  });
+}
+
+// Componente flotante discreto que muestra progreso de precarga
+function MapPrecacheIndicator({ progreso, total, completado }) {
+  if (!progreso && !completado) return null;
+  var pct = total ? Math.round(progreso / total * 100) : 0;
+  return React.createElement('div', { style: {
+    position: 'fixed', bottom: 80, right: 16, zIndex: 9000,
+    background: completado ? '#e8f5e9' : 'white',
+    border: '1px solid ' + (completado ? '#a5d6a7' : '#e0e0e0'),
+    borderRadius: 10, padding: '8px 14px', fontSize: 11,
+    boxShadow: '0 2px 12px rgba(0,0,0,0.12)', maxWidth: 220,
+    transition: 'opacity 0.5s', opacity: 1,
+    display: 'flex', flexDirection: 'column', gap: 4,
+  }},
+    React.createElement('div', { style: { fontWeight: 600, color: completado ? '#2e7d32' : '#333' } },
+      completado ? '✓ Mapa offline listo' : '📥 Descargando mapa offline…'
+    ),
+    !completado && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+      React.createElement('div', { style: {
+        flex: 1, height: 3, borderRadius: 2, background: '#e0e0e0', overflow: 'hidden'
+      }},
+        React.createElement('div', { style: {
+          width: pct + '%', height: '100%', background: '#1976d2', borderRadius: 2,
+          transition: 'width 0.3s',
+        }})
+      ),
+      React.createElement('span', { style: { color: '#888', whiteSpace: 'nowrap' } }, pct + '%')
+    )
+  );
+}
+
 // ── SVG icon paths (Heroicons outline 24×24) ──────────────────
 const ICO = {
   home:     'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1',
@@ -81,6 +176,36 @@ function AppV6() {
       if (!SESSION_V6.leer()) { setUsuario(null); appAlert('Tu sesión ha expirado.', { titulo: 'Sesión expirada' }); }
     }, 60000);
     return () => clearInterval(id);
+  }, [usuario]);
+
+  // ── Precarga automática de mapa offline (una vez tras login) ──
+  const [mapPrecache, setMapPrecache] = useStateApp(null); // null | {progreso, total} | 'done'
+  const precacheCancelRef = useRefApp(false);
+  useEffectApp(() => {
+    if (!usuario) return;
+    // No repetir si ya se hizo
+    try { if (localStorage.getItem(MAP_PRECACHE_KEY) === 'done') return; } catch(e) {}
+    // Esperar a que Google Maps esté disponible y a que haya conexión
+    if (!navigator.onLine) return;
+    // Delay 5s para no competir con la carga inicial de la app
+    var timer = setTimeout(function() {
+      if (typeof google === 'undefined' || !google.maps) return;
+      precacheCancelRef.current = false;
+      setMapPrecache({ progreso: 0, total: 1 });
+      _precacheMapTiles(
+        function(prog, tot) { setMapPrecache({ progreso: prog, total: tot }); },
+        function(ok) {
+          if (ok) {
+            setMapPrecache('done');
+            setTimeout(function() { setMapPrecache(null); }, 4000);
+          } else {
+            setMapPrecache(null);
+          }
+        },
+        precacheCancelRef
+      );
+    }, 5000);
+    return function() { clearTimeout(timer); precacheCancelRef.current = true; };
   }, [usuario]);
 
   if (!usuario) {
@@ -208,6 +333,11 @@ function AppV6() {
       <ModalHost />
       <InformeModalHost />
       <VisitaDetailModalHost />
+      {/* Indicador flotante de precarga de mapa (discreto, esquina inferior) */}
+      {mapPrecache && <MapPrecacheIndicator
+        progreso={mapPrecache === 'done' ? 0 : mapPrecache.progreso}
+        total={mapPrecache === 'done' ? 0 : mapPrecache.total}
+        completado={mapPrecache === 'done'} />}
     </div>
   );
 }

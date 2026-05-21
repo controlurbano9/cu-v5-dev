@@ -204,29 +204,51 @@ function ConsultaNormaScreen() {
     if (consultar) consultarNorma(lat, lon);
   }
 
-  // Capturar coordenadas GPS del dispositivo
-  async function capturarGPS() {
+  // Capturar coordenadas GPS con refinamiento progresivo
+  const geoWatchCNRef = useRefCN(null);
+  const [gpsAccCN, setGpsAccCN] = useStateCN(null);
+  function _detenerGeoCN() {
+    if (geoWatchCNRef.current != null) {
+      navigator.geolocation.clearWatch(geoWatchCNRef.current);
+      geoWatchCNRef.current = null;
+    }
+  }
+  useEffectCN(function() { return _detenerGeoCN; }, []);
+
+  function capturarGPS() {
     if (!navigator.geolocation) {
       setError('Tu dispositivo no soporta geolocalización.');
       return;
     }
-    setBusyGPS(true); setError('');
-    navigator.geolocation.getCurrentPosition(
+    // Si ya está escuchando, aceptar lo que hay
+    if (geoWatchCNRef.current != null) { _detenerGeoCN(); setBusyGPS(false); return; }
+    setBusyGPS(true); setError(''); setGpsAccCN(null);
+    var mejor = { lat: null, lon: null, acc: Infinity };
+    var tid = setTimeout(function() {
+      if (mejor.lat != null) {
+        _detenerGeoCN(); setBusyGPS(false);
+        if (!dentroDeBello(mejor.lat, mejor.lon)) { setError('Tu ubicación está fuera de Bello.'); return; }
+        colocarPin(mejor.lat, mejor.lon, true);
+      } else {
+        _detenerGeoCN(); setBusyGPS(false);
+        setError('Tiempo de espera agotado. Intenta con mejor señal GPS.');
+      }
+    }, 25000);
+    geoWatchCNRef.current = navigator.geolocation.watchPosition(
       function(pos) {
-        var lat = pos.coords.latitude, lon = pos.coords.longitude;
-        if (!dentroDeBello(lat, lon)) {
-          setError('Tu ubicación actual está fuera de Bello.');
-          setBusyGPS(false);
-          return;
+        var lat = pos.coords.latitude, lon = pos.coords.longitude, acc = pos.coords.accuracy;
+        if (acc < mejor.acc) { mejor = { lat: lat, lon: lon, acc: acc }; setGpsAccCN(Math.round(acc)); }
+        if (acc <= 10) {
+          clearTimeout(tid); _detenerGeoCN(); setBusyGPS(false); setGpsAccCN(Math.round(acc));
+          if (!dentroDeBello(lat, lon)) { setError('Tu ubicación está fuera de Bello.'); return; }
+          colocarPin(lat, lon, true);
         }
-        colocarPin(lat, lon, true);
-        setBusyGPS(false);
       },
       function(err) {
+        clearTimeout(tid); _detenerGeoCN(); setBusyGPS(false);
         setError('No se pudo obtener la ubicación: ' + err.message);
-        setBusyGPS(false);
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
     );
   }
 
@@ -338,15 +360,32 @@ function ConsultaNormaScreen() {
         <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
           Acepta direccion, coordenadas decimales, DMS, DMM o link de Google Maps.
         </div>
-        <button onClick={capturarGPS} disabled={busyGPS} style={{
+        <button onClick={capturarGPS} disabled={busyGPS && geoWatchCNRef.current == null} style={{
           marginTop: 8, width: '100%', padding: '10px 14px', borderRadius: 8,
           border: '1.5px solid var(--brand-accent)', background: 'var(--superficie)',
           color: 'var(--brand-accent)', fontSize: 13, fontWeight: 600,
-          fontFamily: 'inherit', cursor: busyGPS ? 'wait' : 'pointer',
+          fontFamily: 'inherit', cursor: busyGPS ? 'pointer' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-          {busyGPS ? 'Obteniendo ubicación...' : '📍 Capturar mis coordenadas'}
+          {busyGPS
+            ? (gpsAccCN != null
+              ? '✓ Usar ubicación (±' + gpsAccCN + 'm)'
+              : '⏳ Buscando señal GPS…')
+            : '📍 Capturar mis coordenadas'}
         </button>
+        {busyGPS && React.createElement('div', {
+          style: { textAlign: 'center', marginTop: 4 }
+        },
+          gpsAccCN != null && React.createElement('span', {
+            style: { fontSize: 12, fontWeight: 600,
+              color: gpsAccCN <= 10 ? '#2e7d32' : gpsAccCN <= 25 ? '#e65100' : '#c62828' }
+          }, 'Precisión: ±' + gpsAccCN + 'm'),
+          React.createElement('button', {
+            onClick: function(e) { e.stopPropagation(); _detenerGeoCN(); setBusyGPS(false); setGpsAccCN(null); },
+            style: { background: 'none', border: 'none', color: '#999', fontSize: 11,
+              cursor: 'pointer', marginLeft: 12 }
+          }, '✕ Cancelar')
+        )
       </div>
 
       {/* Mapa Google Maps */}

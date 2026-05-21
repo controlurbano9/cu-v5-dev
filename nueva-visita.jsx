@@ -1181,6 +1181,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [cargandoFotos, setCargandoFotos] = useStateNV(false);
   const [dragIdx, setDragIdx]   = useStateNV(null); // indice de la foto siendo arrastrada
   const [busyGeo, setBusyGeo]   = useStateNV(false);
+  const [gpsAccuracy, setGpsAccuracy] = useStateNV(null); // precisión en metros
+  const geoWatchRef = React.useRef(null); // id del watchPosition activo
   const [busyMejora, setBusyMe] = useStateNV(false);
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
   const [dictando, setDictando] = useStateNV(false);    // grabación por voz activa
@@ -1450,30 +1452,87 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setCatRes(null);
   }
 
-  // ── Geolocalización directa del dispositivo ───────────────
+  // ── Geolocalización progresiva del dispositivo ─────────────
+  // Usa watchPosition para refinar la precisión en tiempo real.
+  // Acepta automáticamente cuando la precisión es ≤8m, o el usuario
+  // puede aceptar manualmente tocando "✓ Usar esta ubicación".
+  // Timeout global de 30s si no se alcanza buena precisión.
+  function _detenerGeoWatch() {
+    if (geoWatchRef.current != null) {
+      navigator.geolocation.clearWatch(geoWatchRef.current);
+      geoWatchRef.current = null;
+    }
+  }
+  function _aceptarCoordenadas(lat, lon, acc) {
+    _detenerGeoWatch();
+    setBusyGeo(false);
+    setGpsAccuracy(acc);
+    setCampo('lat', lat);
+    setCampo('lon', lon);
+    ejecutarPOT(lat, lon);
+    ejecutarBusquedaCatastral(lat, lon);
+  }
   async function usarMiUbicacion() {
     if (!navigator.geolocation) {
       await appAlert('Tu dispositivo no soporta geolocalización.', { titulo: 'GPS' });
       return;
     }
-    setBusyGeo(true);
-    try {
-      const pos = await new Promise((ok, fail) =>
-        navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: true, timeout: 15000 })
-      );
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      setCampo('lat', lat);
-      setCampo('lon', lon);
-      ejecutarPOT(lat, lon);
-      ejecutarBusquedaCatastral(lat, lon);
-    } catch (e) {
-      const msg = e.code === 1 ? 'Permiso de ubicación denegado.' :
-                  e.code === 3 ? 'Tiempo de espera agotado.' : 'No se pudo obtener ubicación.';
-      await appAlert(msg, { titulo: 'GPS' });
+    // Si ya hay un watch corriendo, detenerlo y aceptar lo que haya
+    if (geoWatchRef.current != null) {
+      // El usuario tocó "✓ Usar esta ubicación" — aceptar coordenadas actuales
+      _detenerGeoWatch();
+      setBusyGeo(false);
+      return;
     }
-    setBusyGeo(false);
+    setBusyGeo(true);
+    setGpsAccuracy(null);
+    var mejorPos = { lat: null, lon: null, acc: Infinity };
+    var timeoutId = setTimeout(function() {
+      // Timeout 30s: aceptar la mejor lectura o fallar
+      if (mejorPos.lat != null) {
+        _aceptarCoordenadas(mejorPos.lat, mejorPos.lon, mejorPos.acc);
+      } else {
+        _detenerGeoWatch();
+        setBusyGeo(false);
+        appAlert('Tiempo de espera agotado. Intenta en un lugar con mejor señal GPS.', { titulo: 'GPS' });
+      }
+    }, 30000);
+    var watchId = navigator.geolocation.watchPosition(
+      function(pos) {
+        var lat = pos.coords.latitude;
+        var lon = pos.coords.longitude;
+        var acc = pos.coords.accuracy; // metros
+        // Solo actualizar si esta lectura es mejor que la anterior
+        if (acc < mejorPos.acc) {
+          mejorPos = { lat: lat, lon: lon, acc: acc };
+          setGpsAccuracy(Math.round(acc));
+          // Mostrar coordenadas en tiempo real (sin disparar POT/catastro aún)
+          setCampo('lat', lat);
+          setCampo('lon', lon);
+        }
+        // Auto-aceptar cuando la precisión es suficiente (≤8 metros)
+        if (acc <= 8) {
+          clearTimeout(timeoutId);
+          _aceptarCoordenadas(lat, lon, Math.round(acc));
+        }
+      },
+      function(err) {
+        clearTimeout(timeoutId);
+        _detenerGeoWatch();
+        setBusyGeo(false);
+        var msg = err.code === 1 ? 'Permiso de ubicación denegado.' :
+                  err.code === 3 ? 'Tiempo de espera agotado. Intenta en un lugar con mejor señal.' :
+                  'No se pudo obtener ubicación.';
+        appAlert(msg, { titulo: 'GPS' });
+      },
+      { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
+    );
+    geoWatchRef.current = watchId;
   }
+  // Limpiar watch al desmontar el componente
+  React.useEffect(function() {
+    return function() { _detenerGeoWatch(); };
+  }, []);
 
   // ── Validaciones mínimas antes de guardar ──────────────────
   function _validar() {
@@ -2000,12 +2059,32 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               {d.lat != null && d.lon != null
                 ? `${Number(d.lat).toFixed(6)}, ${Number(d.lon).toFixed(6)}`
                 : 'Sin coordenadas'}
+              {gpsAccuracy != null && (() => {
+                var color = gpsAccuracy <= 8 ? '#2e7d32' : gpsAccuracy <= 20 ? '#e65100' : '#c62828';
+                var label = gpsAccuracy <= 8 ? 'Excelente' : gpsAccuracy <= 20 ? 'Buena' : gpsAccuracy <= 50 ? 'Regular' : 'Baja';
+                return React.createElement('span', {
+                  style: { marginLeft: 8, fontSize: 12, fontWeight: 600, color: color,
+                    padding: '1px 7px', borderRadius: 8, background: color + '18' }
+                }, '±' + gpsAccuracy + 'm · ' + label);
+              })()}
             </div>
             <div className="gps-dir">{d.direccion || '—'}</div>
+            {busyGeo && gpsAccuracy != null && React.createElement('div', {
+              style: { fontSize: 11, color: '#666', marginTop: 2 }
+            }, 'Refinando señal GPS… Puedes aceptar la ubicación actual o esperar mayor precisión.')}
           </div>
-          <_BtnAccion busy={busyGeo} onClick={usarMiUbicacion}>
-            {busyGeo ? 'Capturando...' : '📍 Capturar mi ubicación'}
-          </_BtnAccion>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+            <_BtnAccion busy={false} onClick={usarMiUbicacion}>
+              {busyGeo
+                ? (gpsAccuracy != null ? '✓ Usar esta ubicación' : '⏳ Buscando señal…')
+                : '📍 Capturar mi ubicación'}
+            </_BtnAccion>
+            {busyGeo && React.createElement('button', {
+              onClick: function() { _detenerGeoWatch(); setBusyGeo(false); setGpsAccuracy(null); },
+              style: { background: 'none', border: 'none', color: '#999', fontSize: 12,
+                cursor: 'pointer', padding: '2px 6px' }
+            }, '✕ Cancelar')}
+          </div>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <_MapaGPS lat={d.lat} lon={d.lon} onMove={(lat, lon) => {

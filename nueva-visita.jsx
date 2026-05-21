@@ -1177,6 +1177,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [guardando, setGuard]   = useStateNV(false);
   const [generandoActa, setGA]  = useStateNV(false);
   const [generandoRF,  setGRF]  = useStateNV(false);
+  const [modalFotos,  setModalFotos] = useStateNV(null); // null o [{id, nombre, link, descripcion, mimeType}]
+  const [cargandoFotos, setCargandoFotos] = useStateNV(false);
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [busyMejora, setBusyMe] = useStateNV(false);
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
@@ -1773,7 +1775,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
   // Paso 2 del F-GGO-46: Doc REGISTRO FOTOGRÁFICO con las fotos
   // ya subidas a la subcarpeta Fotos de la visita.
-  async function generarRegistroFotografico() {
+  // Abre el modal de fotos: carga la lista de Drive, genera descripciones IA
+  async function abrirModalFotos() {
     if (!filaEditando) {
       await appAlert('Primero guarda la visita.', { titulo: 'Visita no guardada' });
       return;
@@ -1782,22 +1785,72 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       await appAlert('La visita aún no tiene subcarpeta de fotos. Sube fotos primero.', { titulo: 'Sin fotos' });
       return;
     }
-    setGRF(true);
+    setCargandoFotos(true);
     try {
-      const r = await gasPost(Object.assign({ accion: 'generarRegistroFotos' }, _construirDatosF46()));
+      const r = await listarFotosActa(d.idCarpetaFotos);
+      if (!r.ok || !r.fotos || r.fotos.length === 0) {
+        await appAlert('No se encontraron fotos en la carpeta.', { titulo: 'Sin fotos' });
+        setCargandoFotos(false);
+        return;
+      }
+      // Inicializar con descripciones vacias — se generan async
+      const lista = r.fotos.map(function(f) {
+        return { id: f.id, nombre: f.nombre, link: f.link, descripcion: '', mimeType: f.mimeType, descBusy: true };
+      });
+      setModalFotos(lista);
+      setCargandoFotos(false);
+      // Generar descripciones IA en paralelo (sin bloquear)
+      lista.forEach(function(foto, idx) {
+        describirFotoDesdeId(foto.id).then(function(resp) {
+          setModalFotos(function(prev) {
+            if (!prev) return prev;
+            var next = prev.slice();
+            next[idx] = Object.assign({}, next[idx], {
+              descripcion: resp.descripcion || 'Sin descripcion',
+              descBusy: false,
+            });
+            return next;
+          });
+        }).catch(function() {
+          setModalFotos(function(prev) {
+            if (!prev) return prev;
+            var next = prev.slice();
+            next[idx] = Object.assign({}, next[idx], { descripcion: 'Sin descripcion', descBusy: false });
+            return next;
+          });
+        });
+      });
+    } catch (e) {
+      await appAlert('Error cargando fotos: ' + e.message, { titulo: 'Error' });
+      setCargandoFotos(false);
+    }
+  }
+
+  // Confirmar y generar RF con las fotos en el orden del modal
+  async function confirmarYGenerarRF() {
+    if (!modalFotos || modalFotos.length === 0) return;
+    setGRF(true);
+    setModalFotos(null);
+    try {
+      const payload = Object.assign({ accion: 'generarRegistroFotos' }, _construirDatosF46());
+      // Enviar array de fotos con fileId y descripcion editada
+      payload.fotos = modalFotos.map(function(f) {
+        return { fileId: f.id, descripcion: f.descripcion || '' };
+      });
+      const r = await gasPost(payload);
       const link = r.linkDoc;
       if (link) {
         await appAlert(
-          (r.yaExistia ? 'El registro fotográfico ya existía en la carpeta.' : 'Registro fotográfico generado.') +
-          '\n\nSe abrirá en una pestaña nueva.',
-          { titulo: 'Registro fotográfico listo' }
+          (r.yaExistia ? 'El registro fotografico ya existia en la carpeta.' : 'Registro fotografico generado.') +
+          '\n\nSe abrira en una pestana nueva.',
+          { titulo: 'Registro fotografico listo' }
         );
         window.open(link, '_blank', 'noopener');
       } else {
-        await appAlert('Se generó pero no recibí link. Revisa Drive.', { titulo: 'Registro generado' });
+        await appAlert('Se genero pero no recibi link. Revisa Drive.', { titulo: 'Registro generado' });
       }
     } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Generar registro fotográfico' });
+      await appAlert('Error: ' + e.message, { titulo: 'Generar registro fotografico' });
     }
     setGRF(false);
   }
@@ -2571,10 +2624,111 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         />
       )}
       {filaEditando && (
-        <button onClick={generarRegistroFotografico} disabled={generandoRF}
+        <button onClick={abrirModalFotos} disabled={generandoRF || cargandoFotos}
           className="btn-principal" style={{ fontSize: 15, marginTop: 14 }}>
-          {generandoRF ? 'Generando registro fotográfico...' : 'Generar registro fotográfico'}
+          {cargandoFotos ? 'Cargando fotos...' : generandoRF ? 'Generando...' : 'Generar registro fotografico'}
         </button>
+      )}
+
+      {/* Modal de revision de fotos antes de generar RF */}
+      {modalFotos && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          padding: 16, overflowY: 'auto',
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 12, padding: 20, width: '100%',
+            maxWidth: 600, margin: 'auto',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--brand-accent)', marginBottom: 4 }}>
+              Registro fotografico
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>
+              Revisa y edita las descripciones. Usa las flechas para reordenar.
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {modalFotos.map(function(foto, idx) {
+                return (
+                  <div key={foto.id} style={{
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
+                    borderBottom: '1px solid var(--borde)', paddingBottom: 12,
+                  }}>
+                    {/* Thumbnail via Google Drive */}
+                    <img
+                      src={'https://drive.google.com/thumbnail?id=' + foto.id + '&sz=w160'}
+                      alt="" style={{
+                        width: 80, height: 80, objectFit: 'cover', borderRadius: 6,
+                        flexShrink: 0, background: 'var(--gris-bg)',
+                      }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
+                        Foto {idx + 1} de {modalFotos.length}
+                      </div>
+                      <input
+                        type="text"
+                        value={foto.descripcion}
+                        placeholder={foto.descBusy ? 'Generando descripcion...' : 'Descripcion'}
+                        disabled={foto.descBusy}
+                        onChange={function(e) {
+                          var val = e.target.value;
+                          setModalFotos(function(prev) {
+                            var next = prev.slice();
+                            next[idx] = Object.assign({}, next[idx], { descripcion: val });
+                            return next;
+                          });
+                        }}
+                        style={{
+                          width: '100%', border: '1px solid var(--borde)', borderRadius: 6,
+                          padding: 8, fontSize: 13, boxSizing: 'border-box',
+                          fontFamily: 'inherit',
+                        }}
+                      />
+                      {/* Botones reordenar */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <button disabled={idx === 0} onClick={function() {
+                          setModalFotos(function(prev) {
+                            var next = prev.slice();
+                            var tmp = next[idx - 1]; next[idx - 1] = next[idx]; next[idx] = tmp;
+                            return next;
+                          });
+                        }} style={{
+                          background: 'var(--gris-bg)', border: '1px solid var(--borde)',
+                          borderRadius: 4, padding: '2px 8px', fontSize: 12, cursor: 'pointer',
+                        }}>&#9650; Subir</button>
+                        <button disabled={idx === modalFotos.length - 1} onClick={function() {
+                          setModalFotos(function(prev) {
+                            var next = prev.slice();
+                            var tmp = next[idx + 1]; next[idx + 1] = next[idx]; next[idx] = tmp;
+                            return next;
+                          });
+                        }} style={{
+                          background: 'var(--gris-bg)', border: '1px solid var(--borde)',
+                          borderRadius: 4, padding: '2px 8px', fontSize: 12, cursor: 'pointer',
+                        }}>&#9660; Bajar</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={confirmarYGenerarRF} disabled={modalFotos.some(function(f) { return f.descBusy; })}
+                className="btn-principal verde" style={{ flex: 1, margin: 0, padding: 12, fontSize: 14 }}>
+                {modalFotos.some(function(f) { return f.descBusy; })
+                  ? 'Generando descripciones...'
+                  : 'Confirmar y generar'}
+              </button>
+              <button onClick={function() { setModalFotos(null); }} style={{
+                background: 'var(--gris-bg)', border: 'none', borderRadius: 8,
+                padding: 12, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+              }}>Cancelar</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Botón "Ver carpeta Drive" al final del formulario */}

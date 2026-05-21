@@ -261,6 +261,16 @@ async function describirFotoConIA(base64, mime) {
   return d.descripcion || '';
 }
 
+// Lista las fotos de una carpeta de Drive (sin base64, solo metadata).
+async function listarFotosActa(idCarpetaFotos) {
+  return gasGet({ accion: 'listarFotosActa', idCarpeta: idCarpetaFotos });
+}
+
+// Describe una foto por fileId usando Gemini Vision (thumbnail 600px).
+async function describirFotoDesdeId(fileId) {
+  return gasGet({ accion: 'describirFotoDesdeId', fileId });
+}
+
 // ── Consulta POT (100% cliente, igual que producción V2) ───────────
 // Cruza un punto (lat,lon) contra los GeoJSONs publicados en GitHub
 // `controlurbano9/pot-bello/main/*.geojson` usando turf.js (cargado
@@ -642,7 +652,9 @@ Object.assign(window, {
   generarSolicitudVigilancia,
   geocodeDireccion, crearCarpetaVisita, guardarVisita,
   mejorarTexto,
-  subirFotoConDescripcion, describirFotoConIA, consultarPOT,
+  subirFotoConDescripcion, describirFotoConIA,
+  listarFotosActa, describirFotoDesdeId,
+  consultarPOT,
   buscarCatastroGPS, formatearCOP,
   SESSION_V6: SESSION,
   invalidarCache,

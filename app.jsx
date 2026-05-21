@@ -179,22 +179,30 @@ function AppV6() {
   }, [usuario]);
 
   // ── Precarga automática de mapa offline (una vez tras login) ──
+  // Solo corre si: hay usuario + hay conexión + localStorage no tiene 'done'
+  // + no hay otro precache corriendo. Delay 5s para no competir con carga inicial.
   const [mapPrecache, setMapPrecache] = useStateApp(null); // null | {progreso, total} | 'done'
   const precacheCancelRef = useRefApp(false);
+  const precacheRunningRef = useRefApp(false); // evita doble ejecución
   useEffectApp(() => {
     if (!usuario) return;
-    // No repetir si ya se hizo
+    // No repetir si ya se completó antes en este navegador
     try { if (localStorage.getItem(MAP_PRECACHE_KEY) === 'done') return; } catch(e) {}
-    // Esperar a que Google Maps esté disponible y a que haya conexión
+    // No repetir si ya está en curso
+    if (precacheRunningRef.current) return;
+    // Necesita conexión y Google Maps cargado
     if (!navigator.onLine) return;
     // Delay 5s para no competir con la carga inicial de la app
     var timer = setTimeout(function() {
       if (typeof google === 'undefined' || !google.maps) return;
+      if (precacheRunningRef.current) return;
+      precacheRunningRef.current = true;
       precacheCancelRef.current = false;
       setMapPrecache({ progreso: 0, total: 1 });
       _precacheMapTiles(
         function(prog, tot) { setMapPrecache({ progreso: prog, total: tot }); },
         function(ok) {
+          precacheRunningRef.current = false;
           if (ok) {
             setMapPrecache('done');
             setTimeout(function() { setMapPrecache(null); }, 4000);

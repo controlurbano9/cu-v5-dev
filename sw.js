@@ -4,7 +4,7 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v48';
+const CACHE_NAME = 'cu-v6-cache-v49';
 
 // Assets locales que se pre-cachean en install
 const PRECACHE_URLS = [

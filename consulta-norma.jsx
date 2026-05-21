@@ -385,7 +385,7 @@ function ConsultaNormaScreen() {
             style: { background: 'none', border: 'none', color: '#999', fontSize: 11,
               cursor: 'pointer', marginLeft: 12 }
           }, '✕ Cancelar')
-        )
+        )}
       </div>
 
       {/* Mapa Google Maps */}

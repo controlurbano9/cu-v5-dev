@@ -2754,8 +2754,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
   const [subiendo, setSubiendo] = useStateNV(false);
   const [fotos, setFotos]       = useStateNV([]);  // [{ nombre, link, descripcion }]
-  const [pendiente, setPendiente] = useStateNV(null); // { file, preview, descripcion }
-  const [busyDesc, setBusyDesc] = useStateNV(false);
+  const [cola, setCola]         = useStateNV([]);   // archivos pendientes de subir
+  const [progreso, setProgreso] = useStateNV('');   // "Subiendo 2/5..."
+  const inputRef = React.useRef(null);
 
   async function _aBase64(file) {
     return new Promise((resolve, reject) => {
@@ -2767,51 +2768,54 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
   }
 
   function alSeleccionar(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      appAlert('La foto pesa más de 8MB. Comprímela antes de subir.', { titulo: 'Foto muy grande' });
-      return;
+    const archivos = Array.from(e.target.files || []);
+    if (!archivos.length) return;
+    // Filtrar por tamano
+    const validos = archivos.filter(function(f) { return f.size <= 8 * 1024 * 1024; });
+    const rechazados = archivos.length - validos.length;
+    if (rechazados > 0) {
+      appAlert(rechazados + ' foto(s) superan 8MB y fueron excluidas.', { titulo: 'Fotos grandes' });
     }
-    const preview = URL.createObjectURL(file);
-    setPendiente({ file, preview, descripcion: '' });
+    if (validos.length === 0) return;
+    setCola(validos);
+    // Reset input para poder seleccionar los mismos archivos de nuevo
+    if (inputRef.current) inputRef.current.value = '';
   }
 
-  async function generarDescripcion() {
-    if (!pendiente) return;
-    setBusyDesc(true);
-    try {
-      const base64 = await _aBase64(pendiente.file);
-      const desc = await describirFotoConIA(base64, pendiente.file.type);
-      setPendiente(p => ({ ...p, descripcion: desc }));
-    } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'IA descripción' });
+  // Subir cola secuencialmente cuando cambie
+  React.useEffect(function() {
+    if (cola.length === 0 || subiendo) return;
+    var cancelado = false;
+    async function subirTodos() {
+      setSubiendo(true);
+      for (var i = 0; i < cola.length; i++) {
+        if (cancelado) break;
+        setProgreso('Subiendo ' + (i + 1) + '/' + cola.length + '...');
+        try {
+          var base64 = await _aBase64(cola[i]);
+          var r = await subirFotoConDescripcion(idCarpetaFotos, base64, cola[i].type, '');
+          setFotos(function(prev) {
+            return prev.concat([{
+              nombre: r.nombre || cola[i].name,
+              link:   r.link,
+              descripcion: r.descripcion || '',
+            }]);
+          });
+        } catch (err) {
+          console.warn('Error subiendo foto:', err);
+        }
+      }
+      setCola([]);
+      setProgreso('');
+      setSubiendo(false);
     }
-    setBusyDesc(false);
-  }
-
-  async function subirAhora() {
-    if (!pendiente) return;
-    setSubiendo(true);
-    try {
-      const base64 = await _aBase64(pendiente.file);
-      const r = await subirFotoConDescripcion(idCarpetaFotos, base64, pendiente.file.type, pendiente.descripcion);
-      setFotos(prev => [...prev, {
-        nombre: r.nombre || pendiente.file.name,
-        link:   r.link,
-        descripcion: pendiente.descripcion,
-      }]);
-      URL.revokeObjectURL(pendiente.preview);
-      setPendiente(null);
-    } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Subir foto' });
-    }
-    setSubiendo(false);
-  }
+    subirTodos();
+    return function() { cancelado = true; };
+  }, [cola]);
 
   return (
     <div className="form-seccion" style={{ marginTop: 14 }}>
-      <span className="form-seccion-titulo titulo-azul">Registro fotográfico</span>
+      <span className="form-seccion-titulo titulo-azul">Registro fotografico</span>
       <div style={{ marginTop: 12 }}>
         {linkDrive && (
           <div style={{ marginBottom: 12 }}>
@@ -2821,50 +2825,22 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
           </div>
         )}
 
-        {!pendiente && (
-          <label style={{
-            display: 'block', padding: 14, border: '1.5px dashed var(--borde-med)',
-            borderRadius: 10, textAlign: 'center', cursor: 'pointer',
-            background: 'var(--gris-bg)', fontSize: 13, color: 'var(--texto-suave)',
-          }}>
-            Toca para seleccionar una foto
-            <input type="file" accept="image/*"
-              onChange={alSeleccionar} style={{ display: 'none' }} />
-          </label>
-        )}
-
-        {pendiente && (
-          <div style={{
-            border: '1px solid var(--borde-med)', borderRadius: 10, padding: 12,
-            background: 'var(--superficie)',
-          }}>
-            <img src={pendiente.preview} alt="" style={{
-              width: '100%', maxHeight: 280, objectFit: 'contain',
-              borderRadius: 8, background: 'var(--gris-bg)', marginBottom: 10,
-            }} />
-            <_TextArea value={pendiente.descripcion}
-              onChange={v => setPendiente(p => ({ ...p, descripcion: v }))}
-              placeholder="Descripción de la foto..." rows={3} />
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <_BtnAccion busy={busyDesc} onClick={generarDescripcion}>
-                {busyDesc ? '...' : 'Describir con IA'}
-              </_BtnAccion>
-              <button onClick={subirAhora} disabled={subiendo} className="btn-principal verde"
-                style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: 13 }}>
-                {subiendo ? 'Subiendo...' : 'Subir foto'}
-              </button>
-              <button onClick={() => { URL.revokeObjectURL(pendiente.preview); setPendiente(null); }}
-                style={{
-                  background: 'var(--gris-bg)', border: '1px solid var(--borde)',
-                  borderRadius: 8, padding: '8px 12px', fontFamily: 'inherit',
-                  fontSize: 13, cursor: 'pointer',
-                }}>Cancelar</button>
-            </div>
-          </div>
-        )}
+        <label style={{
+          display: 'block', padding: 14, border: '1.5px dashed var(--borde-med)',
+          borderRadius: 10, textAlign: 'center', cursor: subiendo ? 'wait' : 'pointer',
+          background: 'var(--gris-bg)', fontSize: 13, color: 'var(--texto-suave)',
+          opacity: subiendo ? 0.5 : 1,
+        }}>
+          {subiendo ? progreso : 'Toca para seleccionar fotos'}
+          <input ref={inputRef} type="file" accept="image/*" multiple
+            onChange={alSeleccionar} disabled={subiendo} style={{ display: 'none' }} />
+        </label>
 
         {fotos.length > 0 && (
           <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--texto-suave)', marginBottom: 2 }}>
+              {fotos.length} foto(s) subida(s)
+            </div>
             {fotos.map((f, i) => (
               <div key={i} style={{
                 padding: '8px 12px', background: 'var(--gris-bg)', borderRadius: 8, fontSize: 12,

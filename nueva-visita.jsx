@@ -2749,12 +2749,14 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                     boxShadow: '0 0 6px rgba(25,118,210,0.5)',
                   }}),
                   React.createElement('div', {
-                    draggable: true,
+                    draggable: false,
                     onDragStart: function(e) {
+                      // Solo arrastrar desde el handle ≡
+                      var handle = e.target.closest('[data-draghandle]');
+                      if (!handle) { e.preventDefault(); return; }
                       setDragIdx(idx);
                       e.dataTransfer.effectAllowed = 'move';
                       try { e.dataTransfer.setData('text/plain', String(idx)); } catch(ex) {}
-                      // Ghost image semi-transparente
                       if (e.dataTransfer.setDragImage) {
                         var ghost = e.currentTarget.cloneNode(true);
                         ghost.style.opacity = '0.85';
@@ -2803,7 +2805,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                       });
                       setDragIdx(null);
                     },
-                    onDragEnd: function() { setDragIdx(null); setDropTarget(null); },
+                    onDragEnd: function(e) { e.currentTarget.draggable = false; setDragIdx(null); setDropTarget(null); },
                     // ── Touch events (móvil) ──
                     onTouchStart: function(e) {
                       if (!e.target.dataset.draghandle) return;
@@ -2858,13 +2860,22 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                       opacity: isDragging ? 0.5 : 1,
                       transform: isDragging ? 'scale(0.97)' : 'none',
                       boxShadow: isDragging ? 'inset 0 0 0 1px #1976d2' : 'none',
-                      cursor: 'grab', touchAction: 'none',
+                      cursor: 'default',
                       transition: 'transform 0.15s, opacity 0.15s, background 0.15s, border-color 0.15s',
                     },
                   },
                     // Handle de arrastre
                     React.createElement('div', {
                       'data-draghandle': '1',
+                      onMouseDown: function(e) {
+                        // Activar draggable en la fila al sostener el handle
+                        var row = e.currentTarget.parentElement;
+                        if (row) row.draggable = true;
+                      },
+                      onMouseUp: function(e) {
+                        var row = e.currentTarget.parentElement;
+                        if (row) row.draggable = false;
+                      },
                       style: {
                         display: 'flex', flexDirection: 'column', alignItems: 'center',
                         justifyContent: 'center', width: 28, flexShrink: 0,

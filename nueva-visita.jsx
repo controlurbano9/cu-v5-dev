@@ -1179,6 +1179,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [generandoRF,  setGRF]  = useStateNV(false);
   const [modalFotos,  setModalFotos] = useStateNV(null); // null o [{id, nombre, link, descripcion, mimeType}]
   const [cargandoFotos, setCargandoFotos] = useStateNV(false);
+  const [dragIdx, setDragIdx]   = useStateNV(null); // indice de la foto siendo arrastrada
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [busyMejora, setBusyMe] = useStateNV(false);
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
@@ -2636,7 +2637,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999,
           display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
           padding: 16, overflowY: 'auto',
-        }}>
+        }} onClick={function(e) { if (e.target === e.currentTarget) setModalFotos(null); }}>
           <div style={{
             background: 'white', borderRadius: 12, padding: 20, width: '100%',
             maxWidth: 600, margin: 'auto',
@@ -2645,32 +2646,97 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               Registro fotografico
             </div>
             <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>
-              Revisa y edita las descripciones. Usa las flechas para reordenar.
+              Arrastra para reordenar. Edita las descripciones generadas por IA.
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {modalFotos.map(function(foto, idx) {
+                var isDragging = dragIdx === idx;
                 return (
-                  <div key={foto.id} style={{
-                    display: 'flex', gap: 12, alignItems: 'flex-start',
-                    borderBottom: '1px solid var(--borde)', paddingBottom: 12,
-                  }}>
-                    {/* Thumbnail via Google Drive */}
+                  <div key={foto.id}
+                    draggable
+                    onDragStart={function(e) {
+                      setDragIdx(idx);
+                      e.dataTransfer.effectAllowed = 'move';
+                      try { e.dataTransfer.setData('text/plain', idx); } catch(ex) {}
+                    }}
+                    onDragOver={function(e) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                    }}
+                    onDrop={function(e) {
+                      e.preventDefault();
+                      if (dragIdx == null || dragIdx === idx) return;
+                      setModalFotos(function(prev) {
+                        var next = prev.slice();
+                        var item = next.splice(dragIdx, 1)[0];
+                        next.splice(idx, 0, item);
+                        return next;
+                      });
+                      setDragIdx(null);
+                    }}
+                    onDragEnd={function() { setDragIdx(null); }}
+                    onTouchStart={function(e) {
+                      // Solo activar drag desde el handle (icono de arrastre)
+                      if (!e.target.dataset.draghandle) return;
+                      setDragIdx(idx);
+                    }}
+                    onTouchMove={function(e) {
+                      if (dragIdx == null) return;
+                      e.preventDefault();
+                      var touch = e.touches[0];
+                      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+                      if (el) {
+                        var row = el.closest('[data-fotoidx]');
+                        if (row) {
+                          var targetIdx = parseInt(row.dataset.fotoidx);
+                          if (targetIdx !== dragIdx && !isNaN(targetIdx)) {
+                            setModalFotos(function(prev) {
+                              var next = prev.slice();
+                              var item = next.splice(dragIdx, 1)[0];
+                              next.splice(targetIdx, 0, item);
+                              return next;
+                            });
+                            setDragIdx(targetIdx);
+                          }
+                        }
+                      }
+                    }}
+                    onTouchEnd={function() { setDragIdx(null); }}
+                    data-fotoidx={idx}
+                    style={{
+                      display: 'flex', gap: 10, alignItems: 'flex-start',
+                      padding: '10px 8px', borderRadius: 8,
+                      border: isDragging ? '2px dashed var(--brand-accent)' : '1px solid var(--borde)',
+                      background: isDragging ? 'var(--brand-bg)' : 'white',
+                      opacity: isDragging ? 0.7 : 1,
+                      cursor: 'grab', touchAction: 'none',
+                      transition: 'background 0.15s, opacity 0.15s',
+                    }}>
+                    {/* Handle de arrastre */}
+                    <div data-draghandle="1" style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      justifyContent: 'center', width: 24, flexShrink: 0,
+                      color: 'var(--texto-suave)', fontSize: 16, cursor: 'grab',
+                      userSelect: 'none', touchAction: 'none',
+                    }}>
+                      <span data-draghandle="1" style={{ lineHeight: 1 }}>{'≡'}</span>
+                      <span data-draghandle="1" style={{ fontSize: 10, marginTop: 2 }}>{idx + 1}</span>
+                    </div>
+                    {/* Thumbnail */}
                     <img
                       src={'https://drive.google.com/thumbnail?id=' + foto.id + '&sz=w160'}
-                      alt="" style={{
-                        width: 80, height: 80, objectFit: 'cover', borderRadius: 6,
+                      alt="" draggable={false} style={{
+                        width: 64, height: 64, objectFit: 'cover', borderRadius: 6,
                         flexShrink: 0, background: 'var(--gris-bg)',
                       }}
                     />
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
-                        Foto {idx + 1} de {modalFotos.length}
-                      </div>
+                    {/* Descripcion */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <input
                         type="text"
                         value={foto.descripcion}
-                        placeholder={foto.descBusy ? 'Generando descripcion...' : 'Descripcion'}
+                        placeholder={foto.descBusy ? 'Generando...' : 'Descripcion'}
                         disabled={foto.descBusy}
                         onChange={function(e) {
                           var val = e.target.value;
@@ -2682,33 +2748,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                         }}
                         style={{
                           width: '100%', border: '1px solid var(--borde)', borderRadius: 6,
-                          padding: 8, fontSize: 13, boxSizing: 'border-box',
+                          padding: '6px 8px', fontSize: 13, boxSizing: 'border-box',
                           fontFamily: 'inherit',
                         }}
                       />
-                      {/* Botones reordenar */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                        <button disabled={idx === 0} onClick={function() {
-                          setModalFotos(function(prev) {
-                            var next = prev.slice();
-                            var tmp = next[idx - 1]; next[idx - 1] = next[idx]; next[idx] = tmp;
-                            return next;
-                          });
-                        }} style={{
-                          background: 'var(--gris-bg)', border: '1px solid var(--borde)',
-                          borderRadius: 4, padding: '2px 8px', fontSize: 12, cursor: 'pointer',
-                        }}>&#9650; Subir</button>
-                        <button disabled={idx === modalFotos.length - 1} onClick={function() {
-                          setModalFotos(function(prev) {
-                            var next = prev.slice();
-                            var tmp = next[idx + 1]; next[idx + 1] = next[idx]; next[idx] = tmp;
-                            return next;
-                          });
-                        }} style={{
-                          background: 'var(--gris-bg)', border: '1px solid var(--borde)',
-                          borderRadius: 4, padding: '2px 8px', fontSize: 12, cursor: 'pointer',
-                        }}>&#9660; Bajar</button>
-                      </div>
                     </div>
                   </div>
                 );

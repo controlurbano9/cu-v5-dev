@@ -241,6 +241,14 @@ function _estadoInicial(datosIniciales) {
     alturaPisos:    d['ALTURA EN PISOS']      || '',
     destActuales:   d['N° DESTINACIONES ACTUALES'] || d['N DESTINACIONES ACTUALES'] || '',
     usos:           d['USOS ACTUALES']        || '',
+    queFunciona:    (function() {
+                      var raw = (d['USOS ACTUALES'] || '').toString();
+                      if (!raw) return '';
+                      var partes = raw.split(/\s*[·,]\s*/).filter(Boolean);
+                      var conocidos = ['Residencial','Comercial','Industrial','Servicios','Institucional','Otro'];
+                      var extras = partes.filter(function(p) { return !conocidos.includes(p.trim()); });
+                      return extras.join(', ');
+                    })(),
     cubiertaActual: d['TIPO CUBIERTA ACTUAL'] || '',
     catastral:      d['CODIGO CATASTRAL']     || d['CATASTRAL']         || '',
     ficha:          d['N° FICHA PREDIAL']     || d['N FICHA PREDIAL']    || '',
@@ -267,7 +275,17 @@ function _estadoInicial(datosIniciales) {
     suspension:      d['SUSPENSION DE LA OBRA'] || '',
     orden:           d['N° ORDEN DE POLICIA'] || d['N ORDEN DE POLICIA'] || '',
     citacionFecha:   _fechaAIso((d['FECHA CITACION'] || '').split(' · ')[0]),
-    citacionHora:    '',
+    citacionHora:    (function() {
+                       var raw = (d['FECHA CITACION'] || '').toString().trim();
+                       if (!raw || raw === 'No se deja citación') return '';
+                       var partes = raw.split(' · ');
+                       if (partes.length < 2) return '';
+                       var horaTexto = partes[1].trim().toUpperCase();
+                       var match = HORAS_CITACION.find(function(h) {
+                         return h.l.toUpperCase() === horaTexto;
+                       });
+                       return match ? match.val : '';
+                     })(),
     noCitacion:      (d['FECHA CITACION'] || '').toString().trim() === 'No se deja citación',
     // Visitadores
     visitador:       d['VISITADOR(ES)']       || '',
@@ -365,7 +383,7 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.habitado || '',                             // AB HABITADO
     d.alturaPisos || '',                          // AC ALTURA EN PISOS
     d.destActuales || '',                         // AD N° DESTINACIONES ACTUALES
-    d.usos || '',                                 // AE USOS ACTUALES
+    (d.usos || '') + (d.queFunciona ? ' · ' + d.queFunciona : ''), // AE USOS ACTUALES (+ que funciona)
     d.cubiertaActual || '',                       // AF TIPO CUBIERTA ACTUAL
     d.catastral || '',                            // AG CODIGO CATASTRAL
     d.ficha || '',                                // AH N° FICHA PREDIAL
@@ -1565,7 +1583,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       // Caracterización
       estadoObra:     d.estadoObra,
       repLocativa:    d.repLocativa,
-      usos:           d.usos,
+      usos:           (d.usos || '') + (d.queFunciona ? ' - ' + d.queFunciona : ''),
       alturaP:        d.alturaPisos,
       destActuales:   d.destActuales,
       cubiertalActual:d.cubiertaActual,
@@ -1672,7 +1690,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     req(d.poligono, 'Polígono de uso del suelo');
     req(d.amenaza, '¿Amenaza? (SI/NO)');
     req(d.sueloProt, '¿Suelo de protección? (SI/NO)');
-    req(d.quebrada, '¿Cumple retiro de quebrada? (SI/NO)');
+    req(d.quebrada, '¿Dentro de retiro de quebrada? (SI/NO)');
 
     // Observaciones (sección 10) — opcional, no bloquea acta
 
@@ -2031,8 +2049,22 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             value={d.usos}
             onChange={v => setCampo('usos', v)}
             separador=" · "
-            otroLabel="¿Qué funciona?"
+            otroLabel="Especifique uso"
           />
+          {/* Campo que funciona: visible cuando hay uso diferente a Residencial */}
+          {(d.usos || '').split(/\s*[·,]\s*/).some(function(u) {
+            return u.trim() && u.trim() !== 'Residencial' && u.trim() !== 'Otro';
+          }) && (
+            <div style={{ marginTop: 8 }}>
+              <input
+                type="text"
+                className="input-campo"
+                placeholder="¿Qué funciona en el predio?"
+                value={d.queFunciona || ''}
+                onChange={function(e) { setCampo('queFunciona', e.target.value); }}
+              />
+            </div>
+          )}
         </_Campo>
         <_Campo label="Tipo de cubierta actual" fullWidth>
           <_ChipsMulti
@@ -2345,7 +2377,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           <_Radio value={d.sueloProt} onChange={v => setCampo('sueloProt', v)}
             opciones={['SI', 'NO']} />
         </_Campo>
-        <_Campo label="¿Cumple retiro de quebrada?">
+        <_Campo label="¿Dentro de retiro de quebrada?">
           <_Radio value={d.quebrada} onChange={v => setCampo('quebrada', v)}
             opciones={['SI', 'NO']} />
         </_Campo>

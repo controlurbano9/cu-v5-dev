@@ -1202,6 +1202,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [busyPOT, setBusyPOT]   = useStateNV(false);
   const [busyCat, setBusyCat]   = useStateNV(false);
   const [catResultados, setCatRes] = useStateNV(null);
+  // Flag independiente: ¿es predio del Municipio de Bello?
+  // catResultados solo se setea cuando hay >1 ficha (propiedad horizontal);
+  // este flag se setea SIEMPRE que la búsqueda catastral encuentre fichas
+  // municipales, sin importar si es 1 ficha o muchas. Crítico para que la
+  // advertencia de tipificación A3 no se "pierda" en predios de 1 sola ficha.
+  const [predioMunicipal, setPredioMunicipal] = useStateNV(false);
   // Estado para la advertencia de tipificación (predio público / suelo protección).
   // Cuando el inspector toca "Ignorar" no volvemos a mostrarla hasta que cambien
   // las señales (nuevo punto GPS, nueva consulta catastral, etc.).
@@ -1356,9 +1362,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   useEffectNV(() => {
     // Reset al cambiar el contexto del predio (nuevo punto / nueva consulta).
     setAdvertTipifIgnorada(false);
-  }, [d.sueloProt, d.quebrada, catResultados, d.catastral]);
+  }, [d.sueloProt, d.quebrada, catResultados, predioMunicipal, d.catastral]);
 
-  const _esPublico = !!(catResultados && catResultados.some(r => r.municipal));
+  // Detección "es público": prioriza el flag predioMunicipal (siempre confiable);
+  // como fallback, mira catResultados (caso PH cuando aún no se setea el flag).
+  const _esPublico = predioMunicipal || !!(catResultados && catResultados.some(r => r.municipal));
   const _esProtegido = d.sueloProt === 'SI';
   const _enRetiroQ = d.quebrada === 'SI';
   const _sugerenciasA = (function() {
@@ -1584,8 +1592,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     }
     setBusyCat(true);
     setCatRes(null);
+    setPredioMunicipal(false);   // reset al iniciar nueva búsqueda
     try {
       const res = await buscarCatastroGPS(lat, lon);
+      // Flag municipal: SIEMPRE se setea si alguna ficha del predio
+      // pertenece al Municipio de Bello, sin importar cuántas fichas haya.
+      // Crítico para que la sugerencia A3 funcione también en predios
+      // de 1 sola ficha (la mayoría).
+      const esMunicipal = res.some(r => r.municipal);
+      setPredioMunicipal(esMunicipal);
+
       if (!res.length) {
         // Solo avisar si fue invocado manualmente con conexión.
         // Tras GPS auto-disparado y sin red, esto sería ruido.
@@ -1595,6 +1611,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       } else if (res.length === 1) {
         setCampo('catastral', res[0].catastral);
         setCampo('ficha', String(res[0].ficha));
+        // Si la única ficha es municipal, mostramos también catResultados
+        // para que aparezca el banner visual "Predio del Municipio de Bello"
+        // en sección 9 (que hoy solo se renderiza con catResultados poblado).
+        if (esMunicipal) setCatRes(res);
       } else {
         // En propiedad horizontal puede haber muchas unidades en el mismo polígono.
         // Sin tope: el inspector debe poder ver todas y elegir.

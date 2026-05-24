@@ -8,10 +8,10 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateCN, useEffect: useEffectCN, useRef: useRefCN } = React;
 
-// Reutiliza componentes catastrales definidos en nueva-visita.jsx
-// (se carga antes que este archivo, así que están en window).
-const _TarjetaFichaCatastral = window._TarjetaFichaCatastral;
-const _ListaFichasCatastrales = window._ListaFichasCatastrales;
+// Reutiliza componentes catastrales definidos en nueva-visita.jsx.
+// En el bundle final están en el mismo scope; en modo individual de dev,
+// quedan expuestos vía window.X y son accesibles por nombre. No reasignamos
+// aquí porque esbuild marca colisión al detectar la declaración previa.
 
 const BELLO_BBOX = { latMin: 6.18, latMax: 6.55, lonMin: -75.75, lonMax: -75.40 };
 const BELLO_CENTRO = { lat: 6.337, lng: -75.557 };
@@ -204,12 +204,18 @@ function ConsultaNormaScreen() {
     if (consultar) consultarNorma(lat, lon);
   }
 
-  // Capturar coordenadas GPS con refinamiento progresivo
-  const geoWatchCNRef = useRefCN(null);
+  // Capturar coordenadas GPS — directo, sin paso de confirmación.
+  // Para la pestaña Norma (consulta rápida) preferimos getCurrentPosition:
+  // un solo intento, sin refinamiento progresivo. El usuario toca el botón
+  // → llega la lectura → se consulta la norma de inmediato.
+  // En el formulario de Nueva Visita sí usamos watchPosition refinado.
   const [gpsAccCN, setGpsAccCN] = useStateCN(null);
+  // geoWatchCNRef se mantiene como ref por compatibilidad con _detenerGeoCN
+  // (que aún se llama desde el botón "✕ Cancelar" para abortar si hace falta).
+  const geoWatchCNRef = useRefCN(null);
   function _detenerGeoCN() {
     if (geoWatchCNRef.current != null) {
-      navigator.geolocation.clearWatch(geoWatchCNRef.current);
+      try { navigator.geolocation.clearWatch(geoWatchCNRef.current); } catch (e) {}
       geoWatchCNRef.current = null;
     }
   }
@@ -220,35 +226,30 @@ function ConsultaNormaScreen() {
       setError('Tu dispositivo no soporta geolocalización.');
       return;
     }
-    // Si ya está escuchando, aceptar lo que hay
-    if (geoWatchCNRef.current != null) { _detenerGeoCN(); setBusyGPS(false); return; }
+    if (busyGPS) return;   // doble-click defensivo
     setBusyGPS(true); setError(''); setGpsAccCN(null);
-    var mejor = { lat: null, lon: null, acc: Infinity };
-    var tid = setTimeout(function() {
-      if (mejor.lat != null) {
-        _detenerGeoCN(); setBusyGPS(false);
-        if (!dentroDeBello(mejor.lat, mejor.lon)) { setError('Tu ubicación está fuera de Bello.'); return; }
-        colocarPin(mejor.lat, mejor.lon, true);
-      } else {
-        _detenerGeoCN(); setBusyGPS(false);
-        setError('Tiempo de espera agotado. Intenta con mejor señal GPS.');
-      }
-    }, 25000);
-    geoWatchCNRef.current = navigator.geolocation.watchPosition(
+    navigator.geolocation.getCurrentPosition(
       function(pos) {
-        var lat = pos.coords.latitude, lon = pos.coords.longitude, acc = pos.coords.accuracy;
-        if (acc < mejor.acc) { mejor = { lat: lat, lon: lon, acc: acc }; setGpsAccCN(Math.round(acc)); }
-        if (acc <= 10) {
-          clearTimeout(tid); _detenerGeoCN(); setBusyGPS(false); setGpsAccCN(Math.round(acc));
-          if (!dentroDeBello(lat, lon)) { setError('Tu ubicación está fuera de Bello.'); return; }
-          colocarPin(lat, lon, true);
+        setBusyGPS(false);
+        var lat = pos.coords.latitude;
+        var lon = pos.coords.longitude;
+        var acc = pos.coords.accuracy;
+        setGpsAccCN(Math.round(acc));
+        if (!dentroDeBello(lat, lon)) {
+          setError('Tu ubicación está fuera de Bello.');
+          return;
         }
+        colocarPin(lat, lon, true);   // consulta norma inmediatamente
       },
       function(err) {
-        clearTimeout(tid); _detenerGeoCN(); setBusyGPS(false);
-        setError('No se pudo obtener la ubicación: ' + err.message);
+        setBusyGPS(false);
+        var msg = err.code === 1 ? 'Permiso de ubicación denegado. Habilítalo en los ajustes del navegador.' :
+                  err.code === 2 ? 'GPS no disponible. Verifica que la ubicación esté encendida y estás al aire libre.' :
+                  err.code === 3 ? 'Tiempo de espera agotado. Intenta en un lugar con mejor señal.' :
+                  'No se pudo obtener la ubicación: ' + (err.message || '');
+        setError(msg);
       },
-      { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }
 
@@ -360,32 +361,21 @@ function ConsultaNormaScreen() {
         <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
           Acepta direccion, coordenadas decimales, DMS, DMM o link de Google Maps.
         </div>
-        <button onClick={capturarGPS} disabled={busyGPS && geoWatchCNRef.current == null} style={{
+        <button onClick={capturarGPS} disabled={busyGPS} style={{
           marginTop: 8, width: '100%', padding: '10px 14px', borderRadius: 8,
           border: '1.5px solid var(--brand-accent)', background: 'var(--superficie)',
           color: 'var(--brand-accent)', fontSize: 13, fontWeight: 600,
-          fontFamily: 'inherit', cursor: busyGPS ? 'pointer' : 'pointer',
+          fontFamily: 'inherit', cursor: busyGPS ? 'wait' : 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          opacity: busyGPS ? 0.7 : 1,
         }}>
-          {busyGPS
-            ? (gpsAccCN != null
-              ? '✓ Usar ubicación (±' + gpsAccCN + 'm)'
-              : '⏳ Buscando señal GPS…')
-            : '📍 Capturar mis coordenadas'}
+          {busyGPS ? '⏳ Capturando ubicación…' : '📍 Capturar mis coordenadas'}
         </button>
-        {busyGPS && React.createElement('div', {
-          style: { textAlign: 'center', marginTop: 4 }
-        },
-          gpsAccCN != null && React.createElement('span', {
-            style: { fontSize: 12, fontWeight: 600,
-              color: gpsAccCN <= 10 ? '#2e7d32' : gpsAccCN <= 25 ? '#e65100' : '#c62828' }
-          }, 'Precisión: ±' + gpsAccCN + 'm'),
-          React.createElement('button', {
-            onClick: function(e) { e.stopPropagation(); _detenerGeoCN(); setBusyGPS(false); setGpsAccCN(null); },
-            style: { background: 'none', border: 'none', color: '#999', fontSize: 11,
-              cursor: 'pointer', marginLeft: 12 }
-          }, '✕ Cancelar')
-        )}
+        {/* Precisión solo se muestra tras una captura exitosa */}
+        {!busyGPS && gpsAccCN != null && React.createElement('div', {
+          style: { textAlign: 'center', marginTop: 4, fontSize: 12, fontWeight: 600,
+            color: gpsAccCN <= 10 ? '#2e7d32' : gpsAccCN <= 25 ? '#e65100' : '#c62828' }
+        }, 'Precisión: ±' + gpsAccCN + 'm')}
       </div>
 
       {/* Mapa Google Maps */}

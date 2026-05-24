@@ -207,19 +207,26 @@ function VisitaDetailUI({ f, onCerrar }) {
             </_SeccionVD>
           )}
 
-          {/* Debug: muestra todos los campos no vacíos para diagnosticar
-              cuando algunas secciones aparezcan en blanco. Hay que tocar
-              "Ver datos crudos" para expandirlo. */}
-          <_DebugRawVD f={f} />
+          {/* Debug solo para ADMIN: muestra todos los campos no vacíos
+              para diagnosticar cuando algunas secciones aparezcan en blanco.
+              Oculto para inspectores regulares para evitar exponer estructura interna. */}
+          <_DebugRawVD f={f} solo_admin />
         </div>
       </div>
     </div>
   );
 }
 
-function _DebugRawVD({ f }) {
+function _DebugRawVD({ f, solo_admin }) {
   const [open, setOpen] = useStateVD(false);
   if (!f) return null;
+  // Si está marcado solo_admin (default), verificar sesión ADMIN
+  if (solo_admin) {
+    try {
+      var s = (typeof SESSION_V6 !== 'undefined') ? SESSION_V6.leer() : null;
+      if (!s || s.rol !== 'ADMIN') return null;
+    } catch (e) { return null; }
+  }
   // Recolectar pares (clave, valor) — saltar claves numéricas (duplicado)
   // y vacíos. Si los nombres no encajan con los que busca el modal, la
   // lista revela cómo están escritos los headers reales del Sheet.

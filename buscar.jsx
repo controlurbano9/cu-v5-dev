@@ -130,6 +130,47 @@ function BuscarScreen({ usuario, onContinuar }) {
   }
 
   async function adminCompletar(fila, fechaAsig) {
+    // Paridad V2: si la visita tiene orden de suspensión preventiva
+    // (SUSPENSION=SI + N° ORDEN DE POLICIA) y NO tiene oficio de vigilancia
+    // generado aún, ofrecer generarlo antes de completar.
+    const f = datos.find(x => x._idx === fila);
+    const suspSi = f && (f['SUSPENSION DE LA OBRA'] || '').toString().trim().toUpperCase() === 'SI';
+    const tieneOrden = f && (f['N° ORDEN DE POLICIA'] || f['N ORDEN DE POLICIA'] || '').toString().trim();
+    const sinOficio = f && !(f['LINK_SOLICITUD_VIGILANCIA'] || '').toString().trim();
+    const requiereVigilancia = !!(f && suspSi && tieneOrden && sinOficio);
+
+    if (requiereVigilancia) {
+      const generar = await appConfirm(
+        'Esta visita tiene orden de suspensión preventiva y aún no se ha generado el oficio de Vigilancia Policía.\n\n¿Generar el oficio antes de completar?',
+        { titulo: 'Solicitud de vigilancia pendiente', btnOk: 'Generar oficio', btnCancel: 'Completar sin oficio' }
+      );
+      if (generar) {
+        setBusyFila(fila);
+        try {
+          const idCarpeta = extraerIdCarpetaDrive(f['LINK_DRIVE'] || f[55] || '');
+          if (!idCarpeta) {
+            await appAlert('La visita no tiene carpeta de Drive asociada.', { titulo: 'Sin carpeta' });
+            setBusyFila(null);
+            return;
+          }
+          await generarSolicitudVigilancia({
+            fila: f._idx,
+            idCarpetaVisita: idCarpeta,
+            radicado:        f['RADICADO'] || '',
+            fechaVisita:     f['FECHA DE VISITA'] || '',
+            nOrdenPolicia:   f['N° ORDEN DE POLICIA'] || f['N ORDEN DE POLICIA'] || '',
+            direccion:       f['DIRECCION INFRACCION'] || f['DIRECCION'] || '',
+            barrio:          f['BARRIO/VEREDA'] || f['BARRIO'] || '',
+          });
+        } catch (e) {
+          await appAlert('Error generando oficio: ' + e.message + '\n\nLa visita NO se marcó como completada.', { titulo: 'Error' });
+          setBusyFila(null);
+          return;
+        }
+        setBusyFila(null);
+      }
+    }
+
     const ok = await appConfirm('¿Marcar como COMPLETADO?', {
       titulo: 'Completar visita', btnOk: 'Completar',
     });

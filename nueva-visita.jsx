@@ -76,7 +76,11 @@ function _extraerConsecutivoOrden(ordenCompleta) {
 }
 
 // ── Catálogos ──────────────────────────────────────────────────
-const VISITADORES = [
+// VISITADORES_FALLBACK se usa si el endpoint público listarInspectoresActivos()
+// falla (por red caída o primera carga sin cache). La lista real se carga
+// dinámicamente al montar el formulario — alta/baja de inspectores ya no
+// requiere editar este archivo.
+const VISITADORES_FALLBACK = [
   { val: 'ALEJANDRO HERNANDEZ MUÑOZ',   l: 'Alejandro Hernández' },
   { val: 'MAURICIO HERRERA LOPERA',     l: 'Mauricio Herrera'    },
   { val: 'DIEGO ALEJANDRO MUNERA OSSA', l: 'Diego Munera'        },
@@ -85,6 +89,14 @@ const VISITADORES = [
   { val: 'CARLOS ANDRES MEJIA',         l: 'Carlos Mejía'        },
   { val: 'JUAN SEBASTIAN PINZON GAONA', l: 'Juan Sebastián Pinzón' },
 ];
+
+// Helper para generar label legible del nombre completo en mayúsculas.
+// "ALEJANDRO HERNANDEZ MUÑOZ" → "Alejandro Hernández" (2 primeros tokens, title-case).
+function _labelInspector(nombre) {
+  return String(nombre || '').trim().split(/\s+/).slice(0, 2)
+    .map(t => t ? t.charAt(0).toUpperCase() + t.slice(1).toLowerCase() : '')
+    .join(' ');
+}
 
 const HORAS_CITACION = [
   { val: '08:00', l: '8:00 AM' }, { val: '09:00', l: '9:00 AM' },
@@ -1190,6 +1202,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [busyPOT, setBusyPOT]   = useStateNV(false);
   const [busyCat, setBusyCat]   = useStateNV(false);
   const [catResultados, setCatRes] = useStateNV(null);
+  // Estado para la advertencia de tipificación (predio público / suelo protección).
+  // Cuando el inspector toca "Ignorar" no volvemos a mostrarla hasta que cambien
+  // las señales (nuevo punto GPS, nueva consulta catastral, etc.).
+  const [advertTipifIgnorada, setAdvertTipifIgnorada] = useStateNV(false);
   // Estado auxiliar para barrio "Otro" (texto libre)
   const [barrioOtro, setBarrioOtro] = useStateNV('');
   // Estado auxiliar para consecutivo de orden de policía (solo el número)
@@ -1229,14 +1245,31 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Helper para actualizar un campo del form
   function setCampo(k, v) { setD(prev => ({ ...prev, [k]: v })); }
 
+  // Lista dinámica de visitadores (cargada desde USUARIOS vía endpoint).
+  // Si falla la carga (sin red o primer arranque sin cache), usa el fallback.
+  const [visitadoresDin, setVisitadoresDin] = useStateNV(VISITADORES_FALLBACK);
+  useEffectNV(() => {
+    if (fase !== 'formulario') return;
+    if (typeof listarInspectoresActivos !== 'function') return;
+    let cancelado = false;
+    listarInspectoresActivos().then(lista => {
+      if (cancelado || !lista || !lista.length) return;
+      setVisitadoresDin(lista.map(u => ({
+        val: u.nombre,            // mayúsculas, coincide con BD VISITAS col R
+        l: _labelInspector(u.nombre),
+      })));
+    }).catch(() => { /* mantiene fallback */ });
+    return () => { cancelado = true; };
+  }, [fase]);
+
   // Prefijar visitador con el usuario logueado (si está en la lista)
   useEffectNV(() => {
     if (fase !== 'formulario') return; // no ejecutar en fase modal
     if (!d.visitador && usuario) {
-      const m = VISITADORES.find(v => v.val.includes(usuario.usuario.toUpperCase().split(' ')[0]));
+      const m = visitadoresDin.find(v => v.val.includes(usuario.usuario.toUpperCase().split(' ')[0]));
       if (m) setCampo('visitador', m.val);
     }
-  }, [fase]); // se dispara cuando pasa a 'formulario'
+  }, [fase, visitadoresDin]); // re-prefija si la lista cambia tras carga dinámica
 
   // Sincronizar orden completa cuando cambia el consecutivo
   useEffectNV(() => {
@@ -1246,6 +1279,48 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       setCampo('orden', '');
     }
   }, [ordenConsecutivo]);
+
+  // Auto-recuperación de carpeta Drive faltante.
+  // Si la visita se guardó offline, la cola la sincroniza sin LINK_DRIVE
+  // (crearCarpetaVisita es GET y falla offline). Al reabrirla online,
+  // creamos la carpeta automáticamente y persistimos el link.
+  useEffectNV(() => {
+    if (fase !== 'formulario') return;
+    if (!filaEditando) return;             // solo para visitas ya en BD
+    if (d.linkDrive) return;                // ya tiene carpeta
+    if (!navigator.onLine) return;          // sin red: nada que hacer
+    if (!d.comuna || !d.direccion || !d.fechaVisita) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const c = await crearCarpetaVisita(d.comuna, d.direccion, d.fechaVisita, d.nVisita || 1, {
+          barrio:  d.barrio,
+          persona: d.atiendeNombre || '',
+          lat:     d.lat || '',
+          lon:     d.lon || '',
+        });
+        if (cancelado) return;
+        const linkDrive = c.linkCarpeta || '';
+        if (!linkDrive) return;
+        // Persistir en BD: re-armar payload con linkDrive y actualizar la fila.
+        const vals = _construirPayload(d, estadoVisita, linkDrive, datosIniciales);
+        try {
+          await guardarVisita({ valores: vals, fila: filaEditando });
+        } catch (e) { /* silencioso, se reintenta al próximo save */ }
+        if (cancelado) return;
+        setD(prev => ({
+          ...prev,
+          linkDrive: linkDrive,
+          idCarpetaVisita: _idCarpetaDeLink(linkDrive),
+          idCarpetaFotos: c.idFotos || '',
+        }));
+        console.log('[carpeta-auto] carpeta Drive creada al reabrir visita');
+      } catch (e) {
+        console.warn('[carpeta-auto] no se pudo crear carpeta:', e.message);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [fase, filaEditando, d.linkDrive, d.comuna, d.direccion, d.fechaVisita]);
 
   // Recuperar idCarpetaFotos al reabrir una visita ya guardada.
   // La BD solo persiste LINK_DRIVE (carpeta visita); la subcarpeta de Fotos
@@ -1270,6 +1345,58 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       setCampo('suspension', 'N/A');
     }
   }, [d.estadoObra]);
+
+  // ── Sugerencias de tipificación según POT + catastro ──
+  // Predio público (catastro municipal)              → A3: Bienes uso público (Antejardín)
+  // Suelo de protección o retiro de quebrada (POT)   → A1: Áreas protegidas
+  // Ambas condiciones                                → A1 + A3 (suma)
+  // El inspector debe aceptar para aplicarlas. Al aceptar reemplazamos
+  // SOLO el grupo A (preservando chips C/D que el inspector haya marcado).
+  // Si toca "Ignorar" no insistimos hasta que cambien las señales.
+  useEffectNV(() => {
+    // Reset al cambiar el contexto del predio (nuevo punto / nueva consulta).
+    setAdvertTipifIgnorada(false);
+  }, [d.sueloProt, d.quebrada, catResultados, d.catastral]);
+
+  const _esPublico = !!(catResultados && catResultados.some(r => r.municipal));
+  const _esProtegido = d.sueloProt === 'SI';
+  const _enRetiroQ = d.quebrada === 'SI';
+  const _sugerenciasA = (function() {
+    const s = [];
+    if (_esProtegido || _enRetiroQ) {
+      const razon = (_esProtegido && _enRetiroQ)
+        ? 'el predio está en suelo de protección y retiro de quebrada'
+        : (_esProtegido
+            ? 'el predio está en suelo de protección'
+            : 'el predio está dentro del retiro de quebrada');
+      s.push({ val: 'A1: Áreas protegidas', razon: razon });
+    }
+    if (_esPublico) {
+      s.push({ val: 'A3: Bienes uso público (Antejardín)', razon: 'el predio es del Municipio de Bello' });
+    }
+    return s;
+  })();
+
+  // Chips A actuales en d.infraccion
+  const _chipsActuales = (d.infraccion || '').split(' | ').map(s => s.trim()).filter(Boolean);
+  const _chipsAActuales = _chipsActuales.filter(v => /^A\d/.test(v));
+  const _vSugeridos = _sugerenciasA.map(s => s.val);
+  // ¿Las sugerencias ya están aplicadas exactamente?
+  const _sugerenciasYaAplicadas = _vSugeridos.length > 0
+    && _vSugeridos.every(v => _chipsAActuales.includes(v))
+    && _chipsAActuales.length === _vSugeridos.length;
+  const _mostrarAdvertenciaTipif = _sugerenciasA.length > 0
+    && !advertTipifIgnorada
+    && !_sugerenciasYaAplicadas;
+
+  function _aplicarSugerenciasTipif() {
+    // Quitar chips de literal A; conservar el resto (C, D, "No se evidencia...")
+    const noA = _chipsActuales.filter(v => !/^A\d/.test(v));
+    // Quitar también "No se evidencia infracción" si estaba — ahora SÍ hay infracción.
+    const noNoInfr = noA.filter(v => v !== CONTRAVENCION_ESPECIAL);
+    const final = [...noNoInfr, ..._vSugeridos];
+    setCampo('infraccion', final.join(' | '));
+  }
 
   // Limpiar geoWatch al desmontar (debe estar ANTES del early return para evitar React #310)
   React.useEffect(function() {
@@ -1311,9 +1438,20 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }
 
   // ── Mejorar texto con IA (genera sugerencia, no reemplaza directo) ──
+  // Anti-martilleo: además de busy durante la petición, mantenemos 3s de
+  // cooldown después para no saturar Apps Script + Claude/Deepseek con
+  // doble-click accidentales (rate-limit 429).
   async function ejecutarMejora() {
+    if (busyMejora) return;  // doble-click defensivo
     if (!d.actuacion) {
       await appAlert('Escribe algo en la descripción primero.', { titulo: 'Nada que mejorar' });
+      return;
+    }
+    // IA requiere conexión obligatoria (la respuesta es el texto mejorado
+    // que el inspector ve para aceptar/rechazar — no tiene sentido encolarlo).
+    if (!navigator.onLine) {
+      await appAlert('Sin conexión: la mejora con IA requiere internet. Guarda la descripción tal cual y mejórala cuando vuelva la señal.',
+        { titulo: 'Sin conexión' });
       return;
     }
     setBusyMe(true);
@@ -1323,7 +1461,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     } catch (e) {
       await appAlert('Error: ' + e.message, { titulo: 'Mejora con IA' });
     }
-    setBusyMe(false);
+    // Cooldown 3s antes de liberar el botón
+    setTimeout(() => setBusyMe(false), 3000);
   }
   function aceptarSugerenciaIA() {
     setCampo('actuacion', sugerenciaIA);
@@ -1424,7 +1563,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         }
       }
     } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Consulta POT' });
+      // Sin conexión: no interrumpir al inspector. El botón manual
+      // "Consultar POT por coordenadas" permite reintentar al volver la señal.
+      if (navigator.onLine) {
+        await appAlert('Error: ' + e.message, { titulo: 'Consulta POT' });
+      } else {
+        console.warn('[POT] sin conexión, consulta diferida:', e.message);
+      }
     }
     setBusyPOT(false);
   }
@@ -1442,7 +1587,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     try {
       const res = await buscarCatastroGPS(lat, lon);
       if (!res.length) {
-        await appAlert('La ubicación GPS no cae dentro de ningún predio registrado en el catastro 2026 de Bello.', { titulo: 'Sin resultados' });
+        // Solo avisar si fue invocado manualmente con conexión.
+        // Tras GPS auto-disparado y sin red, esto sería ruido.
+        if (navigator.onLine) {
+          await appAlert('La ubicación GPS no cae dentro de ningún predio registrado en el catastro 2026 de Bello.', { titulo: 'Sin resultados' });
+        }
       } else if (res.length === 1) {
         setCampo('catastral', res[0].catastral);
         setCampo('ficha', String(res[0].ficha));
@@ -1452,7 +1601,14 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         setCatRes(res);
       }
     } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Catastro' });
+      // Sin conexión, el catastro.json no se pudo cargar — el inspector
+      // puede llenar manualmente catastral/ficha y dejar la consulta
+      // catastral para cuando vuelva la señal.
+      if (navigator.onLine) {
+        await appAlert('Error: ' + e.message, { titulo: 'Catastro' });
+      } else {
+        console.warn('[Catastro] sin conexión, consulta diferida:', e.message);
+      }
     }
     setBusyCat(false);
   }
@@ -1531,7 +1687,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         clearTimeout(timeoutId);
         _detenerGeoWatch();
         setBusyGeo(false);
-        var msg = err.code === 1 ? 'Permiso de ubicación denegado.' :
+        var msg = err.code === 1 ? 'Permiso de ubicación denegado. Habilítalo en los ajustes del navegador.' :
+                  err.code === 2 ? 'GPS no disponible. Verifica que la ubicación esté encendida y estás al aire libre.' :
                   err.code === 3 ? 'Tiempo de espera agotado. Intenta en un lugar con mejor señal.' :
                   'No se pudo obtener ubicación.';
         appAlert(msg, { titulo: 'GPS' });
@@ -1604,10 +1761,25 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         idCarpetaFotos,
       }));
 
-      await appAlert(filaEditando
-        ? 'Registro actualizado correctamente.'
-        : 'Visita guardada. Ya puedes generar el acta F-GGO-46.',
-        { titulo: 'Guardado' });
+      if (r && r.encolado) {
+        // Visita guardada en cola offline. Acta/RF/informe NO se pueden
+        // generar hasta que sincronice (necesitan fila real + Drive).
+        // La carpeta Drive tampoco se creó: cuando vuelva la señal, el
+        // inspector debe reabrir la visita y tocar "Actualizar" para que
+        // se cree la carpeta (la lógica actual de guardar lo hace solo).
+        await appAlert(
+          'Sin conexión: la visita quedó guardada en este dispositivo (#' + r.localId + ').\n\n' +
+          'Se sincronizará automáticamente cuando vuelva la señal. ' +
+          'Al recuperar conexión, vuelve a abrir la visita y toca "Actualizar" ' +
+          'para crear la carpeta Drive y poder generar acta y subir fotos.',
+          { titulo: 'Guardado local' }
+        );
+      } else {
+        await appAlert(filaEditando
+          ? 'Registro actualizado correctamente.'
+          : 'Visita guardada. Ya puedes generar el acta F-GGO-46.',
+          { titulo: 'Guardado' });
+      }
     } catch (e) {
       await appAlert('Error: ' + e.message, { titulo: 'Error al guardar' });
     }
@@ -1923,7 +2095,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }
 
   // ── Render ─────────────────────────────────────────────────
-  const nVisitaLabel = d.nVisita && d.nVisita > 1 ? ' · Visita N°' + d.nVisita : '';
+  // nVisita puede venir como string del Sheet ("2") o number (1). Normalizar
+  // antes de comparar para evitar la coerción frágil "10" > 1 (=true) vs "2" > 1 (=true por casualidad).
+  const _nVisitaNum = parseInt(d.nVisita, 10) || 0;
+  const nVisitaLabel = _nVisitaNum > 1 ? ' · Visita N°' + _nVisitaNum : '';
   const tituloPantalla = filaEditando
     ? 'Continuar visita'
     : (d.esOficio ? 'Visita de oficio' : 'Nueva visita');
@@ -1973,12 +2148,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               {d.esOficio && d.orden && <span style={{
                 fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--brand-accent)', fontWeight: 600,
               }}>OFICIO {d.orden}</span>}
-              {d.nVisita > 1 && (
+              {_nVisitaNum > 1 && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
                   background: 'var(--brand-bg)', color: 'var(--brand-ink)',
                   border: '1px solid var(--brand-accent)',
-                }}>Visita N°{d.nVisita}</span>
+                }}>Visita N°{_nVisitaNum}</span>
               )}
             </div>
           </div>
@@ -1999,7 +2174,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           }}>
             <span>{d.esOficio ? '🏗️' : '📋'}</span>
             {d.esOficio ? 'Visita de oficio' : 'PQR / Radicado'}
-            {d.nVisita > 1 && <span style={{ marginLeft: 4, opacity: 0.7 }}>· Visita N°{d.nVisita}</span>}
+            {_nVisitaNum > 1 && <span style={{ marginLeft: 4, opacity: 0.7 }}>· Visita N°{_nVisitaNum}</span>}
           </div>
         </_Campo>
         {!d.esOficio && (
@@ -2342,6 +2517,61 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {/* 7B. CONCLUSIONES ────────────────────────────────── */}
       <_Seccion titulo="Conclusiones" color="cafe">
         <_Campo label="Tipo de contravención (Art. 135 Ley 1801/2016)" fullWidth>
+          {/* Advertencia: si el predio es público o está en área protegida,
+              sugerir el comportamiento correcto antes de que el inspector
+              tipifique algo incorrecto (ej.: A4 cuando debería ser A1/A3). */}
+          {_mostrarAdvertenciaTipif && (
+            <div style={{
+              padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 12,
+              background: '#fef3c7', border: '1.5px solid #f59e0b',
+              color: '#78350f', fontSize: 13,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>⚠️</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                    Tipificación sugerida
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    Según la consulta POT/catastro:
+                    <ul style={{ margin: '4px 0 0 0', paddingLeft: 20 }}>
+                      {_sugerenciasA.map(s => (
+                        <li key={s.val} style={{ marginBottom: 3 }}>
+                          {s.razon} → <strong>{s.val}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {_chipsAActuales.length > 0 && _chipsAActuales.some(v => !_vSugeridos.includes(v)) && (
+                    <div style={{
+                      padding: '6px 10px', borderRadius: 6, marginBottom: 8,
+                      background: '#fee2e2', color: '#991b1b', fontSize: 12,
+                      border: '1px solid #fca5a5',
+                    }}>
+                      Actualmente marcaste: {_chipsAActuales.join(', ')}.
+                      Al aplicar la sugerencia se reemplazarán solo los comportamientos del Literal A.
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button type="button" onClick={_aplicarSugerenciasTipif}
+                      className="btn-principal verde"
+                      style={{ margin: 0, padding: '8px 14px', fontSize: 13 }}>
+                      ✓ Aplicar sugerencia
+                    </button>
+                    <button type="button" onClick={() => setAdvertTipifIgnorada(true)}
+                      style={{
+                        background: 'transparent', color: '#78350f',
+                        border: '1px solid #d97706', borderRadius: 8,
+                        padding: '8px 14px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                        cursor: 'pointer',
+                      }}>
+                      No aplicar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <_ChipsContravencion
             value={d.infraccion}
             onChange={v => setCampo('infraccion', v)}
@@ -2432,7 +2662,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       <_Seccion titulo="Funcionarios que realizan la inspección" color="azul">
         <_Campo label="Visitador(es)" fullWidth>
           <div className="chips">
-            {VISITADORES.map(v => {
+            {visitadoresDin.map(v => {
               const seleccionados = (d.visitador || '').split(' / ').filter(Boolean);
               const activo = seleccionados.includes(v.val);
               function toggle() {
@@ -3035,6 +3265,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
               nombre: r.nombre || cola[i].name,
               link:   r.link,
               descripcion: r.descripcion || '',
+              pendiente: !!r.encolado,  // sin red: foto pendiente de subir a Drive
             }]);
           });
         } catch (err) {
@@ -3079,9 +3310,16 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
             </div>
             {fotos.map((f, i) => (
               <div key={i} style={{
-                padding: '8px 12px', background: 'var(--gris-bg)', borderRadius: 8, fontSize: 12,
+                padding: '8px 12px',
+                background: f.pendiente ? '#fff7ed' : 'var(--gris-bg)',
+                border: f.pendiente ? '1px dashed #fb923c' : 'none',
+                borderRadius: 8, fontSize: 12,
               }}>
-                <div style={{ fontWeight: 600 }}>{f.nombre}</div>
+                <div style={{ fontWeight: 600 }}>
+                  {f.pendiente && <span title="Pendiente de subir a Drive" style={{ marginRight: 6, color: '#fb923c' }}>↑</span>}
+                  {f.nombre}
+                  {f.pendiente && <span style={{ marginLeft: 6, fontSize: 10, color: '#9a3412', fontWeight: 400 }}>· pendiente</span>}
+                </div>
                 {f.descripcion && (
                   <div style={{ color: 'var(--texto-suave)', marginTop: 2 }}>{f.descripcion}</div>
                 )}

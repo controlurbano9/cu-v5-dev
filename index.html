@@ -23,10 +23,9 @@
 
 <div id="root"></div>
 
-<!-- React + Babel pinneados -->
+<!-- React (Babel-standalone eliminado: el bundle se pre-transpila con esbuild) -->
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
 
 <!-- Turf.js para consulta espacial POT (mismo que producción V2) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
@@ -36,25 +35,19 @@
 
 
 <!-- Cliente webhook (JS plano) — bump ?v= cuando cambie el código para invalidar caché del SW -->
-<script src="api.js?v=52"></script>
-<script src="utils.js?v=52"></script>
+<!-- offline-queue debe cargar ANTES de api.js: api.js usa offlineEnqueue al fallar por red -->
+<script src="offline-queue.js?v=58"></script>
+<script src="api.js?v=58"></script>
+<script src="utils.js?v=58"></script>
 
-<!-- Componentes React (cada uno expone su componente en window) -->
-<script type="text/babel" src="modal.jsx?v=52"></script>
-<script type="text/babel" src="informe-modal.jsx?v=52"></script>
-<script type="text/babel" src="visita-detail-modal.jsx?v=52"></script>
-<script type="text/babel" src="login.jsx?v=52"></script>
-<script type="text/babel" src="home.jsx?v=52"></script>
-<script type="text/babel" src="mis-visitas.jsx?v=52"></script>
-<script type="text/babel" src="buscar.jsx?v=52"></script>
-<script type="text/babel" src="agenda.jsx?v=52"></script>
-<script type="text/babel" src="gestion.jsx?v=52"></script>
-<script type="text/babel" src="nueva-visita.jsx?v=52"></script>
-<script type="text/babel" src="consulta-norma.jsx?v=52"></script>
-<script type="text/babel" src="admin.jsx?v=52"></script>
+<!-- ─────────────────────────────────────────────────────────────
+     PRODUCCIÓN: bundle.min.js pre-transpilado y minificado con esbuild.
+     Sin @babel/standalone en runtime → ahorro ~770 KB de descarga
+     y ~400 ms de transpilación en cada arranque.
+     Regenerar tras editar JSX:  node build.js   (o npm run build)
+     ───────────────────────────────────────────────────────────── -->
+<script src="bundle.min.js?v=58"></script>
 
-<!-- App principal (último: usa LoginScreen, HomeScreen, AdminScreen del window) -->
-<script type="text/babel" src="app.jsx?v=52"></script>
 
 <!-- Registro del Service Worker (cache de assets estáticos) -->
 <script>
@@ -63,26 +56,32 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js')
       .then(function(reg) {
         console.log('[SW] registrado, scope:', reg.scope);
-        // Si hay un SW nuevo esperando, recargar automáticamente cuando tome control
+        // Si hay un SW nuevo esperando, pedirle skipWaiting → tomará control
+        // y disparará 'controllerchange' (handler único debajo se encarga del reload).
         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         reg.addEventListener('updatefound', function() {
           var nw = reg.installing;
           if (!nw) return;
           nw.addEventListener('statechange', function() {
+            // Cuando el nuevo SW termina de instalar y ya hay un controller previo,
+            // significa que hay una versión esperando: pedirle activarse.
             if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              console.log('[SW] versión nueva instalada, recargando...');
-              window.location.reload();
+              console.log('[SW] versión nueva instalada, activando...');
+              nw.postMessage({ type: 'SKIP_WAITING' });
             }
           });
         });
       })
       .catch(function(e) { console.warn('[SW] fallo registro:', e); });
 
-    // Si el SW cambia de controller (activate de nuevo SW), recargar
+    // Único punto de reload: cuando un SW nuevo toma control de la pestaña.
+    // En la primera carga (sin controller previo) no se dispara — evita
+    // el reload espurio del primer ingreso.
     var refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', function() {
       if (refreshing) return;
       refreshing = true;
+      console.log('[SW] controller cambió, recargando...');
       window.location.reload();
     });
   });

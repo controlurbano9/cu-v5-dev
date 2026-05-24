@@ -223,13 +223,28 @@ async function obtenerIdFotos(idCarpetaVisita) {
 
 // Guarda una visita. Si pasa filaExistente actualiza; si no, agrega.
 // payload.valores es el array de 60 valores (cols B → BD) ya armado.
+// Si el POST falla por error de red, encola en IndexedDB y devuelve
+// { ok:true, encolado:true, localId } para que el frontend muestre éxito
+// optimista. La cola se sincroniza al recuperar conexión.
 async function guardarVisita(payload) {
   const accion = payload.fila ? 'actualizar' : 'agregar';
   const body = { accion, valores: payload.valores };
   if (payload.fila) body.fila = payload.fila;
-  const d = await gasPost(body);
-  invalidarCache('visitas');
-  return d;
+  try {
+    const d = await gasPost(body);
+    invalidarCache('visitas');
+    return d;
+  } catch (e) {
+    if (typeof _offlineEsErrorDeRed === 'function' && _offlineEsErrorDeRed(e)) {
+      const localId = await offlineEnqueue({
+        tipo: 'guardarVisita',
+        body: body,
+        descripcion: body.fila ? 'Actualizar visita #' + body.fila : 'Nueva visita',
+      });
+      return { ok: true, encolado: true, localId: localId, fila: body.fila || null };
+    }
+    throw e;
+  }
 }
 
 // Mejora un texto con IA (claude/deepseek) vía webhook.
@@ -245,15 +260,29 @@ async function mejorarTexto(texto) {
 // No envolvemos en un wrapper consolidado para preservar la separación.
 
 // Sube una foto a la subcarpeta Fotos de la visita.
+// Si falla por red, encola para sincronizar después.
 async function subirFotoConDescripcion(idCarpetaFotos, base64, mime, descripcion, nombre) {
-  return gasPost({
+  const body = {
     accion: 'subirFoto',
     idCarpeta: idCarpetaFotos,
     nombre: nombre || ('Foto_' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg'),
-    base64,
-    mime,
+    base64: base64,
+    mime: mime,
     descripcion: descripcion || '',
-  });
+  };
+  try {
+    return await gasPost(body);
+  } catch (e) {
+    if (typeof _offlineEsErrorDeRed === 'function' && _offlineEsErrorDeRed(e)) {
+      const localId = await offlineEnqueue({
+        tipo: 'subirFoto',
+        body: body,
+        descripcion: 'Subir foto: ' + body.nombre,
+      });
+      return { ok: true, encolado: true, localId: localId, nombre: body.nombre, link: '', descripcion: body.descripcion };
+    }
+    throw e;
+  }
 }
 
 // Genera descripción de una foto con Gemini (vía webhook).
@@ -300,21 +329,88 @@ async function consultarPOT(lat, lon) {
     throw new Error('turf.js no cargado — verifica VERSION_6_REACT.html');
   }
   const punto = turf.point([Number(lon), Number(lat)]);
-  const [usoSuelo, sueloProtec, amenazas, barrios, veredas, retiros] = await Promise.all([
-    _cargarGeoJSON('UsoGeneralSuelo.geojson'),
-    _cargarGeoJSON('SueloProteccion.geojson'),
-    _cargarGeoJSON('AmenazasNaturales.geojson'),
-    _cargarGeoJSON('Barrios.geojson'),
-    _cargarGeoJSON('Veredas.geojson'),
-    _cargarGeoJSON('RetirosCorrientesHidricas.geojson')
-      .catch(() => _cargarGeoJSON('Retiros_Corrientes_Hidricas.geojson'))
-      .catch(() => _cargarGeoJSON('RetiroQuebradas.geojson'))
-      .catch(() => null),
+  const result = { poligono: '', sueloProt: 'NO', sueloProtCategoria: '', amenaza: 'NO', amenazaTipo: '', amenazaCategoria: '', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '', enDRMI: 'NO', drmiNombre: '', ambito: '' };
+
+  // ── PASADA A: capas pequeñas que definen el ámbito (rural/urbano) ──
+  // Clasificación + Comunas son chicas; cargarlas primero permite saltarse
+  // las capas urbanas pesadas (Barrios, UsoGeneralSuelo, Densidades) cuando
+  // el punto es rural — útil en campo con mala señal.
+  const [clasifSuelo, comunas] = await Promise.all([
+    _cargarGeoJSON('ClasificacionSueloMunicipal.geojson')
+      .then(r => r || _cargarGeoJSON('ClasificacionSuelo.geojson')),
+    _cargarGeoJSON('Comunas.geojson'),
   ]);
 
-  const result = { poligono: '', sueloProt: 'NO', sueloProtCategoria: '', amenaza: 'NO', amenazaTipo: '', amenazaCategoria: '', barrioSugerido: '', enRetiro: 'NO', clasificacion: '', tratamiento: '', intensidad: '', comuna: '', enDRMI: 'NO', drmiNombre: '' };
+  if (clasifSuelo) {
+    for (const feat of clasifSuelo.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          result.clasificacion = p.CLASE || p.clase || p.CLASIFICAC || p.clasificac ||
+            p.TIPO || p.tipo || p.NOMBRE || p.nombre || p.MOMBRE || '';
+          break;
+        }
+      } catch (e) {}
+    }
+  }
 
-  // 1. Polígono uso del suelo
+  // Comuna (point-in-polygon)
+  if (comunas) {
+    for (const feat of comunas.features) {
+      try {
+        if (turf.booleanPointInPolygon(punto, feat)) {
+          const p = feat.properties || {};
+          var cod = p.CODIGO_COM || p.codigo_com || p.CODIGO || p.codigo || '';
+          var nom = p.Nombre || p.NOMBRE || p.nombre || '';
+          if (cod) {
+            result.comuna = String(cod).replace(/^0+/, '') || cod;
+          } else if (nom) {
+            var m = String(nom).match(/(\d+)/);
+            result.comuna = m ? m[1] : nom;
+          }
+          result.comunaNombre = nom;
+          break;
+        }
+      } catch (e) {}
+    }
+  }
+
+  // Determinar ámbito a partir de clasificación.
+  // 'rural' → omite capas urbanas (Barrios, UsoGeneralSuelo, Densidades).
+  // Sin clasificación detectada → asumimos urbano (carga completa, conservador).
+  const _clas = (result.clasificacion || '').toString().toLowerCase();
+  const esRural = _clas.includes('rural');
+  result.ambito = esRural ? 'Rural' : (_clas ? 'Urbano' : '');
+
+  // ── PASADA B: capas comunes (aplican a ambos ámbitos) ──
+  const tareasComunes = [
+    _cargarGeoJSON('SueloProteccion.geojson'),
+    _cargarGeoJSON('AmenazasNaturales.geojson'),
+    _cargarGeoJSON('Veredas.geojson'),
+    _cargarGeoJSON('RetirosCorrientesHidricas.geojson')
+      .then(r => r || _cargarGeoJSON('Retiros_Corrientes_Hidricas.geojson'))
+      .then(r => r || _cargarGeoJSON('RetiroQuebradas.geojson')),
+    _cargarGeoJSON('TratamientoUrbanistico.geojson'),
+    _cargarGeoJSON('DRMI_Quitasol_LaHolanda.geojson'),
+  ];
+
+  // ── PASADA B (extra): capas urbanas — solo si NO es rural ──
+  // Estas son las pesadas. En zona rural quedan en null y se saltan los loops.
+  const tareasUrbanas = esRural
+    ? [Promise.resolve(null), Promise.resolve(null), Promise.resolve(null)]
+    : [
+      _cargarGeoJSON('UsoGeneralSuelo.geojson'),
+      _cargarGeoJSON('Barrios.geojson'),
+      _cargarGeoJSON('Densidades.geojson')
+        .then(r => r || _cargarGeoJSON('FranjaIntensidad.geojson')),
+    ];
+
+  const [
+    sueloProtec, amenazas, veredas, retiros, tratUrb, drmi,
+    usoSuelo, barrios, franjaInt,
+  ] = await Promise.all([...tareasComunes, ...tareasUrbanas]);
+
+  // 1. Polígono uso del suelo (urbano)
   if (usoSuelo) {
     for (const feat of usoSuelo.features) {
       try {
@@ -366,7 +462,7 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 4. Barrio o vereda (texto crudo del GeoJSON — el frontend hace match contra el select)
+  // 4. Barrio (urbano) o vereda (rural) — texto crudo del GeoJSON
   if (barrios) {
     for (const feat of barrios.features) {
       try {
@@ -411,23 +507,7 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 6. Clasificación del suelo (urbano / rural / expansión) + tratamiento + densidad + comuna + DRMI
-  const [clasifSuelo, tratUrb, franjaInt, comunas, drmi] = await Promise.all([
-    _cargarGeoJSON('ClasificacionSueloMunicipal.geojson')
-      .catch(() => _cargarGeoJSON('ClasificacionSuelo.geojson'))
-      .catch(() => null),
-    _cargarGeoJSON('TratamientoUrbanistico.geojson').catch(() => null),
-    // Capa de densidad: primero Densidades.geojson (3651 features detalladas
-    // con índices de ocupación) y fallback al FranjaIntensidad.geojson viejo
-    // (DensidadesUrbanas, 12 macro-grupos)
-    _cargarGeoJSON('Densidades.geojson')
-      .catch(() => _cargarGeoJSON('FranjaIntensidad.geojson'))
-      .catch(() => null),
-    _cargarGeoJSON('Comunas.geojson').catch(() => null),
-    _cargarGeoJSON('DRMI_Quitasol_LaHolanda.geojson').catch(() => null),
-  ]);
-
-  // 6d. DRMI Quitasol-La Holanda (Corantioquia, 1 polígono)
+  // 6. DRMI Quitasol-La Holanda (Corantioquia, 1 polígono)
   if (drmi) {
     for (const feat of drmi.features) {
       try {
@@ -435,43 +515,6 @@ async function consultarPOT(lat, lon) {
           var pD = feat.properties || {};
           result.enDRMI = 'SI';
           result.drmiNombre = pD.NOMBRE || pD.nombre || pD.CATEGORIA || 'DRMI Quitasol-La Holanda';
-          break;
-        }
-      } catch (e) {}
-    }
-  }
-
-  // 6c. Comuna (point-in-polygon contra Comunas.geojson)
-  if (comunas) {
-    for (const feat of comunas.features) {
-      try {
-        if (turf.booleanPointInPolygon(punto, feat)) {
-          const p = feat.properties || {};
-          // Preferir CODIGO_COM ('06') sobre Nombre ('COMUNA 6') porque el resto del sistema usa el código
-          var cod = p.CODIGO_COM || p.codigo_com || p.CODIGO || p.codigo || '';
-          var nom = p.Nombre || p.NOMBRE || p.nombre || '';
-          if (cod) {
-            // Quitar ceros a la izquierda: '06' → '6'
-            result.comuna = String(cod).replace(/^0+/, '') || cod;
-          } else if (nom) {
-            // Si solo hay nombre tipo 'COMUNA 6', extraer el número
-            var m = String(nom).match(/(\d+)/);
-            result.comuna = m ? m[1] : nom;
-          }
-          result.comunaNombre = nom;
-          break;
-        }
-      } catch (e) {}
-    }
-  }
-
-  if (clasifSuelo) {
-    for (const feat of clasifSuelo.features) {
-      try {
-        if (turf.booleanPointInPolygon(punto, feat)) {
-          const p = feat.properties || {};
-          result.clasificacion = p.CLASE || p.clase || p.CLASIFICAC || p.clasificac ||
-            p.TIPO || p.tipo || p.NOMBRE || p.nombre || p.MOMBRE || '';
           break;
         }
       } catch (e) {}
@@ -497,7 +540,7 @@ async function consultarPOT(lat, lon) {
     }
   }
 
-  // 8. Densidades / Franja de intensidad
+  // 8. Densidades / Franja de intensidad (urbano)
   //    Densidades.geojson (3651 features) usa atributo Layer = "DENSIDAD ALTA/MEDIA/BAJA"
   //    FranjaIntensidad.geojson (legado) usa NMG + Densidad_Vivha
   if (franjaInt) {

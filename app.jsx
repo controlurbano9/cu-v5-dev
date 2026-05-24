@@ -16,6 +16,49 @@ const { useState: useStateApp, useEffect: useEffectApp, useRef: useRefApp } = Re
 var MAP_PRECACHE_KEY = 'cu_map_precache_v2'; // bumpar si cambia la grilla
 var BELLO_BOUNDS = { north: 6.395, south: 6.300, west: -75.600, east: -75.510 };
 
+// ═══════════════════════════════════════════════════════════════
+// Pre-cache de capas POT + catastro al login.
+// Garantiza que los GeoJSONs y el catastro.json estén en el caché del SW
+// antes de que el inspector salga a campo sin señal. El SW usa estrategia
+// stale-while-revalidate, así que estas peticiones también lo poblan.
+// Una vez completado, se guarda flag en localStorage para no repetir.
+// ═══════════════════════════════════════════════════════════════
+var DATA_PRECACHE_KEY = 'cu_data_precache_v1'; // bumpar al cambiar la lista de capas
+var POT_BASE_URL = 'https://raw.githubusercontent.com/controlurbano9/pot-bello/main/';
+var CAPAS_POT_PRECACHE = [
+  'ClasificacionSueloMunicipal.geojson',
+  'Comunas.geojson',
+  'SueloProteccion.geojson',
+  'AmenazasNaturales.geojson',
+  'Veredas.geojson',
+  'RetirosCorrientesHidricas.geojson',
+  'TratamientoUrbanistico.geojson',
+  'DRMI_Quitasol_LaHolanda.geojson',
+  'UsoGeneralSuelo.geojson',
+  'Barrios.geojson',
+  'Densidades.geojson',
+];
+
+async function _precacheDatos(onProgress) {
+  // Total: capas POT + catastro
+  var total = CAPAS_POT_PRECACHE.length + 1;
+  var hecho = 0;
+
+  // Capas POT: en paralelo, ignorando errores individuales.
+  await Promise.all(CAPAS_POT_PRECACHE.map(function(capa) {
+    return fetch(POT_BASE_URL + capa, { cache: 'reload' })
+      .catch(function(e) { console.warn('[precache] ' + capa + ':', e.message); })
+      .finally(function() { hecho++; onProgress(hecho, total); });
+  }));
+
+  // Catastro: archivo pesado (~37 MB) — fetch separado, ignorando errores.
+  await fetch('catastro.json', { cache: 'reload' })
+    .catch(function(e) { console.warn('[precache] catastro:', e.message); })
+    .finally(function() { hecho++; onProgress(hecho, total); });
+
+  try { localStorage.setItem(DATA_PRECACHE_KEY, 'done'); } catch (e) {}
+}
+
 function _precacheMapTiles(onProgress, onDone, cancelRef) {
   if (typeof google === 'undefined' || !google.maps) { onDone(false); return; }
   // Div oculto para el mapa de precarga
@@ -72,20 +115,24 @@ function _precacheMapTiles(onProgress, onDone, cancelRef) {
 }
 
 // Componente flotante discreto que muestra progreso de precarga
-function MapPrecacheIndicator({ progreso, total, completado }) {
+function MapPrecacheIndicator({ progreso, total, completado, etiqueta, etiquetaDone, posicion }) {
   if (!progreso && !completado) return null;
   var pct = total ? Math.round(progreso / total * 100) : 0;
+  var bottom = (posicion && posicion.bottom != null) ? posicion.bottom : 80;
+  var right = (posicion && posicion.right != null) ? posicion.right : 16;
   return React.createElement('div', { style: {
-    position: 'fixed', bottom: 80, right: 16, zIndex: 9000,
+    position: 'fixed', bottom: bottom, right: right, zIndex: 9000,
     background: completado ? '#e8f5e9' : 'white',
     border: '1px solid ' + (completado ? '#a5d6a7' : '#e0e0e0'),
     borderRadius: 10, padding: '8px 14px', fontSize: 11,
-    boxShadow: '0 2px 12px rgba(0,0,0,0.12)', maxWidth: 220,
+    boxShadow: '0 2px 12px rgba(0,0,0,0.12)', maxWidth: 240,
     transition: 'opacity 0.5s', opacity: 1,
     display: 'flex', flexDirection: 'column', gap: 4,
   }},
     React.createElement('div', { style: { fontWeight: 600, color: completado ? '#2e7d32' : '#333' } },
-      completado ? '✓ Mapa offline listo' : '📥 Descargando mapa offline…'
+      completado
+        ? (etiquetaDone || '✓ Mapa offline listo')
+        : (etiqueta || '📥 Descargando mapa offline…')
     ),
     !completado && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
       React.createElement('div', { style: {
@@ -118,6 +165,113 @@ function Ico({ d, size }) {
       style={{ width: size || 22, height: size || 22, flexShrink: 0 }}>
       <path strokeLinecap="round" strokeLinejoin="round" d={d} />
     </svg>
+  );
+}
+
+// ── Indicador de cola offline: muestra cuántas escrituras pendientes hay ──
+// Se monta junto al banner offline; siempre visible si hay items en la cola
+// (aún online, por si el flush periódico todavía no terminó).
+function OfflineColaBadge() {
+  const [count, setCount] = useStateApp(0);
+  const [sincronizando, setSinc] = useStateApp(false);
+  const [detalleAbierto, setDetalleAbierto] = useStateApp(false);
+  const [items, setItems] = useStateApp([]);
+
+  useEffectApp(() => {
+    if (typeof offlineCount !== 'function') return;
+    function actualizar() {
+      offlineCount().then(setCount).catch(() => {});
+      if (detalleAbierto && typeof offlineListar === 'function') {
+        offlineListar().then(setItems).catch(() => {});
+      }
+    }
+    actualizar();
+    const off = (typeof offlineOnChange === 'function')
+      ? offlineOnChange(actualizar) : null;
+    return () => { if (off) off(); };
+  }, [detalleAbierto]);
+
+  async function sincronizarAhora() {
+    if (sincronizando) return;
+    if (!navigator.onLine) {
+      appAlert('Sin conexión: no se puede sincronizar ahora. Se reintentará automáticamente.',
+        { titulo: 'Cola offline' });
+      return;
+    }
+    setSinc(true);
+    try {
+      const r = await offlineFlush();
+      if (r.exito || r.fallo) {
+        await appAlert(
+          'Sincronización completada.\n\n' +
+          '✓ Exitosos: ' + (r.exito || 0) + '\n' +
+          (r.fallo ? '✕ Fallidos: ' + r.fallo + ' (quedan en cola para reintentar)' : ''),
+          { titulo: 'Cola offline' });
+      }
+    } catch (e) {
+      await appAlert('Error al sincronizar: ' + e.message, { titulo: 'Cola offline' });
+    }
+    setSinc(false);
+  }
+
+  if (!count) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', top: 60, right: 12, zIndex: 8500,
+      background: '#fff7ed', border: '1px solid #fb923c',
+      borderRadius: 10, padding: '8px 12px', fontSize: 12,
+      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        onClick={() => setDetalleAbierto(!detalleAbierto)}>
+        <span style={{ fontSize: 14 }}>{sincronizando ? '🔄' : '↑'}</span>
+        <span style={{ fontWeight: 600, color: '#9a3412' }}>
+          {count} pendiente{count > 1 ? 's' : ''} de sincronizar
+        </span>
+        <span style={{ marginLeft: 'auto', color: '#9a3412', fontSize: 11 }}>
+          {detalleAbierto ? '▲' : '▼'}
+        </span>
+      </div>
+      {detalleAbierto && (
+        <>
+          <div style={{
+            maxHeight: 180, overflowY: 'auto', fontSize: 11,
+            background: 'white', borderRadius: 6, border: '1px solid #fed7aa',
+            padding: 6,
+          }}>
+            {items.map(it => (
+              <div key={it.id} style={{
+                padding: '4px 6px', borderBottom: '1px dashed #fed7aa',
+                display: 'flex', justifyContent: 'space-between', gap: 6,
+              }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {it.descripcion || it.tipo}
+                </span>
+                {it.intentos > 0 && (
+                  <span style={{ color: '#dc2626', fontSize: 10 }}>×{it.intentos}</span>
+                )}
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div style={{ color: '#9a3412', textAlign: 'center', padding: 8 }}>
+                Cargando lista...
+              </div>
+            )}
+          </div>
+          <button onClick={sincronizarAhora} disabled={sincronizando || !navigator.onLine} style={{
+            background: navigator.onLine ? '#fb923c' : '#fed7aa',
+            color: 'white', border: 'none', borderRadius: 6,
+            padding: '6px 10px', fontSize: 11, fontWeight: 600,
+            cursor: sincronizando || !navigator.onLine ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}>
+            {sincronizando ? 'Sincronizando…' : (navigator.onLine ? 'Sincronizar ahora' : 'Sin conexión')}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -178,6 +332,29 @@ function AppV6() {
     return () => clearInterval(id);
   }, [usuario]);
 
+  // ── Precarga automática de capas POT + catastro tras login ──
+  // Garantiza disponibilidad offline en la primera salida a campo.
+  // No bloquea la UI; corre con delay 3s tras login.
+  const [dataPrecache, setDataPrecache] = useStateApp(null); // null | {progreso, total} | 'done'
+  useEffectApp(() => {
+    if (!usuario) return;
+    try { if (localStorage.getItem(DATA_PRECACHE_KEY) === 'done') return; } catch (e) {}
+    if (!navigator.onLine) return;
+    var cancelado = false;
+    var timer = setTimeout(function() {
+      if (cancelado) return;
+      setDataPrecache({ progreso: 0, total: CAPAS_POT_PRECACHE.length + 1 });
+      _precacheDatos(function(p, t) {
+        if (!cancelado) setDataPrecache({ progreso: p, total: t });
+      }).then(function() {
+        if (cancelado) return;
+        setDataPrecache('done');
+        setTimeout(function() { if (!cancelado) setDataPrecache(null); }, 4000);
+      });
+    }, 3000);
+    return function() { cancelado = true; clearTimeout(timer); };
+  }, [usuario]);
+
   // ── Precarga automática de mapa offline (una vez tras login) ──
   // Solo corre si: hay usuario + hay conexión + localStorage no tiene 'done'
   // + no hay otro precache corriendo. Delay 5s para no competir con carga inicial.
@@ -219,6 +396,7 @@ function AppV6() {
   if (!usuario) {
     return <>
       <OfflineBanner />
+      <OfflineColaBadge />
       <LoginScreen onLogin={u => { setUsuario(u); setPantalla('home'); }} />
       <ModalHost />
     </>;
@@ -255,6 +433,7 @@ function AppV6() {
   return (
     <div id="app-principal" style={{ display: 'block' }}>
       <OfflineBanner />
+      <OfflineColaBadge />
       <div id="app-wrapper">
         {/* ── HEADER ── */}
         <div className="header">
@@ -346,6 +525,14 @@ function AppV6() {
         progreso={mapPrecache === 'done' ? 0 : mapPrecache.progreso}
         total={mapPrecache === 'done' ? 0 : mapPrecache.total}
         completado={mapPrecache === 'done'} />}
+      {/* Indicador de precarga de capas POT + catastro (un poco más arriba para no solapar) */}
+      {dataPrecache && <MapPrecacheIndicator
+        progreso={dataPrecache === 'done' ? 0 : dataPrecache.progreso}
+        total={dataPrecache === 'done' ? 0 : dataPrecache.total}
+        completado={dataPrecache === 'done'}
+        etiqueta="📥 Descargando POT + catastro…"
+        etiquetaDone="✓ Datos offline listos"
+        posicion={{ bottom: 140, right: 16 }} />}
     </div>
   );
 }

@@ -1,0 +1,6 @@
+# Dependencias instaladas por npm (regenerables con `npm install`)
+# package-lock.json SÍ se commitea para reproducibilidad
+node_modules/
+
+# Bundle viejo (concatenación pre-esbuild) — ya no se usa
+bundle.jsx

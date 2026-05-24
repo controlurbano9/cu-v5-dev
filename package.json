@@ -1,0 +1,12 @@
+{
+  "name": "cu-v6",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Control Urbano V6 — bundle con esbuild",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

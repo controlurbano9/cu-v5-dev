@@ -63,9 +63,14 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       if (e !== 'INICIADO') return;
 
       // Filtro por rol: inspector solo ve las suyas
+      // Regla diligenciador: en INICIADO, solo el primero en VISITADOR(ES)
+      // recibe las alertas. No tiene sentido alertar al co-asignado de
+      // tareas que él no diligenció — su responsable es el otro.
       if (!esAdmin) {
         const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
         if (!vis.includes(miNombre)) return;
+        const principal = vis.split(/\s*[\/,]\s*/)[0].trim();
+        if (principal !== miNombre) return;
       }
 
       // Alerta roja: audiencia/citación en ≤3 días hábiles

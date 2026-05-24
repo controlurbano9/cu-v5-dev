@@ -72,11 +72,23 @@ function MisVisitasScreen({ usuario, onNueva, onContinuar }) {
   }
 
   // ── Filtrar visitas del inspector logueado ──
+  // Regla: para INICIADAS/COMPLETADAS solo aparece para quien diligenció
+  // el formulario (= primer inspector en VISITADOR(ES); cuando el inspector
+  // abre el form, su nombre se auto-prefija primero). Para PENDIENTES/
+  // ASIGNADAS ambos co-asignados siguen viéndolas hasta que una se inicie,
+  // para que nadie pierda visibilidad de una tarea pendiente.
   const misVisitas = useMemoMV(() => {
     const miNombre = usuario.usuario.toUpperCase();
     return datos.filter(f => {
       const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
-      return vis.includes(miNombre);
+      if (!vis.includes(miNombre)) return false;
+      const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
+      if (est === 'INICIADO' || est === 'COMPLETADO') {
+        // Diligenciador = primer nombre en el campo. Separadores: "/" o ","
+        const principal = vis.split(/\s*[\/,]\s*/)[0].trim();
+        return principal === miNombre;
+      }
+      return true;   // PENDIENTE/ASIGNADO: cualquier co-asignado la ve
     });
   }, [datos, usuario]);
 

@@ -122,28 +122,28 @@ function MapPrecacheIndicator({ progreso, total, completado, etiqueta, etiquetaD
   var right = (posicion && posicion.right != null) ? posicion.right : 16;
   return React.createElement('div', { style: {
     position: 'fixed', bottom: bottom, right: right, zIndex: 9000,
-    background: completado ? '#e8f5e9' : 'white',
-    border: '1px solid ' + (completado ? '#a5d6a7' : '#e0e0e0'),
+    background: completado ? 'var(--verde-bg)' : 'var(--superficie)',
+    border: '1px solid ' + (completado ? 'rgba(107,122,58,0.30)' : 'var(--borde-med)'),
     borderRadius: 10, padding: '8px 14px', fontSize: 11,
-    boxShadow: '0 2px 12px rgba(0,0,0,0.12)', maxWidth: 240,
+    boxShadow: 'var(--sombra-sm)', maxWidth: 240,
     transition: 'opacity 0.5s', opacity: 1,
     display: 'flex', flexDirection: 'column', gap: 4,
   }},
-    React.createElement('div', { style: { fontWeight: 600, color: completado ? '#2e7d32' : '#333' } },
+    React.createElement('div', { style: { fontWeight: 600, color: completado ? 'var(--verde-dark)' : 'var(--texto)' } },
       completado
         ? (etiquetaDone || '✓ Mapa offline listo')
         : (etiqueta || '📥 Descargando mapa offline…')
     ),
     !completado && React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
       React.createElement('div', { style: {
-        flex: 1, height: 3, borderRadius: 2, background: '#e0e0e0', overflow: 'hidden'
+        flex: 1, height: 3, borderRadius: 2, background: 'var(--slate-200)', overflow: 'hidden'
       }},
         React.createElement('div', { style: {
-          width: pct + '%', height: '100%', background: '#1976d2', borderRadius: 2,
+          width: pct + '%', height: '100%', background: 'var(--brand-accent)', borderRadius: 2,
           transition: 'width 0.3s',
         }})
       ),
-      React.createElement('span', { style: { color: '#888', whiteSpace: 'nowrap' } }, pct + '%')
+      React.createElement('span', { style: { color: 'var(--texto-suave)', whiteSpace: 'nowrap' } }, pct + '%')
     )
   );
 }
@@ -157,7 +157,24 @@ const ICO = {
   agenda:   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
   gear:     'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
   plus:     'M12 4v16m8-8H4',
+  // Controles UI (botones, chevrons, acciones)
+  play:     'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+  check:    'M5 13l4 4L19 7',
+  refresh:  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
+  folder:   'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
+  file:     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+  fileEdit: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+  eye:      'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z',
+  undo:     'M3 10h10a8 8 0 018 8v2M3 10l6-6m-6 6l6 6',
+  close:    'M6 18L18 6M6 6l12 12',
+  chevDown: 'M19 9l-7 7-7-7',
+  chevUp:   'M5 15l7-7 7 7',
+  arrowUp:  'M5 10l7-7m0 0l7 7m-7-7v18',
 };
+
+// Exponer a window para que otros archivos del bundle puedan referenciarlos
+// con seguridad (independiente del orden de resolución de identificadores).
+window.ICO = ICO;
 
 function Ico({ d, size }) {
   return (
@@ -167,6 +184,7 @@ function Ico({ d, size }) {
     </svg>
   );
 }
+window.Ico = Ico;
 
 // ── Indicador de cola offline: muestra cuántas escrituras pendientes hay ──
 // Se monta junto al banner offline; siempre visible si hay items en la cola
@@ -219,50 +237,55 @@ function OfflineColaBadge() {
   return (
     <div style={{
       position: 'fixed', top: 60, right: 12, zIndex: 8500,
-      background: '#fff7ed', border: '1px solid #fb923c',
+      background: 'var(--amarillo-bg)', border: '1px solid var(--amarillo)',
       borderRadius: 10, padding: '8px 12px', fontSize: 12,
-      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      boxShadow: 'var(--sombra-sm)',
       maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         onClick={() => setDetalleAbierto(!detalleAbierto)}>
-        <span style={{ fontSize: 14 }}>{sincronizando ? '🔄' : '↑'}</span>
-        <span style={{ fontWeight: 600, color: '#9a3412' }}>
+        <span style={{ display: 'inline-flex', color: 'var(--cafe)' }}>
+          {sincronizando
+            ? <Ico d={ICO.refresh} size={14} />
+            : <Ico d={ICO.arrowUp} size={14} />}
+        </span>
+        <span style={{ fontWeight: 600, color: 'var(--cafe)' }}>
           {count} pendiente{count > 1 ? 's' : ''} de sincronizar
         </span>
-        <span style={{ marginLeft: 'auto', color: '#9a3412', fontSize: 11 }}>
-          {detalleAbierto ? '▲' : '▼'}
+        <span style={{ marginLeft: 'auto', color: 'var(--cafe)', display: 'inline-flex' }}>
+          <Ico d={detalleAbierto ? ICO.chevUp : ICO.chevDown} size={14} />
         </span>
       </div>
       {detalleAbierto && (
         <>
           <div style={{
             maxHeight: 180, overflowY: 'auto', fontSize: 11,
-            background: 'white', borderRadius: 6, border: '1px solid #fed7aa',
+            background: 'var(--superficie)', borderRadius: 6,
+            border: '1px solid rgba(184,135,58,0.30)',
             padding: 6,
           }}>
             {items.map(it => (
               <div key={it.id} style={{
-                padding: '4px 6px', borderBottom: '1px dashed #fed7aa',
+                padding: '4px 6px', borderBottom: '1px dashed rgba(184,135,58,0.30)',
                 display: 'flex', justifyContent: 'space-between', gap: 6,
               }}>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {it.descripcion || it.tipo}
                 </span>
                 {it.intentos > 0 && (
-                  <span style={{ color: '#dc2626', fontSize: 10 }}>×{it.intentos}</span>
+                  <span style={{ color: 'var(--rojo)', fontSize: 10 }}>×{it.intentos}</span>
                 )}
               </div>
             ))}
             {items.length === 0 && (
-              <div style={{ color: '#9a3412', textAlign: 'center', padding: 8 }}>
+              <div style={{ color: 'var(--cafe)', textAlign: 'center', padding: 8 }}>
                 Cargando lista...
               </div>
             )}
           </div>
           <button onClick={sincronizarAhora} disabled={sincronizando || !navigator.onLine} style={{
-            background: navigator.onLine ? '#fb923c' : '#fed7aa',
-            color: 'white', border: 'none', borderRadius: 6,
+            background: navigator.onLine ? 'var(--amarillo)' : 'rgba(184,135,58,0.30)',
+            color: 'var(--superficie)', border: 'none', borderRadius: 6,
             padding: '6px 10px', fontSize: 11, fontWeight: 600,
             cursor: sincronizando || !navigator.onLine ? 'not-allowed' : 'pointer',
             fontFamily: 'inherit',

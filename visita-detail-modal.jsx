@@ -101,14 +101,15 @@ function VisitaDetailUI({ f, onCerrar }) {
             </div>
             <div style={{ fontSize: 11, color: 'var(--texto-suave, #5C5142)', fontFamily: 'var(--font-mono)' }}>
               {_g(f, 'RADICADO') || '—'} · {_fmt(_g(f, 'FECHA DE VISITA'))}
-              {estado && <span style={{ marginLeft: 8, padding: '1px 7px', borderRadius: 8, background: 'rgba(107,122,58,0.14)', color: '#516028', fontFamily: 'inherit', fontSize: 10, fontWeight: 700 }}>{estado}</span>}
+              {estado && <span style={{ marginLeft: 8, padding: '1px 7px', borderRadius: 8, background: 'var(--verde-bg)', color: 'var(--verde-dark)', fontFamily: 'inherit', fontSize: 10, fontWeight: 700 }}>{estado}</span>}
             </div>
           </div>
           <button onClick={onCerrar} aria-label="Cerrar" title="Cerrar (Esc)" style={{
             background: 'transparent', border: '1px solid var(--borde-med, rgba(31,27,22,0.16))',
             color: 'var(--texto-suave, #5C5142)', borderRadius: 8, padding: '6px 10px',
             fontFamily: 'inherit', fontSize: 16, cursor: 'pointer', lineHeight: 1,
-          }}>✕</button>
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}><Ico d={ICO.close} size={16} /></button>
         </div>
 
         {/* Body scrollable */}
@@ -118,10 +119,10 @@ function VisitaDetailUI({ f, onCerrar }) {
           {(linkDrive || linkPdf || linkXlsx || linkInforme || linkVigilancia) && (
             <_SeccionVD titulo="Entregables">
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {linkDrive    && <_LinkBtnVD href={linkDrive}     emoji="📂" label="Carpeta Drive" />}
-                {linkPdf      && <_LinkBtnVD href={linkPdf}       emoji="📄" label="Acta (PDF)" />}
+                {linkDrive    && <_LinkBtnVD href={linkDrive}     icoPath={ICO.folder}   label="Carpeta Drive" />}
+                {linkPdf      && <_LinkBtnVD href={linkPdf}       icoPath={ICO.file}     label="Acta (PDF)" />}
                 {!linkPdf && linkXlsx && <_LinkBtnVD href={linkXlsx} emoji="📊" label="Acta (Sheet)" />}
-                {linkInforme  && <_LinkBtnVD href={linkInforme}   emoji="📝" label="Informe F-43" />}
+                {linkInforme  && <_LinkBtnVD href={linkInforme}   icoPath={ICO.fileEdit} label="Informe F-43" />}
                 {linkVigilancia && <_LinkBtnVD href={linkVigilancia} emoji="🚓" label="Vigilancia Policía" />}
               </div>
             </_SeccionVD>
@@ -240,7 +241,8 @@ function _DebugRawVD({ f, solo_admin }) {
         background: 'transparent', border: '1px dashed var(--borde-med, rgba(31,27,22,0.16))',
         borderRadius: 8, padding: '6px 10px', fontFamily: 'var(--font-mono)',
         fontSize: 11, color: 'var(--texto-suave, #5C5142)', cursor: 'pointer',
-      }}>{open ? '▾' : '▸'} Debug — ver datos crudos del Sheet ({pares.length} columnas con valor)</button>
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+      }}><Ico d={open ? ICO.chevDown : ICO.chevUp} size={12} /> Debug — ver datos crudos del Sheet ({pares.length} columnas con valor)</button>
       {open && (
         <div style={{
           marginTop: 8, padding: 10, background: 'var(--gris-bg, #F5F1EB)',
@@ -274,7 +276,9 @@ function _SeccionVD({ titulo, children }) {
         userSelect: 'none',
       }}>
         <span>{titulo}</span>
-        <span style={{ color: 'var(--texto-suave, #5C5142)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--texto-suave, #5C5142)', display: 'inline-flex' }}>
+          <Ico d={open ? ICO.chevUp : ICO.chevDown} size={12} />
+        </span>
       </div>
       {open && (
         <div style={{ padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13 }}>
@@ -317,7 +321,7 @@ function _CampoLargoVD({ v }) {
   );
 }
 
-function _LinkBtnVD({ href, emoji, label }) {
+function _LinkBtnVD({ href, emoji, icoPath, label }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -326,7 +330,7 @@ function _LinkBtnVD({ href, emoji, label }) {
       border: '1px solid rgba(138,63,38,0.15)', fontSize: 12, fontWeight: 600,
       textDecoration: 'none', cursor: 'pointer',
     }}>
-      <span>{emoji}</span> {label} ↗
+      {icoPath ? <Ico d={icoPath} size={14} /> : <span>{emoji}</span>} {label} ↗
     </a>
   );
 }

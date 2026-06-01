@@ -218,7 +218,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
             <div style={{ marginTop: 10 }}>
               <button type="button" onClick={() => onContinuar(f._idx, f)}
                 className="btn-principal verde" style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
-                ▶ Iniciar visita
+                <Ico d={ICO.play} size={16} /> Iniciar visita
               </button>
             </div>
           </div>
@@ -231,7 +231,8 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
           background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
           padding: '6px 14px', fontFamily: 'inherit', fontSize: 11, cursor: 'pointer',
           color: 'var(--texto-suave)',
-        }}>↻ Recargar datos</button>
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}><Ico d={ICO.refresh} size={12} /> Recargar datos</button>
       </div>
     </div>
   );

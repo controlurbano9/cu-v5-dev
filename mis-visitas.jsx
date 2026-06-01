@@ -299,8 +299,8 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
             {count}
           </span>
         </div>
-        <span style={{ color: 'var(--texto-suave)', fontSize: 12 }}>
-          {abierto ? '▲' : '▼'}
+        <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
+          <Ico d={abierto ? ICO.chevUp : ICO.chevDown} size={14} />
         </span>
       </div>
 
@@ -324,7 +324,7 @@ function TarjetaVisitaMV({ f, onContinuar }) {
 
   // Determinar texto y visibilidad del botón de acción
   const mostrarBoton = est !== 'COMPLETADO';
-  const textoBoton = est === 'INICIADO' ? '▶ Continuar visita' : '▶ Iniciar visita';
+  const textoBoton = est === 'INICIADO' ? 'Continuar visita' : 'Iniciar visita';
 
   return (
     <div style={{
@@ -375,7 +375,7 @@ function TarjetaVisitaMV({ f, onContinuar }) {
             onClick={() => onContinuar(f._idx, f)}
             className="btn-principal verde"
             style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
-            {textoBoton}
+            <Ico d={ICO.play} size={16} /> {textoBoton}
           </button>
         </div>
       )}
@@ -399,11 +399,11 @@ function TarjetaVisitaMV({ f, onContinuar }) {
               onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
               className="btn-principal verde"
               style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-              👁 Ver datos
+              <Ico d={ICO.eye} size={14} /> Ver datos
             </button>
-            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}>📂 Carpeta</a>}
-            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}>📄 Acta</a>}
-            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}>📝 Informe</a>}
+            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.folder}   size={14} /> Carpeta</a>}
+            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.file}     size={14} /> Acta</a>}
+            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.fileEdit} size={14} /> Informe</a>}
           </div>
         );
       })()}

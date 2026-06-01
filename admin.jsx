@@ -156,7 +156,8 @@ function TabVigilancia() {
                           <a href={link} target="_blank" rel="noopener noreferrer" style={{
                             fontSize: 11, color: 'var(--verde-dark)', textDecoration: 'none',
                             alignSelf: 'center',
-                          }}>✓ Ver oficio</a>
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}><Ico d={ICO.check} size={12} /> Ver oficio</a>
                         )}
                       </div>
                     </td>

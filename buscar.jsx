@@ -327,7 +327,9 @@ function BuscarScreen({ usuario, onContinuar }) {
                   <span style={{ color: 'var(--brand-accent)', fontSize: 11 }}>· {filtroComunas.length}</span>
                 )}
               </span>
-              <span className="filtro-section-chevron">{comunasOpen ? '▲' : '▼'}</span>
+              <span className="filtro-section-chevron" style={{ display: 'inline-flex' }}>
+                <Ico d={comunasOpen ? ICO.chevUp : ICO.chevDown} size={12} />
+              </span>
             </div>
             {comunasOpen && (
               <div className="filtros-comunas">
@@ -355,7 +357,9 @@ function BuscarScreen({ usuario, onContinuar }) {
                   <span style={{ color: 'var(--brand-accent)', fontSize: 11 }}>· {filtrosVisitador.length}</span>
                 )}
               </span>
-              <span className="filtro-section-chevron">{visitadorOpen ? '▲' : '▼'}</span>
+              <span className="filtro-section-chevron" style={{ display: 'inline-flex' }}>
+                <Ico d={visitadorOpen ? ICO.chevUp : ICO.chevDown} size={12} />
+              </span>
             </div>
             {visitadorOpen && (
               <div className="filtros-estado">
@@ -510,7 +514,9 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
             {filas.length} {filas.length === 1 ? 'registro' : 'registros'}
           </div>
         </div>
-        <span style={{ color: 'var(--texto-suave)' }}>{open ? '▲' : '▼'}</span>
+        <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
+          <Ico d={open ? ICO.chevUp : ICO.chevDown} size={14} />
+        </span>
       </div>
       {open && (
         <div>
@@ -566,7 +572,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
           <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
             className="btn-principal verde"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            ▶ Iniciar visita
+            <Ico d={ICO.play} size={14} /> Iniciar visita
           </button>
         )}
         {est === 'PENDIENTE' && esAdmin && (
@@ -583,7 +589,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
           <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
             className="btn-principal verde"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            ▶ {est === 'INICIADO' ? 'Continuar' : 'Iniciar'}
+            <Ico d={ICO.play} size={14} /> {est === 'INICIADO' ? 'Continuar' : 'Iniciar'}
           </button>
         )}
         {(est === 'ASIGNADO' || est === 'INICIADO') && esAdmin && (
@@ -599,14 +605,15 @@ function FilaVisitaBase({ f, usuario, onContinuar,
               border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
               fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
               cursor: busy ? 'not-allowed' : 'pointer',
-            }}>↩ Desasignar</button>
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}><Ico d={ICO.undo} size={14} /> Desasignar</button>
           </>
         )}
         {est === 'INICIADO' && esAdmin && (
           <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
             className="btn-principal verde"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            ✓ Completar
+            <Ico d={ICO.check} size={14} /> Completar
           </button>
         )}
 
@@ -627,11 +634,11 @@ function FilaVisitaBase({ f, usuario, onContinuar,
             <button type="button" onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
               className="btn-principal verde"
               style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-              👁 Ver datos
+              <Ico d={ICO.eye} size={14} /> Ver datos
             </button>
-            {linkDrive && <a href={linkDrive} target="_blank" rel="noopener noreferrer" style={btnSty}>📂 Carpeta</a>}
-            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}>📄 Acta</a>}
-            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}>📝 Informe</a>}
+            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.folder}   size={14} /> Carpeta</a>}
+            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.file}     size={14} /> Acta</a>}
+            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.fileEdit} size={14} /> Informe</a>}
             {esAdmin && onAsignarNuevaVisita && (
               <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
                 flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',

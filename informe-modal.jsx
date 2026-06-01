@@ -109,7 +109,8 @@ function InformeIframeUI({ params, onCerrar }) {
           background: 'transparent', border: '1px solid var(--borde-med, rgba(31,27,22,0.16))',
           color: 'var(--texto-suave, #5C5142)', borderRadius: 8, padding: '6px 10px',
           fontFamily: 'inherit', fontSize: 16, cursor: 'pointer', lineHeight: 1,
-        }}>✕</button>
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        }}><Ico d={ICO.close} size={16} /></button>
       </div>
 
       {/* Iframe ocupa todo el alto restante */}

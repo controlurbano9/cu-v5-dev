@@ -96,7 +96,8 @@ function AgendaScreen({ usuario }) {
           <button onClick={cargar} title="Regenerar agenda" style={{
             background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
             padding: '6px 12px', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer',
-          }}>↻ Recargar</button>
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}><Ico d={ICO.refresh} size={14} /> Recargar</button>
         </div>
       </div>
 
@@ -182,7 +183,8 @@ function ItemsLista({ items, busyFila, onCompletar, onDesasignar }) {
               flex: 1, background: 'var(--gris-bg)', color: 'var(--texto)', border: '1px solid var(--borde)',
               borderRadius: 10, padding: '8px 12px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
               cursor: busyFila === it.fila ? 'not-allowed' : 'pointer',
-            }}>↩ Desasignar</button>
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}><Ico d={ICO.undo} size={14} /> Desasignar</button>
           </div>
         </div>
       ))}

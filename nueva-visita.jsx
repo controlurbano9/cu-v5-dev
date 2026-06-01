@@ -761,8 +761,8 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
   const titular = r.propietario || '—';
   return (
     <div style={{
-      borderRadius: 8, border: '1px solid ' + (r.municipal ? '#fca5a5' : 'var(--borde)'),
-      background: r.municipal ? '#fef2f2' : 'var(--superficie)',
+      borderRadius: 8, border: '1px solid ' + (r.municipal ? 'var(--rojo)' : 'var(--borde)'),
+      background: r.municipal ? 'var(--rojo-bg)' : 'var(--superficie)',
       overflow: 'hidden',
       flexShrink: 0,           // evita que se aplaste dentro de flex-column con scroll
       marginBottom: 4,
@@ -771,7 +771,7 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 2 }}>
-              {r.municipal && <span style={{ color: '#dc2626', marginRight: 4 }}>🏛</span>}
+              {r.municipal && <span style={{ color: 'var(--rojo)', marginRight: 4 }}>🏛</span>}
               Ficha <span style={{ fontFamily: 'var(--font-mono)' }}>{r.ficha}</span>
               <span style={{ fontWeight: 400, color: 'var(--texto-suave)', marginLeft: 8, fontSize: 11 }}>
                 · {r.destinacion || 'Sin destinación'}
@@ -785,8 +785,8 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
               <span style={{ fontWeight: 500 }}>{titular}</span>
             </div>
           </div>
-          <span style={{ fontSize: 10, color: 'var(--texto-suave)', whiteSpace: 'nowrap' }}>
-            {abierta ? '▴' : '▾'}
+          <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
+            <Ico d={abierta ? ICO.chevUp : ICO.chevDown} size={12} />
           </span>
         </div>
       </div>
@@ -1120,8 +1120,8 @@ function ModalInicioVisita({ onResult, onCancelar }) {
                       <span style={{ fontWeight: 600 }}>Visita N°{nVis}</span>
                       <span style={{
                         fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
-                        background: esCompletada ? '#dcfce7' : esIniciada ? '#fef9c3' : '#e0e7ff',
-                        color: esCompletada ? '#166534' : esIniciada ? '#854d0e' : '#3730a3',
+                        background: esCompletada ? 'var(--verde-bg)' : esIniciada ? 'var(--amarillo-bg)' : 'var(--azul-bg)',
+                        color: esCompletada ? 'var(--verde-dark)' : esIniciada ? 'var(--cafe)' : 'var(--azul)',
                       }}>{est}</span>
                     </div>
                     {dir && <div style={{ color: 'var(--texto-suave)' }}>{dir}</div>}
@@ -2187,10 +2187,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             padding: '8px 14px', borderRadius: 'var(--r-md)',
-            background: d.esOficio ? '#fef3c7' : 'var(--brand-bg)',
-            border: '1px solid ' + (d.esOficio ? '#f59e0b' : 'var(--brand-accent)'),
+            background: d.esOficio ? 'var(--amarillo-bg)' : 'var(--brand-bg)',
+            border: '1px solid ' + (d.esOficio ? 'var(--amarillo)' : 'var(--brand-accent)'),
             fontSize: 14, fontWeight: 600,
-            color: d.esOficio ? '#92400e' : 'var(--brand-ink)',
+            color: d.esOficio ? 'var(--cafe)' : 'var(--brand-ink)',
           }}>
             <span>{d.esOficio ? '🏗️' : '📋'}</span>
             {d.esOficio ? 'Visita de oficio' : 'PQR / Radicado'}
@@ -2262,30 +2262,35 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 ? `${Number(d.lat).toFixed(6)}, ${Number(d.lon).toFixed(6)}`
                 : 'Sin coordenadas'}
               {gpsAccuracy != null && (() => {
-                var color = gpsAccuracy <= 8 ? '#2e7d32' : gpsAccuracy <= 20 ? '#e65100' : '#c62828';
+                var fg = gpsAccuracy <= 8 ? 'var(--verde-dark)' : gpsAccuracy <= 20 ? 'var(--cafe)' : 'var(--rojo)';
+                var bg = gpsAccuracy <= 8 ? 'var(--verde-bg)'   : gpsAccuracy <= 20 ? 'var(--amarillo-bg)' : 'var(--rojo-bg)';
                 var label = gpsAccuracy <= 8 ? 'Excelente' : gpsAccuracy <= 20 ? 'Buena' : gpsAccuracy <= 50 ? 'Regular' : 'Baja';
                 return React.createElement('span', {
-                  style: { marginLeft: 8, fontSize: 12, fontWeight: 600, color: color,
-                    padding: '1px 7px', borderRadius: 8, background: color + '18' }
+                  style: { marginLeft: 8, fontSize: 12, fontWeight: 600, color: fg,
+                    padding: '1px 7px', borderRadius: 8, background: bg }
                 }, '±' + gpsAccuracy + 'm · ' + label);
               })()}
             </div>
             <div className="gps-dir">{d.direccion || '—'}</div>
             {busyGeo && gpsAccuracy != null && React.createElement('div', {
-              style: { fontSize: 11, color: '#666', marginTop: 2 }
+              style: { fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }
             }, 'Refinando señal GPS… Puedes aceptar la ubicación actual o esperar mayor precisión.')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
             <_BtnAccion busy={false} onClick={usarMiUbicacion}>
               {busyGeo
-                ? (gpsAccuracy != null ? '✓ Usar esta ubicación' : '⏳ Buscando señal…')
+                ? (gpsAccuracy != null
+                    ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+                        React.createElement(Ico, { d: ICO.check, size: 14 }), 'Usar esta ubicación')
+                    : '⏳ Buscando señal…')
                 : '📍 Capturar mi ubicación'}
             </_BtnAccion>
             {busyGeo && React.createElement('button', {
               onClick: function() { _detenerGeoWatch(); setBusyGeo(false); setGpsAccuracy(null); },
-              style: { background: 'none', border: 'none', color: '#999', fontSize: 12,
-                cursor: 'pointer', padding: '2px 6px' }
-            }, '✕ Cancelar')}
+              style: { background: 'none', border: 'none', color: 'var(--texto-3)', fontSize: 12,
+                cursor: 'pointer', padding: '2px 6px',
+                display: 'inline-flex', alignItems: 'center', gap: 4 }
+            }, React.createElement(Ico, { d: ICO.close, size: 12 }), 'Cancelar')}
           </div>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
@@ -2482,11 +2487,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           </_BtnAccion>
           {dictando && (
             <span style={{
-              fontSize: 12, color: '#ef4444', fontWeight: 600,
+              fontSize: 12, color: 'var(--rojo)', fontWeight: 600,
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }}>
               <span style={{
-                width: 8, height: 8, borderRadius: '50%', background: '#ef4444',
+                width: 8, height: 8, borderRadius: '50%', background: 'var(--rojo)',
                 display: 'inline-block', animation: 'pulsar 1s infinite',
               }} />
               Grabando...
@@ -2515,7 +2520,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               rows={8}
               value={sugerenciaIA}
               onChange={e => setSugerenciaIA(e.target.value)}
-              style={{ marginBottom: 10, background: '#fff' }}
+              style={{ marginBottom: 10, background: 'var(--superficie)' }}
             />
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <button type="button" onClick={aceptarSugerenciaIA} className="btn-principal verde"
@@ -2543,8 +2548,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           {_mostrarAdvertenciaTipif && (
             <div style={{
               padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 12,
-              background: '#fef3c7', border: '1.5px solid #f59e0b',
-              color: '#78350f', fontSize: 13,
+              background: 'var(--amarillo-bg)', border: '1.5px solid var(--amarillo)',
+              color: 'var(--cafe)', fontSize: 13,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>⚠️</span>
@@ -2565,8 +2570,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                   {_chipsAActuales.length > 0 && _chipsAActuales.some(v => !_vSugeridos.includes(v)) && (
                     <div style={{
                       padding: '6px 10px', borderRadius: 6, marginBottom: 8,
-                      background: '#fee2e2', color: '#991b1b', fontSize: 12,
-                      border: '1px solid #fca5a5',
+                      background: 'var(--rojo-bg)', color: 'var(--brand-ink)', fontSize: 12,
+                      border: '1px solid var(--rojo)',
                     }}>
                       Actualmente marcaste: {_chipsAActuales.join(', ')}.
                       Al aplicar la sugerencia se reemplazarán solo los comportamientos del Literal A.
@@ -2576,12 +2581,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                     <button type="button" onClick={_aplicarSugerenciasTipif}
                       className="btn-principal verde"
                       style={{ margin: 0, padding: '8px 14px', fontSize: 13 }}>
-                      ✓ Aplicar sugerencia
+                      <Ico d={ICO.check} size={14} /> Aplicar sugerencia
                     </button>
                     <button type="button" onClick={() => setAdvertTipifIgnorada(true)}
                       style={{
-                        background: 'transparent', color: '#78350f',
-                        border: '1px solid #d97706', borderRadius: 8,
+                        background: 'transparent', color: 'var(--cafe)',
+                        border: '1px solid var(--amarillo)', borderRadius: 8,
                         padding: '8px 14px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                         cursor: 'pointer',
                       }}>
@@ -2737,8 +2742,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             {catResultados.some(r => r.municipal) && (
               <div style={{
                 padding: '12px 14px', borderRadius: 'var(--r-md)',
-                background: '#fef2f2', border: '1.5px solid #dc2626',
-                color: '#991b1b', fontSize: 13, fontWeight: 600,
+                background: 'var(--rojo-bg)', border: '1.5px solid var(--rojo)',
+                color: 'var(--brand-ink)', fontSize: 13, fontWeight: 600,
                 display: 'flex', alignItems: 'flex-start', gap: 8,
               }}>
                 <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
@@ -2804,7 +2809,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => window.open(d.linkXlsxActa, '_blank', 'noopener')}
                 className="btn-principal" style={{ fontSize: 15, flex: 2 }}>
-                👁 Ver acta F-GGO-46
+                <Ico d={ICO.eye} size={16} /> Ver acta F-GGO-46
               </button>
               <button type="button" onClick={regenerarActa} disabled={generandoActa}
                 style={{
@@ -2982,7 +2987,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               Registro fotografico
             </div>
             <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>
-              Arrastra desde el icono ≡ para reordenar. La linea azul indica donde se insertara la foto.
+              Arrastra desde el icono ≡ para reordenar. La línea indica donde se insertará la foto.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative' }}>
@@ -2995,8 +3000,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 return React.createElement(React.Fragment, { key: foto.id },
                   // ── Línea de inserción ARRIBA ──
                   showLineAbove && React.createElement('div', { style: {
-                    height: 3, background: '#1976d2', borderRadius: 2, margin: '0 8px',
-                    boxShadow: '0 0 6px rgba(25,118,210,0.5)',
+                    height: 3, background: 'var(--brand-accent)', borderRadius: 2, margin: '0 8px',
+                    boxShadow: '0 0 6px var(--brand-glow)',
                   }}),
                   React.createElement('div', {
                     draggable: false,
@@ -3105,11 +3110,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                     style: {
                       display: 'flex', gap: 10, alignItems: 'flex-start',
                       padding: '10px 8px', margin: '2px 0', borderRadius: 8,
-                      border: isDragging ? '2px solid #1976d2' : '1px solid var(--borde)',
-                      background: isDragging ? '#e3f2fd' : 'white',
+                      border: isDragging ? '2px solid var(--brand-accent)' : '1px solid var(--borde)',
+                      background: isDragging ? 'var(--brand-bg)' : 'var(--superficie)',
                       opacity: isDragging ? 0.5 : 1,
                       transform: isDragging ? 'scale(0.97)' : 'none',
-                      boxShadow: isDragging ? 'inset 0 0 0 1px #1976d2' : 'none',
+                      boxShadow: isDragging ? 'inset 0 0 0 1px var(--brand-accent)' : 'none',
                       cursor: 'default',
                       transition: 'transform 0.15s, opacity 0.15s, background 0.15s, border-color 0.15s',
                     },
@@ -3129,7 +3134,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                       style: {
                         display: 'flex', flexDirection: 'column', alignItems: 'center',
                         justifyContent: 'center', width: 28, flexShrink: 0,
-                        color: isDragging ? '#1976d2' : 'var(--texto-suave)',
+                        color: isDragging ? 'var(--brand-accent)' : 'var(--texto-suave)',
                         fontSize: 18, cursor: 'grab',
                         userSelect: 'none', touchAction: 'none',
                         borderRight: '1px solid var(--borde)',
@@ -3139,8 +3144,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                       React.createElement('span', { 'data-draghandle': '1', style: { lineHeight: 1 } }, '≡'),
                       React.createElement('span', { 'data-draghandle': '1', style: {
                         fontSize: 11, fontWeight: 700, marginTop: 3,
-                        color: isDragging ? '#1976d2' : 'var(--texto)',
-                        background: isDragging ? '#bbdefb' : 'var(--gris-bg)',
+                        color: isDragging ? 'var(--brand-ink)' : 'var(--texto)',
+                        background: isDragging ? 'var(--brand-bg)' : 'var(--gris-bg)',
                         borderRadius: '50%', width: 20, height: 20,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}, String(idx + 1))
@@ -3187,15 +3192,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                       },
                       style: {
                         background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#c62828', fontSize: 18, lineHeight: 1,
+                        color: 'var(--rojo)', fontSize: 18, lineHeight: 1,
                         padding: '4px 6px', flexShrink: 0, borderRadius: 4,
+                        display: 'inline-flex', alignItems: 'center',
                       }
-                    }, '✕')
+                    }, React.createElement(Ico, { d: ICO.close, size: 16 }))
                   ),
                   // ── Línea de inserción ABAJO ──
                   showLineBelow && React.createElement('div', { style: {
-                    height: 3, background: '#1976d2', borderRadius: 2, margin: '0 8px',
-                    boxShadow: '0 0 6px rgba(25,118,210,0.5)',
+                    height: 3, background: 'var(--brand-accent)', borderRadius: 2, margin: '0 8px',
+                    boxShadow: '0 0 6px var(--brand-glow)',
                   }})
                 );
               })}
@@ -3227,7 +3233,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           borderRadius: 12, fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
           textDecoration: 'none', cursor: 'pointer',
         }}>
-          📂 Ver carpeta Drive de la visita
+          <Ico d={ICO.folder} size={18} /> Ver carpeta Drive de la visita
         </a>
       )}
     </div>
@@ -3331,14 +3337,14 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
             {fotos.map((f, i) => (
               <div key={i} style={{
                 padding: '8px 12px',
-                background: f.pendiente ? '#fff7ed' : 'var(--gris-bg)',
-                border: f.pendiente ? '1px dashed #fb923c' : 'none',
+                background: f.pendiente ? 'var(--amarillo-bg)' : 'var(--gris-bg)',
+                border: f.pendiente ? '1px dashed var(--amarillo)' : 'none',
                 borderRadius: 8, fontSize: 12,
               }}>
                 <div style={{ fontWeight: 600 }}>
-                  {f.pendiente && <span title="Pendiente de subir a Drive" style={{ marginRight: 6, color: '#fb923c' }}>↑</span>}
+                  {f.pendiente && <span title="Pendiente de subir a Drive" style={{ marginRight: 6, color: 'var(--amarillo)', display: 'inline-flex', verticalAlign: 'middle' }}><Ico d={ICO.arrowUp} size={12} /></span>}
                   {f.nombre}
-                  {f.pendiente && <span style={{ marginLeft: 6, fontSize: 10, color: '#9a3412', fontWeight: 400 }}>· pendiente</span>}
+                  {f.pendiente && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--cafe)', fontWeight: 400 }}>· pendiente</span>}
                 </div>
                 {f.descripcion && (
                   <div style={{ color: 'var(--texto-suave)', marginTop: 2 }}>{f.descripcion}</div>

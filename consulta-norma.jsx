@@ -374,7 +374,7 @@ function ConsultaNormaScreen() {
         {/* Precisión solo se muestra tras una captura exitosa */}
         {!busyGPS && gpsAccCN != null && React.createElement('div', {
           style: { textAlign: 'center', marginTop: 4, fontSize: 12, fontWeight: 600,
-            color: gpsAccCN <= 10 ? '#2e7d32' : gpsAccCN <= 25 ? '#e65100' : '#c62828' }
+            color: gpsAccCN <= 10 ? 'var(--verde-dark)' : gpsAccCN <= 25 ? 'var(--cafe)' : 'var(--rojo)' }
         }, 'Precisión: ±' + gpsAccCN + 'm')}
       </div>
 
@@ -410,8 +410,8 @@ function ConsultaNormaScreen() {
       {!busyCat && catastro && catastro.some(r => r.municipal) && (
         <div style={{
           padding: '12px 14px', borderRadius: 'var(--r-md)', marginBottom: 12,
-          background: '#fef2f2', border: '1.5px solid #dc2626',
-          color: '#991b1b', fontSize: 13, fontWeight: 600,
+          background: 'var(--rojo-bg)', border: '1.5px solid var(--rojo)',
+          color: 'var(--brand-ink)', fontSize: 13, fontWeight: 600,
           display: 'flex', alignItems: 'flex-start', gap: 8,
         }}>
           <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
@@ -433,12 +433,12 @@ function ConsultaNormaScreen() {
               {catastro && catastro.length > 0 && (
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                  background: 'rgba(74,108,140,0.14)', color: '#3F5C78',
+                  background: 'var(--azul-bg)', color: 'var(--azul)',
                 }}>{catastro.length} {catastro.length === 1 ? 'ficha' : 'fichas'}</span>
               )}
             </div>
-            <span style={{ color: 'var(--texto-suave)', fontSize: 12 }}>
-              {catastroOpen ? '▲' : '▼'}
+            <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
+              <Ico d={catastroOpen ? ICO.chevUp : ICO.chevDown} size={14} />
             </span>
           </div>
           {catastroOpen && (

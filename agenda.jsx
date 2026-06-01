@@ -97,7 +97,7 @@ function AgendaScreen({ usuario }) {
             background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
             padding: '6px 12px', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', gap: 6,
-          }}><Ico d={ICO.refresh} size={14} /> Recargar</button>
+          }}><Icon.Refresh size={14} /> Recargar</button>
         </div>
       </div>
 
@@ -168,11 +168,19 @@ function ItemsLista({ items, busyFila, onCompletar, onDesasignar }) {
                 </div>
               )}
             </div>
-            {it.score != null && (
-              <span className="score-badge score-bajo" style={{ flexShrink: 0 }}>
-                {it.score}
-              </span>
-            )}
+            {it.score != null && (() => {
+              // Tier por score (1-10): crítico ≥8, alto 6-7, medio 4-5, bajo <4
+              const s = Number(it.score);
+              const tier = s >= 8 ? 'score-critico'
+                         : s >= 6 ? 'score-alto'
+                         : s >= 4 ? 'score-medio'
+                         : 'score-bajo';
+              return (
+                <span className={'score-badge ' + tier} style={{ flexShrink: 0 }}>
+                  {it.score}
+                </span>
+              );
+            })()}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={() => onCompletar(it)} disabled={busyFila === it.fila}
@@ -184,7 +192,7 @@ function ItemsLista({ items, busyFila, onCompletar, onDesasignar }) {
               borderRadius: 10, padding: '8px 12px', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
               cursor: busyFila === it.fila ? 'not-allowed' : 'pointer',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}><Ico d={ICO.undo} size={14} /> Desasignar</button>
+            }}><Icon.Undo size={14} /> Desasignar</button>
           </div>
         </div>
       ))}

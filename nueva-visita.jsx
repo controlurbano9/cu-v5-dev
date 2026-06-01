@@ -786,7 +786,7 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
             </div>
           </div>
           <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
-            <Ico d={abierta ? ICO.chevUp : ICO.chevDown} size={12} />
+            {abierta ? <Icon.ChevronUp size={12} /> : <Icon.Chevron size={12} />}
           </span>
         </div>
       </div>
@@ -1221,6 +1221,23 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Referencia estable al recognition de voz (debe estar ANTES del early return de fase=modal,
   // de lo contrario React lanza error #310 al cambiar de modal a formulario).
   const recognitionRef = React.useRef(null);
+
+  // Estado online/offline reactivo — el botón Guardar cambia su microcopy
+  // cuando no hay red para comunicar que la visita se encolará y enviará
+  // automáticamente al recuperar conexión. Refuerza la confianza del inspector
+  // en campo (caso típico: zona rural sin señal).
+  // DEBE estar ANTES del early return de fase=modal (React #310).
+  const [enLinea, setEnLinea] = useStateNV(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  React.useEffect(function() {
+    function _on()  { setEnLinea(true); }
+    function _off() { setEnLinea(false); }
+    window.addEventListener('online',  _on);
+    window.addEventListener('offline', _off);
+    return function() {
+      window.removeEventListener('online',  _on);
+      window.removeEventListener('offline', _off);
+    };
+  }, []);
 
   // ── Callback del modal: configura el formulario según la elección ──
   function handleModalResult(res) {
@@ -2281,16 +2298,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               {busyGeo
                 ? (gpsAccuracy != null
                     ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
-                        React.createElement(Ico, { d: ICO.check, size: 14 }), 'Usar esta ubicación')
+                        React.createElement(Icon.Check, { size: 14 }), 'Usar esta ubicación')
                     : '⏳ Buscando señal…')
                 : '📍 Capturar mi ubicación'}
             </_BtnAccion>
             {busyGeo && React.createElement('button', {
               onClick: function() { _detenerGeoWatch(); setBusyGeo(false); setGpsAccuracy(null); },
-              style: { background: 'none', border: 'none', color: 'var(--texto-3)', fontSize: 12,
+              style: { background: 'none', border: 'none', color: 'var(--texto-suave)', fontSize: 12,
                 cursor: 'pointer', padding: '2px 6px',
                 display: 'inline-flex', alignItems: 'center', gap: 4 }
-            }, React.createElement(Ico, { d: ICO.close, size: 12 }), 'Cancelar')}
+            }, React.createElement(Icon.Close, { size: 12 }), 'Cancelar')}
           </div>
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
@@ -2581,7 +2598,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                     <button type="button" onClick={_aplicarSugerenciasTipif}
                       className="btn-principal secundario"
                       style={{ margin: 0, padding: '8px 14px', fontSize: 13 }}>
-                      <Ico d={ICO.check} size={14} /> Aplicar sugerencia
+                      <Icon.Check size={14} /> Aplicar sugerencia
                     </button>
                     <button type="button" onClick={() => setAdvertTipifIgnorada(true)}
                       style={{
@@ -2795,8 +2812,22 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {/* ── Botón guardar ──────────────────────────────────── */}
       <button onClick={guardar} disabled={guardando} className="btn-principal secundario"
         style={{ marginTop: 18, fontSize: 16 }}>
-        {guardando ? 'Guardando...' : (filaEditando ? 'Actualizar visita' : 'Guardar visita')}
+        {guardando
+          ? 'Guardando...'
+          : (filaEditando
+              ? (enLinea ? 'Actualizar visita' : 'Actualizar (se sincronizará)')
+              : (enLinea ? 'Guardar visita'    : 'Guardar (se sincronizará)'))}
       </button>
+      {/* Pista visual offline: refuerza que la cola se encarga */}
+      {!enLinea && !guardando && (
+        <div style={{
+          marginTop: 6, fontSize: 11, color: 'var(--cafe)', textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--amarillo)' }} />
+          Sin conexión — los datos se enviarán cuando vuelva la red.
+        </div>
+      )}
 
       {/* Botones de documentos generados (solo con fila guardada) */}
       {filaEditando && (
@@ -2809,7 +2840,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" onClick={() => window.open(d.linkXlsxActa, '_blank', 'noopener')}
                 className="btn-principal" style={{ fontSize: 15, flex: 2 }}>
-                <Ico d={ICO.eye} size={16} /> Ver acta F-GGO-46
+                <Icon.Eye size={16} /> Ver acta F-GGO-46
               </button>
               <button type="button" onClick={regenerarActa} disabled={generandoActa}
                 style={{
@@ -3196,7 +3227,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                         padding: '4px 6px', flexShrink: 0, borderRadius: 4,
                         display: 'inline-flex', alignItems: 'center',
                       }
-                    }, React.createElement(Ico, { d: ICO.close, size: 16 }))
+                    }, React.createElement(Icon.Close, { size: 16 }))
                   ),
                   // ── Línea de inserción ABAJO ──
                   showLineBelow && React.createElement('div', { style: {
@@ -3233,7 +3264,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           borderRadius: 12, fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
           textDecoration: 'none', cursor: 'pointer',
         }}>
-          <Ico d={ICO.folder} size={18} /> Ver carpeta Drive de la visita
+          <Icon.Folder size={18} /> Ver carpeta Drive de la visita
         </a>
       )}
     </div>
@@ -3342,7 +3373,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
                 borderRadius: 8, fontSize: 12,
               }}>
                 <div style={{ fontWeight: 600 }}>
-                  {f.pendiente && <span title="Pendiente de subir a Drive" style={{ marginRight: 6, color: 'var(--amarillo)', display: 'inline-flex', verticalAlign: 'middle' }}><Ico d={ICO.arrowUp} size={12} /></span>}
+                  {f.pendiente && <span title="Pendiente de subir a Drive" style={{ marginRight: 6, color: 'var(--amarillo)', display: 'inline-flex', verticalAlign: 'middle' }}><Icon.ArrowUp size={12} /></span>}
                   {f.nombre}
                   {f.pendiente && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--cafe)', fontWeight: 400 }}>· pendiente</span>}
                 </div>

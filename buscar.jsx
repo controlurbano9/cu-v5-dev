@@ -328,7 +328,7 @@ function BuscarScreen({ usuario, onContinuar }) {
                 )}
               </span>
               <span className="filtro-section-chevron" style={{ display: 'inline-flex' }}>
-                <Ico d={comunasOpen ? ICO.chevUp : ICO.chevDown} size={12} />
+                {comunasOpen ? <Icon.ChevronUp size={12} /> : <Icon.Chevron size={12} />}
               </span>
             </div>
             {comunasOpen && (
@@ -358,7 +358,7 @@ function BuscarScreen({ usuario, onContinuar }) {
                 )}
               </span>
               <span className="filtro-section-chevron" style={{ display: 'inline-flex' }}>
-                <Ico d={visitadorOpen ? ICO.chevUp : ICO.chevDown} size={12} />
+                {visitadorOpen ? <Icon.ChevronUp size={12} /> : <Icon.Chevron size={12} />}
               </span>
             </div>
             {visitadorOpen && (
@@ -515,7 +515,7 @@ function GrupoRadicadoBase({ radicado, filas, usuario, onContinuar,
           </div>
         </div>
         <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
-          <Ico d={open ? ICO.chevUp : ICO.chevDown} size={14} />
+          {open ? <Icon.ChevronUp size={14} /> : <Icon.Chevron size={14} />}
         </span>
       </div>
       {open && (

@@ -96,6 +96,27 @@ const Icon = {
     React.createElement('polyline', { key: 3, points: '7 3 7 8 15 8' }),
   ], p?.size),
 
+  // ── Acciones adicionales (migración H-06 desde ICO legacy) ─
+  Play:    (p) => _svg([
+    React.createElement('circle',  { key: 1, cx: 12, cy: 12, r: 10 }),
+    React.createElement('polygon', { key: 2, points: '10 8 16 12 10 16 10 8', fill: 'currentColor' }),
+  ], p?.size),
+  Eye:     (p) => _svg([
+    React.createElement('path',   { key: 1, d: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z' }),
+    React.createElement('circle', { key: 2, cx: 12, cy: 12, r: 3 }),
+  ], p?.size),
+  Folder:  (p) => _svg([
+    React.createElement('path', { key: 1, d: 'M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z' }),
+  ], p?.size),
+  Undo:    (p) => _svg([
+    React.createElement('polyline', { key: 1, points: '9 14 4 9 9 4' }),
+    React.createElement('path',     { key: 2, d: 'M20 20v-7a4 4 0 0 0-4-4H4' }),
+  ], p?.size),
+  ArrowUp: (p) => _svg([
+    React.createElement('line',     { key: 1, x1: 12, y1: 19, x2: 12, y2: 5 }),
+    React.createElement('polyline', { key: 2, points: '5 12 12 5 19 12' }),
+  ], p?.size),
+
   // ── Estados / info ───────────────────────────────────────
   Alert:   (p) => _svg([
     React.createElement('circle', { key: 1, cx: 12, cy: 12, r: 10 }),

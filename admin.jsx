@@ -157,7 +157,7 @@ function TabVigilancia() {
                             fontSize: 11, color: 'var(--verde-dark)', textDecoration: 'none',
                             alignSelf: 'center',
                             display: 'inline-flex', alignItems: 'center', gap: 4,
-                          }}><Ico d={ICO.check} size={12} /> Ver oficio</a>
+                          }}><Icon.Check size={12} /> Ver oficio</a>
                         )}
                       </div>
                     </td>

@@ -148,43 +148,8 @@ function MapPrecacheIndicator({ progreso, total, completado, etiqueta, etiquetaD
   );
 }
 
-// ── SVG icon paths (Heroicons outline 24×24) ──────────────────
-const ICO = {
-  home:     'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1',
-  mis:      'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01m-.01 4h.01',
-  buscar:   'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
-  norma:    'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
-  agenda:   'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  gear:     'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-  plus:     'M12 4v16m8-8H4',
-  // Controles UI (botones, chevrons, acciones)
-  play:     'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-  check:    'M5 13l4 4L19 7',
-  refresh:  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-  folder:   'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
-  file:     'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  fileEdit: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
-  eye:      'M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z',
-  undo:     'M3 10h10a8 8 0 018 8v2M3 10l6-6m-6 6l6 6',
-  close:    'M6 18L18 6M6 6l12 12',
-  chevDown: 'M19 9l-7 7-7-7',
-  chevUp:   'M5 15l7-7 7 7',
-  arrowUp:  'M5 10l7-7m0 0l7 7m-7-7v18',
-};
-
-// Exponer a window para que otros archivos del bundle puedan referenciarlos
-// con seguridad (independiente del orden de resolución de identificadores).
-window.ICO = ICO;
-
-function Ico({ d, size }) {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" strokeWidth="1.7" stroke="currentColor"
-      style={{ width: size || 22, height: size || 22, flexShrink: 0 }}>
-      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-    </svg>
-  );
-}
-window.Ico = Ico;
+// Iconos: usar window.Icon de icons.jsx (Heroicons outline stroke 1.6).
+// El sistema legacy Ico/ICO fue removido tras la migración H-06.
 
 // ── Indicador de cola offline: muestra cuántas escrituras pendientes hay ──
 // Se monta junto al banner offline; siempre visible si hay items en la cola
@@ -246,14 +211,14 @@ function OfflineColaBadge() {
         onClick={() => setDetalleAbierto(!detalleAbierto)}>
         <span style={{ display: 'inline-flex', color: 'var(--cafe)' }}>
           {sincronizando
-            ? <Ico d={ICO.refresh} size={14} />
-            : <Ico d={ICO.arrowUp} size={14} />}
+            ? <Icon.Refresh size={14} />
+            : <Icon.ArrowUp size={14} />}
         </span>
         <span style={{ fontWeight: 600, color: 'var(--cafe)' }}>
           {count} pendiente{count > 1 ? 's' : ''} de sincronizar
         </span>
         <span style={{ marginLeft: 'auto', color: 'var(--cafe)', display: 'inline-flex' }}>
-          <Ico d={detalleAbierto ? ICO.chevUp : ICO.chevDown} size={14} />
+          {detalleAbierto ? <Icon.ChevronUp size={14} /> : <Icon.Chevron size={14} />}
         </span>
       </div>
       {detalleAbierto && (
@@ -443,13 +408,13 @@ function AppV6() {
     setPantalla('nueva-visita');
   }
 
-  // Pestañas según rol
+  // Pestañas según rol — Icono es un componente de Icon.* (icons.jsx)
   const tabs = [];
-  tabs.push({ k: 'home',          label: 'Inicio',     ico: ICO.home });
-  tabs.push({ k: 'mis-visitas',   label: 'Mis visitas', ico: ICO.mis });
-  tabs.push({ k: 'buscar',        label: 'Buscar',     ico: ICO.buscar });
-  if (esAdmin) tabs.push({ k: 'agenda', label: 'Agenda', ico: ICO.agenda });
-  tabs.push({ k: 'consulta-norma', label: 'Norma',     ico: ICO.norma });
+  tabs.push({ k: 'home',          label: 'Inicio',     Icono: Icon.Home   });
+  tabs.push({ k: 'mis-visitas',   label: 'Mis visitas',Icono: Icon.Visits });
+  tabs.push({ k: 'buscar',        label: 'Buscar',     Icono: Icon.Search });
+  if (esAdmin) tabs.push({ k: 'agenda', label: 'Agenda', Icono: Icon.Agenda });
+  tabs.push({ k: 'consulta-norma', label: 'Norma',     Icono: Icon.Norma  });
 
   const enFormulario = pantalla === 'nueva-visita';
 
@@ -480,7 +445,7 @@ function AppV6() {
                   color: pantalla === 'admin' ? 'var(--brand-accent)' : 'var(--texto-suave)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <Ico d={ICO.gear} size={20} />
+                  <Icon.Admin size={20} />
                 </button>
               )}
               <button type="button" className="btn-logout" onClick={salir}>Salir</button>
@@ -493,12 +458,12 @@ function AppV6() {
           <div id="sidebar-desktop" style={{ display: 'flex' }}>
             {tabs.map(t => (
               <SidebarBtn key={t.k} pantalla={pantalla} setPantalla={setPantalla}
-                k={t.k} label={t.label} icoPath={t.ico} />
+                k={t.k} label={t.label} Icono={t.Icono} />
             ))}
             {esAdmin && <>
               <div className="sidebar-sep"></div>
               <SidebarBtn pantalla={pantalla} setPantalla={setPantalla}
-                k="admin" label="Administración" icoPath={ICO.gear} />
+                k="admin" label="Administración" Icono={Icon.Admin} />
             </>}
           </div>
         )}
@@ -523,10 +488,10 @@ function AppV6() {
 
         {/* ── NAV INFERIOR (móvil) ── */}
         {!isDesktop && !enFormulario && (
-          <div id="nav-inferior" style={{ display: 'flex' }}>
+          <div className="nav-inferior" style={{ display: 'flex' }}>
             {tabs.map(t => (
               <BottomTab key={t.k} pantalla={pantalla} setPantalla={setPantalla}
-                k={t.k} label={t.label} icoPath={t.ico} />
+                k={t.k} label={t.label} Icono={t.Icono} />
             ))}
           </div>
         )}
@@ -535,7 +500,7 @@ function AppV6() {
         {!enFormulario && (
           <button type="button" className="fab-nueva" onClick={irNueva}
             title="Nueva visita" aria-label="Nueva visita">
-            <Ico d={ICO.plus} size={26} />
+            <Icon.Plus size={26} />
           </button>
         )}
       </div>
@@ -561,22 +526,22 @@ function AppV6() {
 }
 
 // ── Botón sidebar desktop (icono + label horizontal) ──────────
-function SidebarBtn({ pantalla, setPantalla, k, label, icoPath }) {
+function SidebarBtn({ pantalla, setPantalla, k, label, Icono }) {
   const activo = pantalla === k;
   return (
     <button className={'sidebar-btn' + (activo ? ' activo' : '')} onClick={() => setPantalla(k)}>
-      <Ico d={icoPath} size={18} />
+      {Icono && <Icono size={18} />}
       {label}
     </button>
   );
 }
 
 // ── Botón nav inferior móvil (icono arriba + label abajo) ─────
-function BottomTab({ pantalla, setPantalla, k, label, icoPath }) {
+function BottomTab({ pantalla, setPantalla, k, label, Icono }) {
   const activo = pantalla === k;
   return (
     <button onClick={() => setPantalla(k)} className={'bottom-tab' + (activo ? ' activo' : '')}>
-      <Ico d={icoPath} size={20} />
+      {Icono && <Icono size={20} />}
       <span>{label}</span>
     </button>
   );

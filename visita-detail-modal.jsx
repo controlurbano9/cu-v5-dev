@@ -109,7 +109,7 @@ function VisitaDetailUI({ f, onCerrar }) {
             color: 'var(--texto-suave, #5C5142)', borderRadius: 8, padding: '6px 10px',
             fontFamily: 'inherit', fontSize: 16, cursor: 'pointer', lineHeight: 1,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          }}><Ico d={ICO.close} size={16} /></button>
+          }}><Icon.Close size={16} /></button>
         </div>
 
         {/* Body scrollable */}
@@ -119,10 +119,10 @@ function VisitaDetailUI({ f, onCerrar }) {
           {(linkDrive || linkPdf || linkXlsx || linkInforme || linkVigilancia) && (
             <_SeccionVD titulo="Entregables">
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                {linkDrive    && <_LinkBtnVD href={linkDrive}     icoPath={ICO.folder}   label="Carpeta Drive" />}
-                {linkPdf      && <_LinkBtnVD href={linkPdf}       icoPath={ICO.file}     label="Acta (PDF)" />}
+                {linkDrive    && <_LinkBtnVD href={linkDrive}     Icono={Icon.Folder} label="Carpeta Drive" />}
+                {linkPdf      && <_LinkBtnVD href={linkPdf}       Icono={Icon.File}   label="Acta (PDF)" />}
                 {!linkPdf && linkXlsx && <_LinkBtnVD href={linkXlsx} emoji="📊" label="Acta (Sheet)" />}
-                {linkInforme  && <_LinkBtnVD href={linkInforme}   icoPath={ICO.fileEdit} label="Informe F-43" />}
+                {linkInforme  && <_LinkBtnVD href={linkInforme}   Icono={Icon.Edit}   label="Informe F-43" />}
                 {linkVigilancia && <_LinkBtnVD href={linkVigilancia} emoji="🚓" label="Vigilancia Policía" />}
               </div>
             </_SeccionVD>
@@ -242,7 +242,7 @@ function _DebugRawVD({ f, solo_admin }) {
         borderRadius: 8, padding: '6px 10px', fontFamily: 'var(--font-mono)',
         fontSize: 11, color: 'var(--texto-suave, #5C5142)', cursor: 'pointer',
         display: 'inline-flex', alignItems: 'center', gap: 6,
-      }}><Ico d={open ? ICO.chevDown : ICO.chevUp} size={12} /> Debug — ver datos crudos del Sheet ({pares.length} columnas con valor)</button>
+      }}>{open ? <Icon.Chevron size={12} /> : <Icon.ChevronUp size={12} />} Debug — ver datos crudos del Sheet ({pares.length} columnas con valor)</button>
       {open && (
         <div style={{
           marginTop: 8, padding: 10, background: 'var(--gris-bg, #F5F1EB)',
@@ -277,7 +277,7 @@ function _SeccionVD({ titulo, children }) {
       }}>
         <span>{titulo}</span>
         <span style={{ color: 'var(--texto-suave, #5C5142)', display: 'inline-flex' }}>
-          <Ico d={open ? ICO.chevUp : ICO.chevDown} size={12} />
+          {open ? <Icon.ChevronUp size={12} /> : <Icon.Chevron size={12} />}
         </span>
       </div>
       {open && (
@@ -321,7 +321,7 @@ function _CampoLargoVD({ v }) {
   );
 }
 
-function _LinkBtnVD({ href, emoji, icoPath, label }) {
+function _LinkBtnVD({ href, emoji, Icono, label }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -330,7 +330,7 @@ function _LinkBtnVD({ href, emoji, icoPath, label }) {
       border: '1px solid rgba(138,63,38,0.15)', fontSize: 12, fontWeight: 600,
       textDecoration: 'none', cursor: 'pointer',
     }}>
-      {icoPath ? <Ico d={icoPath} size={14} /> : <span>{emoji}</span>} {label} ↗
+      {Icono ? <Icono size={14} /> : <span>{emoji}</span>} {label} ↗
     </a>
   );
 }

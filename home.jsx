@@ -214,7 +214,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
           padding: '6px 14px', fontFamily: 'inherit', fontSize: 11, cursor: 'pointer',
           color: 'var(--texto-suave)',
           display: 'inline-flex', alignItems: 'center', gap: 6,
-        }}><Ico d={ICO.refresh} size={12} /> Recargar datos</button>
+        }}><Icon.Refresh size={12} /> Recargar datos</button>
       </div>
     </div>
   );

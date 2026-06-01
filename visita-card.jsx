@@ -141,7 +141,7 @@ function BotonContinuarVisita({ f, onContinuar, busy, tamaño }) {
         ? { flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }
         : { margin: 0, padding: '10px 14px', fontSize: 13 }
       }>
-      <Ico d={ICO.play} size={esSm ? 14 : 16} /> {texto}
+      <Icon.Play size={esSm ? 14 : 16} /> {texto}
     </button>
   );
 }
@@ -171,11 +171,11 @@ function BotonesEntregables({ f }) {
         onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
         className="btn-principal secundario"
         style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-        <Ico d={ICO.eye} size={14} /> Ver datos
+        <Icon.Eye size={14} /> Ver datos
       </button>
-      {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.folder}   size={14} /> Carpeta</a>}
-      {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.file}     size={14} /> Acta</a>}
-      {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.fileEdit} size={14} /> Informe</a>}
+      {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Icon.Folder size={14} /> Carpeta</a>}
+      {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Icon.File   size={14} /> Acta</a>}
+      {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Icon.Edit   size={14} /> Informe</a>}
     </>
   );
 }
@@ -237,7 +237,7 @@ function BotonesAdminVisita({ f, esAdmin, busy, abierto,
           </button>
           <button type="button" onClick={() => onDesasignar(f._idx, f['RADICADO'])} disabled={busy}
             style={btnGris({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 })}>
-            <Ico d={ICO.undo} size={14} /> Desasignar
+            <Icon.Undo size={14} /> Desasignar
           </button>
         </>
       )}
@@ -248,7 +248,7 @@ function BotonesAdminVisita({ f, esAdmin, busy, abierto,
           onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
           className="btn-principal secundario"
           style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-          <Ico d={ICO.check} size={14} /> Completar
+          <Icon.Check size={14} /> Completar
         </button>
       )}
 

@@ -300,7 +300,7 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
           </span>
         </div>
         <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
-          <Ico d={abierto ? ICO.chevUp : ICO.chevDown} size={14} />
+          {abierto ? <Icon.ChevronUp size={14} /> : <Icon.Chevron size={14} />}
         </span>
       </div>
 

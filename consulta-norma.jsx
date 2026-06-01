@@ -438,7 +438,7 @@ function ConsultaNormaScreen() {
               )}
             </div>
             <span style={{ color: 'var(--texto-suave)', display: 'inline-flex' }}>
-              <Ico d={catastroOpen ? ICO.chevUp : ICO.chevDown} size={14} />
+              {catastroOpen ? <Icon.ChevronUp size={14} /> : <Icon.Chevron size={14} />}
             </span>
           </div>
           {catastroOpen && (

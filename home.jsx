@@ -200,27 +200,9 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
 
         {!cargando && asignadasHoy.map((f, i) => (
           <div key={f._idx || i} className="card" style={{ padding: 14, marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, color: 'var(--brand-accent)' }}>
-                  {f['RADICADO'] || '—'}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-                  {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 2 }}>
-                  {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}
-                  {f['COMUNA'] && ' · C' + f['COMUNA']}
-                </div>
-              </div>
-              <span className="badge-suave badge-amarillo">Asignada</span>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <button type="button" onClick={() => onContinuar(f._idx, f)}
-                className="btn-principal secundario" style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
-                <Ico d={ICO.play} size={16} /> Iniciar visita
-              </button>
-            </div>
+            <VisitaCard f={f} labelBadge="Asignada" accionesMt={10}>
+              <BotonContinuarVisita f={f} onContinuar={onContinuar} tamaño="md" />
+            </VisitaCard>
           </div>
         ))}
       </div>

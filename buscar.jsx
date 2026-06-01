@@ -537,148 +537,42 @@ function FilaVisitaBase({ f, usuario, onContinuar,
   esAdmin, inspectores, busy, abierto, onAbrirAsignar, onAsignar, onDesasignar, onCompletar,
   onAsignarNuevaVisita }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-  // Badge usando tokens de paleta editorial (no hardcoded RGBA)
-  const tonoCls = {
-    PENDIENTE:  'badge-amarillo',
-    ASIGNADO:   'badge-azul',
-    INICIADO:   'badge-azul',
-    COMPLETADO: 'badge-verde',
-  }[est] || '';
 
+  // En Buscar el badge se renderizaba con el estado raw mayúsculas (PENDIENTE,
+  // ASIGNADO, INICIADO, COMPLETADO). Preservamos ese comportamiento pasando
+  // el override a VisitaCard.
   return (
     <div style={{ padding: '12px 14px', borderTop: '1px solid var(--borde)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
-            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)' }}>
-            {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}
-            {f['COMUNA'] && ` · C${f['COMUNA']}`}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {f['FECHA DE VISITA'] && <span>{formatearFecha(f['FECHA DE VISITA'])}</span>}
-            {f['VISITADOR(ES)'] && <span><span style={{ opacity: 0.7 }}>Inspector:</span> {(f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}</span>}
-            {f['FECHA ASIGNACION VISITA'] && <span><span style={{ opacity: 0.7 }}>Asignado:</span> {formatearFecha(f['FECHA ASIGNACION VISITA'])}</span>}
-          </div>
+      <VisitaCard f={f}
+        mostrarFecha mostrarInspector mostrarAsignado
+        labelBadge={est || '—'}
+        accionesMt={10}>
+        {/* Botones inline en una sola fila — orden contextual por estado */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {/* Iniciar/Continuar para no completadas */}
+          {est !== 'COMPLETADO' && (
+            <BotonContinuarVisita f={f} onContinuar={onContinuar} busy={busy} tamaño="sm" />
+          )}
+          {/* Entregables solo para completadas (Ver datos + Carpeta + Acta + Informe) */}
+          {est === 'COMPLETADO' && <BotonesEntregables f={f} />}
+          {/* Botones admin contextuales (Asignar / Reasignar / Desasignar / Completar / + Nueva visita) */}
+          <BotonesAdminVisita
+            f={f} esAdmin={esAdmin} busy={busy} abierto={abierto}
+            onAbrirAsignar={onAbrirAsignar}
+            onDesasignar={onDesasignar}
+            onCompletar={onCompletar}
+            onAsignarNuevaVisita={onAsignarNuevaVisita}
+          />
         </div>
-        <span className={'badge-suave ' + tonoCls}>{est || '—'}</span>
-      </div>
+      </VisitaCard>
 
-      {/* ── Botones de acción ── */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        {/* PENDIENTE: botón Iniciar + Asignar (admin) */}
-        {est === 'PENDIENTE' && onContinuar && (
-          <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
-            className="btn-principal secundario"
-            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            <Ico d={ICO.play} size={14} /> Iniciar visita
-          </button>
-        )}
-        {est === 'PENDIENTE' && esAdmin && (
-          <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
-            flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
-            border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
-            fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-            cursor: busy ? 'not-allowed' : 'pointer',
-          }}>{busy ? '...' : (abierto ? 'Cancelar' : 'Asignar')}</button>
-        )}
-
-        {/* ASIGNADO / INICIADO: Continuar + Reasignar + Desasignar + Completar (admin) */}
-        {(est === 'ASIGNADO' || est === 'INICIADO') && onContinuar && (
-          <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
-            className="btn-principal secundario"
-            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            <Ico d={ICO.play} size={14} /> {est === 'INICIADO' ? 'Continuar' : 'Iniciar'}
-          </button>
-        )}
-        {(est === 'ASIGNADO' || est === 'INICIADO') && esAdmin && (
-          <>
-            <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
-              flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
-              border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
-              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-              cursor: busy ? 'not-allowed' : 'pointer',
-            }}>{abierto ? 'Cancelar' : 'Reasignar'}</button>
-            <button type="button" onClick={() => onDesasignar(f._idx, f['RADICADO'])} disabled={busy} style={{
-              flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
-              border: '1px solid var(--borde)', borderRadius: 10, padding: '8px 12px',
-              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-              cursor: busy ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}><Ico d={ICO.undo} size={14} /> Desasignar</button>
-          </>
-        )}
-        {est === 'INICIADO' && esAdmin && (
-          <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
-            className="btn-principal secundario"
-            style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-            <Ico d={ICO.check} size={14} /> Completar
-          </button>
-        )}
-
-        {/* COMPLETADO: ver entregables + modal solo-lectura con todos los campos */}
-        {est === 'COMPLETADO' && (() => {
-          var linkDrive    = f['LINK_DRIVE'];
-          var linkActaPdf  = f['LINK_PDF_ACTA'] || f['LINK_XLSX_ACTA'];
-          var linkInforme  = f['LINK_DOCX_INFORME'] || f['LINK_INFORME_F43'];
-          var btnSty = {
-            background: 'var(--gris-bg)', color: 'var(--texto)',
-            border: '1px solid var(--borde)', borderRadius: 10,
-            padding: '8px 12px', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', textDecoration: 'none', display: 'inline-flex',
-            alignItems: 'center', gap: 6, flex: 1, minWidth: 100,
-            justifyContent: 'center',
-          };
-          return <>
-            <button type="button" onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
-              className="btn-principal secundario"
-              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-              <Ico d={ICO.eye} size={14} /> Ver datos
-            </button>
-            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.folder}   size={14} /> Carpeta</a>}
-            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.file}     size={14} /> Acta</a>}
-            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.fileEdit} size={14} /> Informe</a>}
-            {esAdmin && onAsignarNuevaVisita && (
-              <button type="button" onClick={onAbrirAsignar} disabled={busy} style={{
-                flex: 1, minWidth: 100, background: 'var(--gris-bg)', color: 'var(--texto)',
-                border: '1px dashed var(--brand-accent)', borderRadius: 10, padding: '8px 12px',
-                fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-                cursor: busy ? 'not-allowed' : 'pointer',
-              }}>{abierto ? 'Cancelar' : '+ Nueva visita'}</button>
-            )}
-          </>;
-        })()}
-      </div>
-
-      {/* ── Panel de selección de inspector (asignar/reasignar/nueva visita) ── */}
-      {abierto && esAdmin && inspectores && inspectores.length > 0 && (
-        <div style={{
-          marginTop: 10, padding: 10, background: 'var(--gris-bg)', borderRadius: 8,
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 2 }}>
-            {est === 'COMPLETADO' ? 'Crear nueva visita y asignar a:' : 'Asignar a:'}
-          </div>
-          {inspectores.map(i => (
-            <button key={i.nombre} type="button"
-              onClick={() => {
-                // Para COMPLETADO crea fila nueva; para los demás re-asigna la misma fila.
-                if (est === 'COMPLETADO' && onAsignarNuevaVisita) {
-                  onAsignarNuevaVisita(f._idx, i.nombre);
-                } else {
-                  onAsignar(f._idx, i.nombre);
-                }
-              }} disabled={busy} style={{
-              background: 'var(--superficie)', border: '1px solid var(--borde)', borderRadius: 6,
-              padding: '8px 10px', fontFamily: 'inherit', fontSize: 13, textAlign: 'left',
-              cursor: busy ? 'not-allowed' : 'pointer',
-            }}>
-              {i.nombre}
-              {i.cargo && <span style={{ color: 'var(--texto-suave)', fontSize: 11 }}> · {i.cargo}</span>}
-            </button>
-          ))}
-        </div>
+      {/* Panel de selección de inspector (fuera del flex de botones, va debajo) */}
+      {esAdmin && (
+        <PanelSeleccionInspector
+          f={f} busy={busy} abierto={abierto} inspectores={inspectores}
+          onAsignar={onAsignar}
+          onAsignarNuevaVisita={onAsignarNuevaVisita}
+        />
       )}
     </div>
   );

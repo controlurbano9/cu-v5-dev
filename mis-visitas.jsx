@@ -317,96 +317,26 @@ function SeccionAcordeonMV({ titulo, icono, count, color, abierto, onToggle, chi
 // ═══════════════════════════════════════════════════════════════
 function TarjetaVisitaMV({ f, onContinuar }) {
   const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-  const tono = TONOS_MV[est] || { cls: '', label: est };
 
-  // Fecha de visita formateada
-  const fechaVisita = formatearFecha(f['FECHA DE VISITA'] || f['FECHA ASIGNACION VISITA'] || '');
-
-  // Determinar texto y visibilidad del botón de acción
-  const mostrarBoton = est !== 'COMPLETADO';
-  const textoBoton = est === 'INICIADO' ? 'Continuar visita' : 'Iniciar visita';
-
+  // Mis visitas usa labels capitalizados (Pendiente/Asignada/Iniciada/Completada),
+  // exactamente lo que VisitaCard renderiza por defecto via su TONOS_VISITA interno.
+  // No necesitamos override.
   return (
     <div style={{
       padding: '14px 14px',
       borderBottom: '1px solid var(--borde)',
     }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between',
-        alignItems: 'flex-start', gap: 8,
-      }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Radicado */}
-          <div style={{
-            fontFamily: 'var(--font-mono)', fontSize: 12,
-            fontWeight: 600, color: 'var(--brand-accent)',
-          }}>
-            {f['RADICADO'] || '—'}
+      <VisitaCard f={f} mostrarFecha accionesMt={12}>
+        {/* Iniciar/Continuar para no completadas, entregables para completadas */}
+        {est !== 'COMPLETADO' && onContinuar && (
+          <BotonContinuarVisita f={f} onContinuar={onContinuar} tamaño="md" />
+        )}
+        {est === 'COMPLETADO' && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <BotonesEntregables f={f} />
           </div>
-
-          {/* Dirección */}
-          <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
-            {f['DIRECCION INFRACCION'] || f['DIRECCION'] || 'Sin dirección'}
-          </div>
-
-          {/* Barrio · Comuna */}
-          <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
-            {f['BARRIO/VEREDA'] || f['BARRIO'] || '—'}
-            {f['COMUNA'] && (' · C' + f['COMUNA'])}
-          </div>
-
-          {/* Fecha de visita */}
-          {fechaVisita && (
-            <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>
-              <span style={{ opacity: 0.7 }}>Fecha:</span> {fechaVisita}
-            </div>
-          )}
-        </div>
-
-        {/* Badge de estado (clases palette en styles.css) */}
-        <span className={'badge-suave ' + tono.cls}>{tono.label}</span>
-      </div>
-
-      {/* Botón de acción */}
-      {mostrarBoton && onContinuar && (
-        <div style={{ marginTop: 12 }}>
-          <button
-            type="button"
-            onClick={() => onContinuar(f._idx, f)}
-            className="btn-principal secundario"
-            style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
-            <Ico d={ICO.play} size={16} /> {textoBoton}
-          </button>
-        </div>
-      )}
-
-      {/* COMPLETADO: ver datos + entregables Drive/Acta/Informe */}
-      {est === 'COMPLETADO' && (() => {
-        const linkDrive   = f['LINK_DRIVE'];
-        const linkActaPdf = f['LINK_PDF_ACTA'] || f['LINK_XLSX_ACTA'];
-        const linkInforme = f['LINK_DOCX_INFORME'] || f['LINK_INFORME_F43'];
-        const btnSty = {
-          background: 'var(--gris-bg)', color: 'var(--texto)',
-          border: '1px solid var(--borde)', borderRadius: 10,
-          padding: '8px 12px', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-          cursor: 'pointer', textDecoration: 'none', display: 'inline-flex',
-          alignItems: 'center', gap: 6, flex: 1, minWidth: 100,
-          justifyContent: 'center',
-        };
-        return (
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button"
-              onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
-              className="btn-principal secundario"
-              style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
-              <Ico d={ICO.eye} size={14} /> Ver datos
-            </button>
-            {linkDrive   && <a href={linkDrive}   target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.folder}   size={14} /> Carpeta</a>}
-            {linkActaPdf && <a href={linkActaPdf} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.file}     size={14} /> Acta</a>}
-            {linkInforme && <a href={linkInforme} target="_blank" rel="noopener noreferrer" style={btnSty}><Ico d={ICO.fileEdit} size={14} /> Informe</a>}
-          </div>
-        );
-      })()}
+        )}
+      </VisitaCard>
     </div>
   );
 }

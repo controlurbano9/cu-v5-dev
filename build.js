@@ -30,6 +30,8 @@ const ARCHIVOS = [
   'informe-modal.jsx',
   'visita-detail-modal.jsx',
   'login.jsx',
+  // visita-card.jsx antes de home/mis-visitas/buscar (que la consumen)
+  'visita-card.jsx',
   'home.jsx',
   'mis-visitas.jsx',
   'buscar.jsx',

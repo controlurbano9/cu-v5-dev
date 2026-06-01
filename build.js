@@ -24,6 +24,8 @@ const path = require('path');
 const DEV = process.argv.includes('--dev');
 
 const ARCHIVOS = [
+  // icons.jsx primero — expone window.Icon disponible para todos los demás
+  'icons.jsx',
   'modal.jsx',
   'informe-modal.jsx',
   'visita-detail-modal.jsx',

@@ -373,7 +373,7 @@ function TarjetaVisitaMV({ f, onContinuar }) {
           <button
             type="button"
             onClick={() => onContinuar(f._idx, f)}
-            className="btn-principal verde"
+            className="btn-principal secundario"
             style={{ margin: 0, padding: '10px 14px', fontSize: 13 }}>
             <Ico d={ICO.play} size={16} /> {textoBoton}
           </button>
@@ -397,7 +397,7 @@ function TarjetaVisitaMV({ f, onContinuar }) {
           <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button"
               onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
-              className="btn-principal verde"
+              className="btn-principal secundario"
               style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
               <Ico d={ICO.eye} size={14} /> Ver datos
             </button>

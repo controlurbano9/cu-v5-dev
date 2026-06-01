@@ -570,7 +570,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
         {/* PENDIENTE: botón Iniciar + Asignar (admin) */}
         {est === 'PENDIENTE' && onContinuar && (
           <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
-            className="btn-principal verde"
+            className="btn-principal secundario"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
             <Ico d={ICO.play} size={14} /> Iniciar visita
           </button>
@@ -587,7 +587,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
         {/* ASIGNADO / INICIADO: Continuar + Reasignar + Desasignar + Completar (admin) */}
         {(est === 'ASIGNADO' || est === 'INICIADO') && onContinuar && (
           <button type="button" onClick={() => onContinuar(f._idx, f)} disabled={busy}
-            className="btn-principal verde"
+            className="btn-principal secundario"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
             <Ico d={ICO.play} size={14} /> {est === 'INICIADO' ? 'Continuar' : 'Iniciar'}
           </button>
@@ -611,7 +611,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
         )}
         {est === 'INICIADO' && esAdmin && (
           <button type="button" onClick={() => onCompletar(f._idx, f['FECHA ASIGNACION VISITA'])} disabled={busy}
-            className="btn-principal verde"
+            className="btn-principal secundario"
             style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
             <Ico d={ICO.check} size={14} /> Completar
           </button>
@@ -632,7 +632,7 @@ function FilaVisitaBase({ f, usuario, onContinuar,
           };
           return <>
             <button type="button" onClick={() => window.abrirVisitaDetail && window.abrirVisitaDetail(f)}
-              className="btn-principal verde"
+              className="btn-principal secundario"
               style={{ flex: 1, minWidth: 100, margin: 0, padding: '8px 12px', fontSize: 12 }}>
               <Ico d={ICO.eye} size={14} /> Ver datos
             </button>

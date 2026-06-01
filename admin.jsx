@@ -287,7 +287,7 @@ function TabResetPin() {
           width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
           background: 'var(--superficie)', fontFamily: 'var(--font-mono)', fontSize: 16, marginBottom: 12,
         }} />
-      <button onClick={ejecutar} disabled={busy} className="btn-principal verde" style={{ marginTop: 4 }}>
+      <button onClick={ejecutar} disabled={busy} className="btn-principal secundario" style={{ marginTop: 4 }}>
         {busy ? 'Procesando...' : 'Actualizar PIN'}
       </button>
       {msg && (

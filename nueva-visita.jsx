@@ -806,7 +806,7 @@ function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
             <>
               <span></span>
               <button type="button" onClick={(e) => { e.stopPropagation(); onSeleccionar(); }}
-                className="btn-principal verde"
+                className="btn-principal secundario"
                 style={{ margin: 0, marginTop: 6, padding: '6px 14px', fontSize: 12, justifySelf: 'start' }}>
                 Usar esta ficha
               </button>
@@ -1054,7 +1054,7 @@ function ModalInicioVisita({ onResult, onCancelar }) {
             />
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" onClick={buscarRadicado} disabled={buscando || !radicado.trim()}
-                className="btn-principal verde" style={{ flex: 1, margin: 0, fontSize: 14 }}>
+                className="btn-principal secundario" style={{ flex: 1, margin: 0, fontSize: 14 }}>
                 {buscando ? 'Buscando...' : 'Buscar en BD'}
               </button>
               <button type="button" onClick={() => setPaso('tipo')} style={{
@@ -1136,7 +1136,7 @@ function ModalInicioVisita({ onResult, onCancelar }) {
                           La visita N°{nVis} ya fue completada. ¿Desea realizar una nueva visita?
                         </div>
                         <button type="button" onClick={() => crearNuevaVisitaRadicado(u)}
-                          className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                          className="btn-principal secundario" style={{ margin: 0, fontSize: 14 }}>
                           Crear visita N°{resultado.nVisitaSig}
                         </button>
                       </>
@@ -1144,7 +1144,7 @@ function ModalInicioVisita({ onResult, onCancelar }) {
                     {esIniciada && (
                       <>
                         <button type="button" onClick={() => iniciarConDatos(u, nVis)}
-                          className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                          className="btn-principal secundario" style={{ margin: 0, fontSize: 14 }}>
                           Continuar visita N°{nVis}
                         </button>
                         <button type="button" onClick={() => crearNuevaVisitaRadicado(u)}
@@ -1155,7 +1155,7 @@ function ModalInicioVisita({ onResult, onCancelar }) {
                     )}
                     {!esCompletada && !esIniciada && (
                       <button type="button" onClick={() => iniciarConDatos(u, nVis)}
-                        className="btn-principal verde" style={{ margin: 0, fontSize: 14 }}>
+                        className="btn-principal secundario" style={{ margin: 0, fontSize: 14 }}>
                         Iniciar visita
                       </button>
                     )}
@@ -2523,7 +2523,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               style={{ marginBottom: 10, background: 'var(--superficie)' }}
             />
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button type="button" onClick={aceptarSugerenciaIA} className="btn-principal verde"
+              <button type="button" onClick={aceptarSugerenciaIA} className="btn-principal secundario"
                 style={{ margin: 0, fontSize: 13, padding: '8px 18px' }}>
                 Usar esta versión
               </button>
@@ -2579,7 +2579,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                   )}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button type="button" onClick={_aplicarSugerenciasTipif}
-                      className="btn-principal verde"
+                      className="btn-principal secundario"
                       style={{ margin: 0, padding: '8px 14px', fontSize: 13 }}>
                       <Ico d={ICO.check} size={14} /> Aplicar sugerencia
                     </button>
@@ -2793,7 +2793,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       </_Seccion>
 
       {/* ── Botón guardar ──────────────────────────────────── */}
-      <button onClick={guardar} disabled={guardando} className="btn-principal verde"
+      <button onClick={guardar} disabled={guardando} className="btn-principal secundario"
         style={{ marginTop: 18, fontSize: 16 }}>
         {guardando ? 'Guardando...' : (filaEditando ? 'Actualizar visita' : 'Guardar visita')}
       </button>
@@ -3209,7 +3209,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
               <button onClick={confirmarYGenerarRF} disabled={modalFotos.some(function(f) { return f.descBusy; })}
-                className="btn-principal verde" style={{ flex: 1, margin: 0, padding: 12, fontSize: 14 }}>
+                className="btn-principal secundario" style={{ flex: 1, margin: 0, padding: 12, fontSize: 14 }}>
                 {modalFotos.some(function(f) { return f.descBusy; })
                   ? 'Generando descripciones...'
                   : 'Confirmar y generar'}
@@ -3308,7 +3308,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
 
   return (
     <div className="form-seccion" style={{ marginTop: 14 }}>
-      <span className="form-seccion-titulo titulo-azul">Registro fotografico</span>
+      <span className="form-seccion-titulo">Registro fotografico</span>
       <div style={{ marginTop: 12 }}>
         {linkDrive && (
           <div style={{ marginBottom: 12 }}>

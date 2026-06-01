@@ -176,7 +176,7 @@ function ItemsLista({ items, busyFila, onCompletar, onDesasignar }) {
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={() => onCompletar(it)} disabled={busyFila === it.fila}
-              className="btn-principal verde" style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: 13 }}>
+              className="btn-principal secundario" style={{ flex: 1, margin: 0, padding: '8px 12px', fontSize: 13 }}>
               {busyFila === it.fila ? '...' : 'Completar'}
             </button>
             <button onClick={() => onDesasignar(it)} disabled={busyFila === it.fila} style={{

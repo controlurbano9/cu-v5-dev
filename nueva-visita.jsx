@@ -2866,6 +2866,21 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               appAlert('El generador de informe no cargó.', { titulo: 'Error' });
               return;
             }
+            // Mismo control estricto que para el acta: el informe F-GGO-43 se nutre
+            // de los mismos campos del formulario y un dato faltante se traduce en
+            // un placeholder o un párrafo de IA descontextualizado. Mejor bloquear.
+            const faltanInf = _validarAntesDeActa();
+            if (faltanInf.length > 0) {
+              const lista = faltanInf.slice(0, 20).map(s => '• ' + s).join('\n');
+              const extra = faltanInf.length > 20 ? '\n... y ' + (faltanInf.length - 20) + ' más' : '';
+              await appAlert(
+                'No se puede generar el informe F-GGO-43: faltan ' + faltanInf.length + ' campo(s) por diligenciar:\n\n' +
+                lista + extra +
+                '\n\nVuelve al formulario, complétalos y guarda antes de generar el informe.',
+                { titulo: 'Datos incompletos', btnOk: 'Volver al formulario' }
+              );
+              return;
+            }
             // Si hay coordenadas, consultar POT completo para enriquecer
             // (clasificacion, tratamiento, intensidad) además de los campos de BD.
             let potExtra = {};

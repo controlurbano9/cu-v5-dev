@@ -36,9 +36,9 @@
 
 <!-- Cliente webhook (JS plano) — bump ?v= cuando cambie el código para invalidar caché del SW -->
 <!-- offline-queue debe cargar ANTES de api.js: api.js usa offlineEnqueue al fallar por red -->
-<script src="offline-queue.js?v=68"></script>
-<script src="api.js?v=68"></script>
-<script src="utils.js?v=68"></script>
+<script src="offline-queue.js?v=69"></script>
+<script src="api.js?v=69"></script>
+<script src="utils.js?v=69"></script>
 
 <!-- ─────────────────────────────────────────────────────────────
      PRODUCCIÓN: bundle.min.js pre-transpilado y minificado con esbuild.
@@ -46,7 +46,7 @@
      y ~400 ms de transpilación en cada arranque.
      Regenerar tras editar JSX:  node build.js   (o npm run build)
      ───────────────────────────────────────────────────────────── -->
-<script src="bundle.min.js?v=68"></script>
+<script src="bundle.min.js?v=69"></script>
 
 
 <!-- Registro del Service Worker (cache de assets estáticos) -->

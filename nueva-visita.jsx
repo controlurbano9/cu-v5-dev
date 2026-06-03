@@ -1239,6 +1239,111 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     };
   }, []);
 
+  // ═══════════════════════════════════════════════════════════════
+  // AUTOGUARDADO — borrador local + remoto cada 60 s
+  // ═══════════════════════════════════════════════════════════════
+  // Antes no existía y los inspectores perdían trabajo al cerrar la
+  // pestaña o cambiar de pantalla sin tocar "Guardar". Ahora:
+  //   1) Cada cambio en d se persiste en localStorage con debounce 500ms
+  //      (clave por identidad de visita: fila / radicado / orden / nuevo).
+  //   2) Al reabrir el formulario se restaura automáticamente el borrador
+  //      (sin preguntar — decisión de producto).
+  //   3) Si ya existe fila en BD, cada 60 s se hace un POST silencioso
+  //      al webhook (offline cae en la cola IDB).
+  //   4) beforeunload advierte al inspector si hay cambios sin guardar.
+  // DEBE estar antes del early return de fase=modal (React #310).
+  const _draftKey = React.useMemo(function() {
+    if (filaEditando) return 'cu_draft_v1_fila_' + filaEditando;
+    if (d.radicado)   return 'cu_draft_v1_rad_'  + (d.radicado||'').replace(/[^a-zA-Z0-9_-]/g,'_');
+    if (d.orden)      return 'cu_draft_v1_ord_'  + (d.orden||'').replace(/[^a-zA-Z0-9_-]/g,'_');
+    return 'cu_draft_v1_nuevo';
+  }, [filaEditando, d.radicado, d.orden]);
+
+  // Refs para que el setInterval lea siempre el state más reciente sin
+  // tener que recrear el timer en cada keystroke.
+  const _dRef          = React.useRef(d);
+  const _bOtroRef      = React.useRef(barrioOtro);
+  const _lastSavedRef  = React.useRef('');     // JSON del último estado persistido OK
+  const _restauradoRef = React.useRef(false);
+  React.useEffect(function() {
+    _dRef.current     = d;
+    _bOtroRef.current = barrioOtro;
+  }, [d, barrioOtro]);
+
+  const [ultimoGuardadoMs, setUltimoGuardadoMs] = useStateNV(null);
+
+  // (1) Restaurar borrador local en el primer render del formulario.
+  React.useEffect(function() {
+    if (fase !== 'formulario') return;
+    if (_restauradoRef.current) return;
+    _restauradoRef.current = true;
+    try {
+      const raw = localStorage.getItem(_draftKey);
+      if (raw) {
+        const obj = JSON.parse(raw);
+        if (obj && obj._d) {
+          setD(function(prev) { return Object.assign({}, prev, obj._d); });
+          if (typeof obj._barrioOtro === 'string') setBarrioOtro(obj._barrioOtro);
+          console.log('[autoguardado] borrador local restaurado: ' + _draftKey);
+        }
+      }
+    } catch(e) { /* localStorage no disponible / corrupto: silencio */ }
+  }, [fase, _draftKey]);
+
+  // (2) Persistir borrador local con debounce 500ms en cada cambio.
+  React.useEffect(function() {
+    if (fase !== 'formulario') return;
+    if (!_restauradoRef.current) return;
+    const t = setTimeout(function() {
+      try {
+        localStorage.setItem(_draftKey, JSON.stringify({
+          _ts: Date.now(),
+          _d: d,
+          _barrioOtro: barrioOtro,
+        }));
+      } catch(e) { /* quota llena / privacidad: silencio */ }
+    }, 500);
+    return function() { clearTimeout(t); };
+  }, [d, barrioOtro, fase, _draftKey]);
+
+  // (3) Autoguardado remoto cada 60 s — solo si ya existe fila en BD.
+  React.useEffect(function() {
+    if (fase !== 'formulario') return;
+    if (!filaEditando) return;
+    const id = setInterval(async function() {
+      if (guardando || generandoActa || generandoRF) return;
+      const snap = JSON.stringify({ d: _dRef.current, b: _bOtroRef.current });
+      if (snap === _lastSavedRef.current) return; // sin cambios
+      try {
+        const dCur = _dRef.current;
+        const bCur = _bOtroRef.current;
+        const barrioFinal = dCur.barrio === '__otro__' ? (bCur || '') : dCur.barrio;
+        const dFinal = Object.assign({}, dCur, { barrio: barrioFinal });
+        const vals = _construirPayload(dFinal, estadoVisita, dCur.linkDrive || '', datosIniciales);
+        await guardarVisita({ valores: vals, fila: filaEditando });
+        _lastSavedRef.current = snap;
+        setUltimoGuardadoMs(Date.now());
+      } catch(e) {
+        console.warn('[autoguardado] remoto falló (reintenta en 60s):', e.message);
+      }
+    }, 60000);
+    return function() { clearInterval(id); };
+  }, [fase, filaEditando, estadoVisita, datosIniciales, guardando, generandoActa, generandoRF]);
+
+  // (4) beforeunload — advertir si hay cambios pendientes.
+  React.useEffect(function() {
+    function _bu(e) {
+      if (fase !== 'formulario') return;
+      const snap = JSON.stringify({ d: _dRef.current, b: _bOtroRef.current });
+      if (snap === _lastSavedRef.current) return; // limpio
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+    window.addEventListener('beforeunload', _bu);
+    return function() { window.removeEventListener('beforeunload', _bu); };
+  }, [fase]);
+
   // ── Callback del modal: configura el formulario según la elección ──
   function handleModalResult(res) {
     if (res.tipo === 'oficio') {
@@ -1790,6 +1895,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
       // 4. Actualizar state local con metadatos derivados
       setEstV('INICIADO');
+      const dPersistido = { ...dFinal, linkDrive, idCarpetaVisita, idCarpetaFotos };
       setD(prev => ({
         ...prev,
         barrio: barrioFinal,
@@ -1797,6 +1903,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         idCarpetaVisita,
         idCarpetaFotos,
       }));
+      // Sincronizar el snapshot del autoguardado: este estado está "limpio"
+      // hasta que el inspector vuelva a tocar un campo.
+      _lastSavedRef.current = JSON.stringify({ d: dPersistido, b: barrioOtro });
+      setUltimoGuardadoMs(Date.now());
 
       if (r && r.encolado) {
         // Visita guardada en cola offline. Acta/RF/informe NO se pueden
@@ -2826,6 +2936,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--amarillo)' }} />
           Sin conexión — los datos se enviarán cuando vuelva la red.
+        </div>
+      )}
+      {/* Pista de autoguardado: muestra hora del último auto/manual save. */}
+      {ultimoGuardadoMs && !guardando && (
+        <div style={{
+          marginTop: 6, fontSize: 11, color: 'var(--texto-suave)', textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--verde-dark)' }} />
+          Autoguardado · {new Date(ultimoGuardadoMs).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
 

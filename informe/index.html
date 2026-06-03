@@ -1383,14 +1383,79 @@ async function renderDocx(tglobal) {
       }
     });
   }
+  // — Registro fotográfico: descarga las fotos via webhook (Drive no expone
+  //   CORS para fetch directo) y las incrusta como ImageRun, manteniendo
+  //   el orden visual del DOM (querySelectorAll respeta el orden de inserción).
+  function _b64ToBytes(b64) {
+    var bin = atob(b64);
+    var arr = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+  function _dimsFromBytes(bytes, mime) {
+    return new Promise(function(resolve) {
+      var blob = new Blob([bytes], { type: mime || 'image/jpeg' });
+      var url  = URL.createObjectURL(blob);
+      var img  = new Image();
+      img.onload  = function() { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth || 800, h: img.naturalHeight || 600 }); };
+      img.onerror = function() { URL.revokeObjectURL(url); resolve({ w: 800, h: 600 }); };
+      img.src = url;
+    });
+  }
   var FOTO_W = 9057;
+  var tarjetasFoto = Array.from(document.querySelectorAll('#fotos-list > div[id^="foto-"]'));
+  var fotosBin = [];
+  if (tarjetasFoto.length > 0) {
+    var pulls = tarjetasFoto.map(function(tj) {
+      var fidEl  = document.getElementById('fid-'  + tj.id);
+      var descEl = document.getElementById('desc-' + tj.id);
+      var fid    = fidEl  ? fidEl.value  : '';
+      var desc   = descEl ? descEl.value : '';
+      if (!fid) return Promise.resolve(null);
+      return fetch(WH + '?accion=obtenerFotoBase64&fileId=' + encodeURIComponent(fid))
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d.ok || !d.base64) return null;
+          var bytes = _b64ToBytes(d.base64);
+          return _dimsFromBytes(bytes, d.mime).then(function(dims) {
+            return { bytes: bytes, desc: desc, w: dims.w, h: dims.h };
+          });
+        })
+        .catch(function() { return null; });
+    });
+    var resPulls = await Promise.all(pulls);
+    fotosBin = resPulls.filter(function(x) { return x !== null; });
+  }
   var fotoChildren = [];
-  [1,2,3,4,5,6].forEach(function(n) {
-    fotoChildren.push(new D.Paragraph({
-      spacing:{after:100},
-      children:[mkR('Fotografia '+n+'. ', {bold:true, sz:SZ_SMALL}), mkR('(Descripcion)', {it:true, color:'888888', sz:SZ_SMALL})]
-    }));
-  });
+  if (fotosBin.length > 0) {
+    // Encajar cada foto en una caja máxima 450 px × 320 px conservando aspecto.
+    var MAX_W_PX = 450, MAX_H_PX = 320;
+    fotosBin.forEach(function(f, i) {
+      var scale = Math.min(MAX_W_PX / f.w, MAX_H_PX / f.h, 1);
+      var w = Math.max(80, Math.round(f.w * scale));
+      var h = Math.max(60, Math.round(f.h * scale));
+      fotoChildren.push(new D.Paragraph({
+        alignment: D.AlignmentType.CENTER,
+        spacing: { after: 60 },
+        children: [new D.ImageRun({ data: f.bytes, transformation: { width: w, height: h } })]
+      }));
+      fotoChildren.push(new D.Paragraph({
+        spacing: { after: 200 },
+        children: [
+          mkR('Fotografia ' + (i+1) + '. ', { bold: true, sz: SZ_SMALL }),
+          mkR(f.desc || '(Sin descripcion)', { sz: SZ_SMALL })
+        ]
+      }));
+    });
+  } else {
+    // Sin fotos cargadas — mantiene el placeholder original.
+    [1,2,3,4,5,6].forEach(function(n) {
+      fotoChildren.push(new D.Paragraph({
+        spacing:{after:100},
+        children:[mkR('Fotografia '+n+'. ', {bold:true, sz:SZ_SMALL}), mkR('(Descripcion)', {it:true, color:'888888', sz:SZ_SMALL})]
+      }));
+    });
+  }
   var fotoTable = new D.Table({
     width:{size:FOTO_W, type:D.WidthType.DXA}, columnWidths:[FOTO_W],
     rows:[new D.TableRow({children:[new D.TableCell({

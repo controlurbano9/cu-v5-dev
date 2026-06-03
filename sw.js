@@ -4,7 +4,7 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v65';
+const CACHE_NAME = 'cu-v6-cache-v66';
 
 // URL del webhook unificado de Apps Script (espejo de api.js CFG.webhook).
 // Hardcoded aquí porque el SW no puede importar api.js. Si cambia el deploy

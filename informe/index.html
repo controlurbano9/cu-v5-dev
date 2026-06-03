@@ -1540,8 +1540,9 @@ async function renderDocx(tglobal) {
       children:children
     }]
   });
-  var buf = await D.Packer.toBuffer(doc);
-  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  // En navegador usar toBlob (toBuffer pide nodebuffer a JSZip y falla con
+  // "nodebuffer is not supported by this platform").
+  return await D.Packer.toBlob(doc);
 }
 
 // ── Descargar .docx local + subirlo a Drive de la visita (si aplica) ────────

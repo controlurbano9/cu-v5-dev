@@ -230,6 +230,9 @@ async function guardarVisita(payload) {
   const accion = payload.fila ? 'actualizar' : 'agregar';
   const body = { accion, valores: payload.valores };
   if (payload.fila) body.fila = payload.fila;
+  // clientId solo aplica para 'agregar': permite a AS deduplicar reintentos
+  // offline (misma sesión → mismo clientId → siempre devuelve la misma fila).
+  if (!payload.fila && payload.clientId) body.clientId = payload.clientId;
   try {
     const d = await gasPost(body);
     invalidarCache('visitas');

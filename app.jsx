@@ -154,8 +154,12 @@ function MapPrecacheIndicator({ progreso, total, completado, etiqueta, etiquetaD
 // ── Indicador de cola offline: muestra cuántas escrituras pendientes hay ──
 // Se monta junto al banner offline; siempre visible si hay items en la cola
 // (aún online, por si el flush periódico todavía no terminó).
+// Debe coincidir con MAX_INTENTOS de offline-queue.js. Si se cambia ahí, ajustar aquí.
+const OFFLINE_MAX_INTENTOS = 5;
+
 function OfflineColaBadge() {
   const [count, setCount] = useStateApp(0);
+  const [atascados, setAtascados] = useStateApp(0);
   const [sincronizando, setSinc] = useStateApp(false);
   const [detalleAbierto, setDetalleAbierto] = useStateApp(false);
   const [items, setItems] = useStateApp([]);
@@ -164,15 +168,19 @@ function OfflineColaBadge() {
     if (typeof offlineCount !== 'function') return;
     function actualizar() {
       offlineCount().then(setCount).catch(() => {});
-      if (detalleAbierto && typeof offlineListar === 'function') {
-        offlineListar().then(setItems).catch(() => {});
+      // Necesitamos la lista para calcular atascados — y la cacheamos por si se abre el detalle.
+      if (typeof offlineListar === 'function') {
+        offlineListar().then(lista => {
+          setItems(lista || []);
+          setAtascados((lista || []).filter(i => (i.intentos || 0) >= OFFLINE_MAX_INTENTOS).length);
+        }).catch(() => {});
       }
     }
     actualizar();
     const off = (typeof offlineOnChange === 'function')
       ? offlineOnChange(actualizar) : null;
     return () => { if (off) off(); };
-  }, [detalleAbierto]);
+  }, []);
 
   async function sincronizarAhora() {
     if (sincronizando) return;
@@ -197,66 +205,114 @@ function OfflineColaBadge() {
     setSinc(false);
   }
 
+  async function eliminarAtascados() {
+    const atasc = items.filter(i => (i.intentos || 0) >= OFFLINE_MAX_INTENTOS);
+    if (!atasc.length) return;
+    const ok = await appConfirm(
+      'Hay ' + atasc.length + ' item(s) que fallaron ' + OFFLINE_MAX_INTENTOS + ' veces y no son errores de red ' +
+      '(probablemente validación del servidor). Si se eliminan, esos datos se perderán de este dispositivo.\n\n¿Eliminar?',
+      { titulo: 'Eliminar items atascados', btnOk: 'Eliminar', btnCancel: 'Cancelar' }
+    );
+    if (!ok) return;
+    for (const it of atasc) {
+      try { await offlineEliminar(it.id); } catch (_) {}
+    }
+  }
+
   if (!count) return null;
+
+  // Items con intentos < MAX se ven amarillos; los atascados, rojos.
+  const colorPrincipal = atascados > 0 ? 'var(--rojo)' : 'var(--cafe)';
+  const bgPrincipal    = atascados > 0 ? 'var(--rojo-bg)' : 'var(--amarillo-bg)';
+  const bordePrincipal = atascados > 0 ? 'var(--rojo)' : 'var(--amarillo)';
 
   return (
     <div style={{
       position: 'fixed', top: 60, right: 12, zIndex: 8500,
-      background: 'var(--amarillo-bg)', border: '1px solid var(--amarillo)',
+      background: bgPrincipal, border: '1px solid ' + bordePrincipal,
       borderRadius: 10, padding: '8px 12px', fontSize: 12,
       boxShadow: 'var(--sombra-sm)',
-      maxWidth: 280, display: 'flex', flexDirection: 'column', gap: 6,
+      maxWidth: 300, display: 'flex', flexDirection: 'column', gap: 6,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         onClick={() => setDetalleAbierto(!detalleAbierto)}>
-        <span style={{ display: 'inline-flex', color: 'var(--cafe)' }}>
+        <span style={{ display: 'inline-flex', color: colorPrincipal }}>
           {sincronizando
             ? <Icon.Refresh size={14} />
             : <Icon.ArrowUp size={14} />}
         </span>
-        <span style={{ fontWeight: 600, color: 'var(--cafe)' }}>
-          {count} pendiente{count > 1 ? 's' : ''} de sincronizar
+        <span style={{ fontWeight: 600, color: colorPrincipal }}>
+          {count} pendiente{count > 1 ? 's' : ''}
+          {atascados > 0 && ' · ' + atascados + ' atascado' + (atascados > 1 ? 's' : '')}
         </span>
-        <span style={{ marginLeft: 'auto', color: 'var(--cafe)', display: 'inline-flex' }}>
+        <span style={{ marginLeft: 'auto', color: colorPrincipal, display: 'inline-flex' }}>
           {detalleAbierto ? <Icon.ChevronUp size={14} /> : <Icon.Chevron size={14} />}
         </span>
       </div>
       {detalleAbierto && (
         <>
           <div style={{
-            maxHeight: 180, overflowY: 'auto', fontSize: 11,
+            maxHeight: 220, overflowY: 'auto', fontSize: 11,
             background: 'var(--superficie)', borderRadius: 6,
             border: '1px solid rgba(184,135,58,0.30)',
             padding: 6,
           }}>
-            {items.map(it => (
-              <div key={it.id} style={{
-                padding: '4px 6px', borderBottom: '1px dashed rgba(184,135,58,0.30)',
-                display: 'flex', justifyContent: 'space-between', gap: 6,
-              }}>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {it.descripcion || it.tipo}
-                </span>
-                {it.intentos > 0 && (
-                  <span style={{ color: 'var(--rojo)', fontSize: 10 }}>×{it.intentos}</span>
-                )}
-              </div>
-            ))}
+            {items.map(it => {
+              const stuck = (it.intentos || 0) >= OFFLINE_MAX_INTENTOS;
+              return (
+                <div key={it.id} style={{
+                  padding: '4px 6px', borderBottom: '1px dashed rgba(184,135,58,0.30)',
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{
+                      flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      color: stuck ? 'var(--rojo)' : 'inherit', fontWeight: stuck ? 600 : 400,
+                    }}>
+                      {stuck ? '⚠ ' : ''}{it.descripcion || it.tipo}
+                    </span>
+                    {it.intentos > 0 && (
+                      <span style={{ color: stuck ? 'var(--rojo)' : 'var(--cafe)', fontSize: 10 }}>
+                        ×{it.intentos}{stuck ? '/' + OFFLINE_MAX_INTENTOS : ''}
+                      </span>
+                    )}
+                  </div>
+                  {stuck && it.ultimoError && (
+                    <div style={{ fontSize: 10, color: 'var(--rojo)', fontStyle: 'italic',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                         title={it.ultimoError}>
+                      {it.ultimoError}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {items.length === 0 && (
               <div style={{ color: 'var(--cafe)', textAlign: 'center', padding: 8 }}>
                 Cargando lista...
               </div>
             )}
           </div>
-          <button onClick={sincronizarAhora} disabled={sincronizando || !navigator.onLine} style={{
-            background: navigator.onLine ? 'var(--amarillo)' : 'rgba(184,135,58,0.30)',
-            color: 'var(--superficie)', border: 'none', borderRadius: 6,
-            padding: '6px 10px', fontSize: 11, fontWeight: 600,
-            cursor: sincronizando || !navigator.onLine ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit',
-          }}>
-            {sincronizando ? 'Sincronizando…' : (navigator.onLine ? 'Sincronizar ahora' : 'Sin conexión')}
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={sincronizarAhora} disabled={sincronizando || !navigator.onLine} style={{
+              flex: 1,
+              background: navigator.onLine ? 'var(--amarillo)' : 'rgba(184,135,58,0.30)',
+              color: 'var(--superficie)', border: 'none', borderRadius: 6,
+              padding: '6px 10px', fontSize: 11, fontWeight: 600,
+              cursor: sincronizando || !navigator.onLine ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}>
+              {sincronizando ? 'Sincronizando…' : (navigator.onLine ? 'Sincronizar ahora' : 'Sin conexión')}
+            </button>
+            {atascados > 0 && (
+              <button onClick={eliminarAtascados} style={{
+                background: 'var(--rojo)', color: 'var(--superficie)', border: 'none', borderRadius: 6,
+                padding: '6px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              }} title="Elimina los items que llevan 5 intentos fallidos (error persistente del servidor)">
+                Eliminar atascados
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -309,6 +365,30 @@ function AppV6() {
     const onR = () => setWinW(window.innerWidth);
     window.addEventListener('resize', onR);
     return () => window.removeEventListener('resize', onR);
+  }, []);
+
+  // ── Purga de borradores locales del formulario "Nueva visita" ──
+  // Antes existía una clave compartida 'cu_draft_v1_nuevo' bajo la que
+  // todas las visitas en blanco escribían el autoguardado. Eso provocaba
+  // que datos de la persona que atiende se filtraran a visitas posteriores.
+  // Migración: borrar inmediatamente esa clave legacy y limpiar cualquier
+  // borrador huérfano con timestamp mayor a 7 días.
+  useEffectApp(() => {
+    try {
+      localStorage.removeItem('cu_draft_v1_nuevo');
+      const limite = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const aBorrar = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || k.indexOf('cu_draft_v1_') !== 0) continue;
+        try {
+          const obj = JSON.parse(localStorage.getItem(k) || '{}');
+          if (!obj || typeof obj._ts !== 'number' || obj._ts < limite) aBorrar.push(k);
+        } catch(_) { aBorrar.push(k); }
+      }
+      aBorrar.forEach(k => { try { localStorage.removeItem(k); } catch(_) {} });
+      if (aBorrar.length) console.log('[autoguardado] purgados ' + aBorrar.length + ' borradores antiguos');
+    } catch(_) { /* localStorage no disponible: silencio */ }
   }, []);
 
   // Vigilancia de expiración de sesión

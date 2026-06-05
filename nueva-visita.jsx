@@ -25,6 +25,30 @@ function _isoAFecha(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
+// Normaliza CUALQUIER valor de fecha que venga de BD (ISO "YYYY-MM-DD",
+// ISO timestamp "YYYY-MM-DDTHH:mm:ss.sssZ", Date object serializado,
+// "DD/MM/YYYY", etc.) a la forma canónica DD/MM/YYYY que esperamos en BD.
+// Sin esto, los fallbacks que pasaban el valor crudo de BD (FECHA ASIGNACION,
+// FECHA DEVOLUCION, FECHA RADICADO) perpetuaban formatos inconsistentes.
+function _normalizarFechaCelda(valor) {
+  if (!valor) return '';
+  const s = String(valor).trim();
+  if (!s) return '';
+  // Ya está en DD/MM/YYYY → conservar (acepta también DD/MM/YYYY HH:mm)
+  let m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(s);
+  if (m) return m[1] + '/' + m[2] + '/' + m[3];
+  // YYYY-MM-DD o ISO timestamp YYYY-MM-DDTHH... → DD/MM/YYYY
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (m) return m[3] + '/' + m[2] + '/' + m[1];
+  // Fallback: intentar parsear como Date — cubre "Wed Apr 10 2026 ..." etc.
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    return String(d.getDate()).padStart(2, '0') + '/' +
+           String(d.getMonth() + 1).padStart(2, '0') + '/' +
+           d.getFullYear();
+  }
+  return s; // ininteligible: dejar como vino para no perder dato
+}
 function _fechaAIso(valor) {
   if (!valor) return '';
   // Date object → ISO local
@@ -57,14 +81,19 @@ function _soloMin(s) { return (s || '').toString().toLowerCase().trim(); }
 function _soloMay(s) { return (s || '').toString().toUpperCase().trim(); }
 
 // ── Helper para N° Orden de Policía (prefijo YYYY-09-XXX) ─────
-function _ordenPrefijo() {
-  return new Date().getFullYear() + '-09-';
+// Regla de negocio: una orden, una vez asignada, NO cambia de año aunque
+// la visita se reabra años después. Por eso el año se trata como un
+// dato del state (ordenAnio) que se extrae de la orden cargada desde BD
+// y queda bloqueado. Para órdenes nuevas (sin año previo) se usa el año
+// del calendario actual.
+function _ordenPrefijo(anio) {
+  return (anio || new Date().getFullYear()) + '-09-';
 }
-function _formatearOrden(consecutivo) {
+function _formatearOrden(consecutivo, anio) {
   // Recibe número 1-999, devuelve "YYYY-09-XXX" con cero-relleno
   const n = parseInt(consecutivo, 10);
   if (isNaN(n) || n <= 0) return '';
-  return _ordenPrefijo() + String(n).padStart(3, '0');
+  return _ordenPrefijo(anio) + String(n).padStart(3, '0');
 }
 function _extraerConsecutivoOrden(ordenCompleta) {
   // Extrae el consecutivo numérico de "YYYY-09-XXX" u otro formato
@@ -73,6 +102,12 @@ function _extraerConsecutivoOrden(ordenCompleta) {
   if (m) return String(parseInt(m[2], 10)); // sin ceros a la izquierda para el input
   // Fallback: devolver tal cual si no coincide con el patrón
   return ordenCompleta;
+}
+function _extraerAnioOrden(ordenCompleta) {
+  // Extrae el año "YYYY" de una orden tipo "YYYY-09-XXX". '' si no aplica.
+  if (!ordenCompleta) return '';
+  const m = /(\d{4})-09-\d+/.exec(ordenCompleta);
+  return m ? m[1] : '';
 }
 
 // ── Catálogos ──────────────────────────────────────────────────
@@ -213,6 +248,14 @@ const CONTRAVENCION_GRUPOS = [
 ];
 const CONTRAVENCION_ESPECIAL = 'No se evidencia infracción';
 
+// Genera un id único para identificar el borrador local de un formulario
+// en blanco (sin radicado/orden/fila aún). Antes se usaba la clave
+// compartida 'cu_draft_v1_nuevo' y los datos de la persona que atiende se
+// filtraban entre visitas distintas.
+function _newEphemeralDraftId() {
+  return 'eph_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
 // ── Estado inicial (en blanco o prefill) ───────────────────────
 function _estadoInicial(datosIniciales) {
   const d = datosIniciales || {};
@@ -223,7 +266,9 @@ function _estadoInicial(datosIniciales) {
     // Identificación
     radicado:       d['RADICADO']             || '',
     fechaRadicado:  _fechaAIso(d['FECHA RADICADO'] || ''),
-    fechaVisita:    _fechaAIso(d['FECHA DE VISITA'] || '') || _hoyISO(),
+    // NO se prellenan con hoy: el inspector debe ingresar manualmente la fecha
+    // real de la inspección en campo (puede diligenciar después del mismo día).
+    fechaVisita:    _fechaAIso(d['FECHA DE VISITA'] || ''),
     denunciante:    d['DENUNCIANTE/REMITENTE'] || d['DENUNCIANTE'] || '',
     nVisita:        d['N° VISITA']           || d['N VISITA']           || 1,
     esOficio:       !!d['_oficio'],
@@ -360,10 +405,11 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
 
   // Para oficio: la fecha radicado = fecha visita (no hay radicado externo previo,
   // el "radicado" se genera al hacer la visita). Para PQR: lo que ingresó el inspector
-  // o lo que ya estaba en la fila pendiente del PQR original.
+  // o lo que ya estaba en la fila pendiente del PQR original. El fallback a BD
+  // se normaliza para evitar perpetuar formatos ISO o Date crudo.
   const fechaRadicadoFinal = d.esOficio
     ? _isoAFecha(d.fechaVisita)
-    : (_isoAFecha(d.fechaRadicado) || fpRadicado);
+    : (_isoAFecha(d.fechaRadicado) || _normalizarFechaCelda(fpRadicado));
 
   return [
     radicado,                                     // B  RADICADO
@@ -379,13 +425,13 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.dirNoAporta ? 'No aporta' : dirNotifFinal), // L
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.emailNoAporta ? 'No aporta' : _soloMin(d.atiendeEmail)), // M
     estado,                                       // N  ESTADO VISITA
-    fpFechaAsig || _isoAFecha(d.fechaVisita) || _hoyDDMMYYYY_nv(), // O  FECHA ASIGNACION VISITA (si no existe, = fecha de visita)
+    _normalizarFechaCelda(fpFechaAsig) || _isoAFecha(d.fechaVisita) || _hoyDDMMYYYY_nv(), // O  FECHA ASIGNACION VISITA
     _isoAFecha(d.fechaVisita),                    // P  FECHA DE VISITA
     d.nVisita || 1,                               // Q  N° VISITA
     d.visitador || '',                            // R  VISITADOR(ES)
     '',                                           // S  FECHA 2DA VISITA
     '',                                           // T  VISITADOR2
-    fpFechaDev || '',                             // U  FECHA DEVOLUCION
+    _normalizarFechaCelda(fpFechaDev) || '',      // U  FECHA DEVOLUCION
     '',                                           // V  DIAS
     d.estadoObra || '',                           // W  ESTADO OBRA
     d.infraccion || '',                           // X  TIPO DE INFRACCION
@@ -420,7 +466,10 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.amenaza || '',                              // BA AMENAZA
     d.sueloProt || '',                            // BB SUELO DE PROTECCION
     '',                                           // BC PRIORIDAD
-    linkDriveFinal || '',                         // BD LINK_DRIVE
+    // LINK_DRIVE: si el state lo perdió por alguna razón (race condition,
+    // restauración parcial de borrador), preservar el valor original de BD
+    // para no borrar la carpeta ya creada en un actualizar posterior.
+    linkDriveFinal || filaPendiente?.['LINK_DRIVE'] || '',  // BD LINK_DRIVE
   ];
 }
 
@@ -1184,7 +1233,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [fase, setFase] = useStateNV(tieneDatos ? 'formulario' : 'modal');
 
   const [d, setD]               = useStateNV(() => _estadoInicial(datosIniciales));
-  const [estadoVisita, setEstV] = useStateNV(filaInicial ? 'INICIADO' : 'PENDIENTE');
+  // Estado inicial real desde BD para no promover PENDIENTE→INICIADO solo por
+  // abrir el formulario (la promoción ocurre únicamente al pulsar Guardar).
+  const [estadoVisita, setEstV] = useStateNV(() => {
+    const raw = (datosIniciales || {})['ESTADO VISITA'];
+    const norm = (typeof normalizarEstado === 'function' ? normalizarEstado(raw) : (raw || '').toString().toUpperCase().trim());
+    return norm || (filaInicial ? 'INICIADO' : 'PENDIENTE');
+  });
   const [filaEditando, setFE]   = useStateNV(filaInicial || null);
   const [guardando, setGuard]   = useStateNV(false);
   const [generandoActa, setGA]  = useStateNV(false);
@@ -1218,6 +1273,12 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [ordenConsecutivo, setOrdenConsecutivo] = useStateNV(() =>
     _extraerConsecutivoOrden((datosIniciales || {})['N° ORDEN DE POLICIA'] || (datosIniciales || {})['N ORDEN DE POLICIA'] || '')
   );
+  // Año de la orden — se extrae al cargar y queda bloqueado para órdenes
+  // existentes. Para órdenes nuevas (string vacío) el prefijo cae al año
+  // actual del calendario, capturándose efectivamente al guardar.
+  const [ordenAnio, setOrdenAnio] = useStateNV(() =>
+    _extraerAnioOrden((datosIniciales || {})['N° ORDEN DE POLICIA'] || (datosIniciales || {})['N ORDEN DE POLICIA'] || '')
+  );
   // Referencia estable al recognition de voz (debe estar ANTES del early return de fase=modal,
   // de lo contrario React lanza error #310 al cambiar de modal a formulario).
   const recognitionRef = React.useRef(null);
@@ -1245,19 +1306,34 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Antes no existía y los inspectores perdían trabajo al cerrar la
   // pestaña o cambiar de pantalla sin tocar "Guardar". Ahora:
   //   1) Cada cambio en d se persiste en localStorage con debounce 500ms
-  //      (clave por identidad de visita: fila / radicado / orden / nuevo).
+  //      (clave por identidad de visita: fila / radicado / orden / efímero).
+  //      Para visitas en blanco se usa un id efímero único por formulario
+  //      (NO la antigua clave compartida 'cu_draft_v1_nuevo') para evitar
+  //      que datos de la persona que atiende se filtren entre visitas
+  //      distintas al cargar este formulario en blanco.
   //   2) Al reabrir el formulario se restaura automáticamente el borrador
   //      (sin preguntar — decisión de producto).
   //   3) Si ya existe fila en BD, cada 60 s se hace un POST silencioso
   //      al webhook (offline cae en la cola IDB).
   //   4) beforeunload advierte al inspector si hay cambios sin guardar.
+  //   5) Cuando la clave del borrador cambia (p.ej. al teclear radicado o
+  //      al recibir fila tras el primer guardado), el borrador bajo la
+  //      clave anterior se elimina para no dejar huérfanos.
   // DEBE estar antes del early return de fase=modal (React #310).
+  const [draftEphemeralId, setDraftEphemeralId] = useStateNV(_newEphemeralDraftId);
+
+  // clientId: identificador único de esta sesión de formulario, usado solo
+  // para 'agregar'. Si el envío falla y se encola varias veces (o se reintenta
+  // tras una recarga que restaura el borrador), AS deduplica devolviendo
+  // siempre la misma fila. Se persiste con el borrador para sobrevivir reloads.
+  const [clientId, setClientId] = useStateNV(_newEphemeralDraftId);
+
   const _draftKey = React.useMemo(function() {
     if (filaEditando) return 'cu_draft_v1_fila_' + filaEditando;
     if (d.radicado)   return 'cu_draft_v1_rad_'  + (d.radicado||'').replace(/[^a-zA-Z0-9_-]/g,'_');
     if (d.orden)      return 'cu_draft_v1_ord_'  + (d.orden||'').replace(/[^a-zA-Z0-9_-]/g,'_');
-    return 'cu_draft_v1_nuevo';
-  }, [filaEditando, d.radicado, d.orden]);
+    return 'cu_draft_v1_' + draftEphemeralId;
+  }, [filaEditando, d.radicado, d.orden, draftEphemeralId]);
 
   // Refs para que el setInterval lea siempre el state más reciente sin
   // tener que recrear el timer en cada keystroke.
@@ -1265,6 +1341,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const _bOtroRef      = React.useRef(barrioOtro);
   const _lastSavedRef  = React.useRef('');     // JSON del último estado persistido OK
   const _restauradoRef = React.useRef(false);
+  const _prevDraftKeyRef = React.useRef(null); // clave bajo la que se hizo el último setItem
   React.useEffect(function() {
     _dRef.current     = d;
     _bOtroRef.current = barrioOtro;
@@ -1284,6 +1361,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         if (obj && obj._d) {
           setD(function(prev) { return Object.assign({}, prev, obj._d); });
           if (typeof obj._barrioOtro === 'string') setBarrioOtro(obj._barrioOtro);
+          // Restaurar clientId para que un reload tras encolar offline siga
+          // produciendo el mismo id y AS deduplique al reintentar.
+          if (typeof obj._clientId === 'string' && obj._clientId) setClientId(obj._clientId);
           console.log('[autoguardado] borrador local restaurado: ' + _draftKey);
         }
       }
@@ -1291,6 +1371,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   }, [fase, _draftKey]);
 
   // (2) Persistir borrador local con debounce 500ms en cada cambio.
+  // Si la identidad de la visita cambió (p.ej. al teclear el radicado en
+  // una visita de oficio, o al recibir `fila` tras el primer guardado),
+  // también se elimina el borrador bajo la clave anterior para evitar
+  // huérfanos que se restauren en futuras visitas en blanco.
   React.useEffect(function() {
     if (fase !== 'formulario') return;
     if (!_restauradoRef.current) return;
@@ -1300,11 +1384,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           _ts: Date.now(),
           _d: d,
           _barrioOtro: barrioOtro,
+          _clientId: clientId,
         }));
+        if (_prevDraftKeyRef.current && _prevDraftKeyRef.current !== _draftKey) {
+          try { localStorage.removeItem(_prevDraftKeyRef.current); } catch(_) {}
+        }
+        _prevDraftKeyRef.current = _draftKey;
       } catch(e) { /* quota llena / privacidad: silencio */ }
     }, 500);
     return function() { clearTimeout(t); };
-  }, [d, barrioOtro, fase, _draftKey]);
+  }, [d, barrioOtro, fase, _draftKey, clientId]);
 
   // (3) Autoguardado remoto cada 60 s — solo si ya existe fila en BD.
   React.useEffect(function() {
@@ -1346,6 +1435,14 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
   // ── Callback del modal: configura el formulario según la elección ──
   function handleModalResult(res) {
+    // Borrón y cuenta nueva del autoguardado local: id efímero fresco para
+    // que esta nueva sesión de formulario NO restaure datos de un borrador
+    // huérfano de una visita anterior (caso: persona que atiende prellenada
+    // con los datos del oficio del día pasado).
+    setDraftEphemeralId(_newEphemeralDraftId());
+    setClientId(_newEphemeralDraftId());
+    _restauradoRef.current = false;
+    _prevDraftKeyRef.current = null;
     if (res.tipo === 'oficio') {
       // Visita de oficio — formulario en blanco con flag _oficio
       setD(_estadoInicial({ '_oficio': true }));
@@ -1357,9 +1454,9 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       setEstV(res.esNueva ? 'PENDIENTE' : 'INICIADO');
       setFE(res.esNueva ? null : (res.fila || null));
       if (res.datosIniciales) {
-        setOrdenConsecutivo(
-          _extraerConsecutivoOrden(res.datosIniciales['N° ORDEN DE POLICIA'] || res.datosIniciales['N ORDEN DE POLICIA'] || '')
-        );
+        const _ordRaw = res.datosIniciales['N° ORDEN DE POLICIA'] || res.datosIniciales['N ORDEN DE POLICIA'] || '';
+        setOrdenConsecutivo(_extraerConsecutivoOrden(_ordRaw));
+        setOrdenAnio(_extraerAnioOrden(_ordRaw));
       }
     } else if (res.tipo === 'pqr_manual') {
       // PQR sin datos en BD — solo radicado precompletado
@@ -1399,14 +1496,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     }
   }, [fase, visitadoresDin]); // re-prefija si la lista cambia tras carga dinámica
 
-  // Sincronizar orden completa cuando cambia el consecutivo
+  // Sincronizar orden completa cuando cambia el consecutivo o el año.
+  // El año NO se deriva de d.fechaVisita — las órdenes existentes mantienen
+  // su año original; las nuevas usan el año actual del calendario.
   useEffectNV(() => {
     if (ordenConsecutivo) {
-      setCampo('orden', _formatearOrden(ordenConsecutivo));
+      setCampo('orden', _formatearOrden(ordenConsecutivo, ordenAnio));
     } else {
       setCampo('orden', '');
     }
-  }, [ordenConsecutivo]);
+  }, [ordenConsecutivo, ordenAnio]);
 
   // Auto-recuperación de carpeta Drive faltante.
   // Si la visita se guardó offline, la cola la sincroniza sin LINK_DRIVE
@@ -1889,8 +1988,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       // 2. Armar array de 60 valores
       const vals = _construirPayload(dFinal, 'INICIADO', linkDrive, datosIniciales);
 
-      // 3. POST único
-      const r = await guardarVisita({ valores: vals, fila: filaEditando });
+      // 3. POST único — clientId para que AS deduplique reintentos offline
+      const r = await guardarVisita({ valores: vals, fila: filaEditando, clientId });
       if (r && r.fila) setFE(r.fila);
 
       // 4. Actualizar state local con metadatos derivados
@@ -2343,7 +2442,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 color: 'var(--texto-suave)', whiteSpace: 'nowrap',
                 padding: '10px 8px', background: 'var(--slate-100)', borderRadius: '8px 0 0 8px',
                 border: '1px solid var(--borde-med)', borderRight: 'none',
-              }}>{_ordenPrefijo()}</span>
+              }}>{_ordenPrefijo(ordenAnio)}</span>
               <input
                 type="number"
                 min="1" max="999"
@@ -2763,7 +2862,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                     color: 'var(--texto-suave)', whiteSpace: 'nowrap',
                     padding: '10px 8px', background: 'var(--slate-100)', borderRadius: '8px 0 0 8px',
                     border: '1px solid var(--borde-med)', borderRight: 'none',
-                  }}>{_ordenPrefijo()}</span>
+                  }}>{_ordenPrefijo(ordenAnio)}</span>
                   <input
                     type="number"
                     min="1" max="999"

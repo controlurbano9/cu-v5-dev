@@ -418,7 +418,9 @@ function _construirPayload(d, estado, linkDriveFinal, filaPendiente) {
     d.barrio || '',                               // E  BARRIO/VEREDA
     d.comuna || '',                               // F  COMUNA
     denunc,                                       // G  DENUNCIANTE/REMITENTE
-    d.noAtiende ? 'No se atiende / No suministra datos' : _capPalabras(d.atiendeNombre),  // H
+    // El nombre se guarda tal como lo tecleó el inspector (solo trim de espacios)
+    // para preservar particulas en minúscula como "de la", "del", etc.
+    d.noAtiende ? 'No se atiende / No suministra datos' : (d.atiendeNombre || '').toString().trim(),  // H
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.atiendeId || ''),             // I
     d.noAtiende ? 'No se atiende / No suministra datos' : (d.telNoAporta ? 'No aporta' : (d.atiendeTel || '')), // J
     d.noAtiende ? '' : relacionFinal,             // K  RELACION CON EL EVENTO
@@ -1380,9 +1382,19 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     if (!_restauradoRef.current) return;
     const t = setTimeout(function() {
       try {
+        // El borrador NO persiste metadatos del servidor (enlaces Drive,
+        // ids de carpeta, links de acta/informe). Esos vienen de BD y se
+        // re-derivan al reabrir; persistirlos en otra pestaña podría pisar
+        // los del flujo legítimo si dos dispositivos editan la misma fila.
+        const _dServidor = ['linkDrive', 'idCarpetaVisita', 'idCarpetaFotos',
+                            'linkXlsxActa', 'linkPdfActa'];
+        const _dSafe = {};
+        Object.keys(d).forEach(function(k){
+          if (_dServidor.indexOf(k) < 0) _dSafe[k] = d[k];
+        });
         localStorage.setItem(_draftKey, JSON.stringify({
           _ts: Date.now(),
-          _d: d,
+          _d: _dSafe,
           _barrioOtro: barrioOtro,
           _clientId: clientId,
         }));
@@ -1451,7 +1463,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     } else if (res.tipo === 'pqr') {
       // PQR con datos precargados de BD
       setD(_estadoInicial(res.datosIniciales));
-      setEstV(res.esNueva ? 'PENDIENTE' : 'INICIADO');
+      // Estado real desde BD (no hardcodear INICIADO al continuar: una visita
+      // ASIGNADA o PENDIENTE no debe escalar solo por abrir el formulario).
+      // Solo el click "Guardar" promueve a INICIADO.
+      if (res.esNueva) {
+        setEstV('PENDIENTE');
+      } else {
+        const _rawEst = (res.datosIniciales || {})['ESTADO VISITA'];
+        const _normEst = (typeof normalizarEstado === 'function' ? normalizarEstado(_rawEst) : (_rawEst || '').toString().toUpperCase().trim());
+        setEstV(_normEst || 'INICIADO');
+      }
       setFE(res.esNueva ? null : (res.fila || null));
       if (res.datosIniciales) {
         const _ordRaw = res.datosIniciales['N° ORDEN DE POLICIA'] || res.datosIniciales['N ORDEN DE POLICIA'] || '';
@@ -1948,6 +1969,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     if (!d.comuna)         errs.push('Comuna');
     if (!d.fechaVisita)    errs.push('Fecha de visita');
     if (!d.visitador)      errs.push('Visitador');
+    // Validaciones duras sobre la fecha de visita — capturan errores de tipeo
+    // típicos cuando el inspector diligencia días después.
+    if (d.fechaVisita) {
+      const _hoy = _hoyISO();
+      if (d.fechaVisita > _hoy) {
+        errs.push('Fecha de visita no puede ser futura (hoy: ' + _isoAFecha(_hoy) + ')');
+      } else if (!d.esOficio && d.fechaRadicado && d.fechaVisita < d.fechaRadicado) {
+        errs.push('Fecha de visita anterior al radicado (radicado: ' + _isoAFecha(d.fechaRadicado) + ')');
+      }
+    }
     return errs;
   }
 

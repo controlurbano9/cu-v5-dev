@@ -25,7 +25,12 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
     setCargando(false);
   }
 
-  // ── Estadísticas generales ──
+  // ── Estadísticas ──
+  // Para inspector se aplica la regla diligenciador (igual que mis-visitas.jsx):
+  //   PENDIENTE/ASIGNADO → cualquier co-asignado
+  //   INICIADO/COMPLETADO → solo el diligenciador (primer nombre en VISITADOR(ES))
+  // Para admin las stats son globales (vista de sistema). Antes todas eran
+  // globales y daban inconsistencia con la sección "Asignadas hoy" debajo.
   const stats = useMemoH(() => {
     if (!datos.length) return { pendientes: 0, mes: 0, asigHoy: 0, realHoy: 0 };
     const hoyStr = hoyDDMMAAAA();
@@ -36,6 +41,15 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
     let pendientes = 0, mes = 0, asigHoy = 0, realHoy = 0;
     datos.forEach(f => {
       const e = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
+      // Filtro por rol — admin ve todo, inspector aplica regla diligenciador.
+      if (!esAdmin) {
+        const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
+        if (!vis.includes(miNombre)) return;
+        if (e === 'INICIADO' || e === 'COMPLETADO') {
+          const principal = vis.split(/\s*[\/,]\s*/)[0].trim();
+          if (principal !== miNombre) return;
+        }
+      }
       if (e === 'PENDIENTE' || e === 'ASIGNADO') pendientes++;
       if (e === 'COMPLETADO') {
         const dComp = parsearFecha(f['FECHA DEVOLUCION'] || '');
@@ -51,7 +65,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       }
     });
     return { pendientes, mes, asigHoy, realHoy };
-  }, [datos]);
+  }, [datos, esAdmin, miNombre]);
 
   // ── Alertas urgentes ──
   const alertas = useMemoH(() => {

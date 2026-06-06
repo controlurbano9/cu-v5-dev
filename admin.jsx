@@ -59,8 +59,10 @@ function TabVigilancia() {
         const orden = (d['N ORDEN DE POLICIA'] || d['N° ORDEN DE POLICIA'] || '').toString().trim();
         return s === 'SI' && orden;
       });
-      // Ordenar por fecha de visita descendente (más recientes primero)
-      susp.sort((a, b) => (b['FECHA DE VISITA'] || '').localeCompare(a['FECHA DE VISITA'] || ''));
+      // Ordenar por fecha de visita descendente (más recientes primero).
+      // localeCompare sobre DD/MM/YYYY ordena por día primero, no por fecha real;
+      // parseamos a timestamp para que "02/02/2026" > "10/01/2026" como debe ser.
+      susp.sort((a, b) => _parsearFechaVigilancia(b['FECHA DE VISITA']) - _parsearFechaVigilancia(a['FECHA DE VISITA']));
       setFilas(susp);
     } catch (e) { setError(e.message); }
     setCargando(false);
@@ -70,6 +72,18 @@ function TabVigilancia() {
     if (!link) return '';
     const m = link.match(/folders\/([a-zA-Z0-9_-]+)/);
     return m ? m[1] : '';
+  }
+
+  // Parsea DD/MM/YYYY (formato canónico en BD), ISO o Date a timestamp.
+  function _parsearFechaVigilancia(val) {
+    if (!val) return 0;
+    const s = String(val).trim().split(' ')[0];
+    let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1]).getTime() || 0;
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]).getTime() || 0;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
   }
 
   async function generar(f) {

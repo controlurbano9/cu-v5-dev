@@ -2292,6 +2292,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Paso 2 del F-GGO-46: Doc REGISTRO FOTOGRÁFICO con las fotos
   // ya subidas a la subcarpeta Fotos de la visita.
   // Abre el modal de fotos: carga la lista de Drive, genera descripciones IA
+  // Generación de descripciones: throttle a 3 concurrentes para no saturar Gemini
+  // y sesionRef para descartar callbacks de una apertura anterior si el inspector
+  // cerró y reabrió el modal antes de que terminaran.
+  const _modalFotosSesionRef = React.useRef(0);
+
   async function abrirModalFotos() {
     if (!filaEditando) {
       await appAlert('Primero guarda la visita.', { titulo: 'Visita no guardada' });
@@ -2313,29 +2318,36 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const lista = r.fotos.map(function(f) {
         return { id: f.id, nombre: f.nombre, link: f.link, descripcion: '', mimeType: f.mimeType, descBusy: true };
       });
+      _modalFotosSesionRef.current++;
+      const sesion = _modalFotosSesionRef.current;
       setModalFotos(lista);
       setCargandoFotos(false);
-      // Generar descripciones IA en paralelo (sin bloquear)
-      lista.forEach(function(foto, idx) {
-        describirFotoDesdeId(foto.id).then(function(resp) {
+      // Throttle: hasta 3 descripciones simultaneas (Gemini rate-limit friendly)
+      const MAX_CONC = 3;
+      let next = 0;
+      async function worker() {
+        while (true) {
+          const idx = next++;
+          if (idx >= lista.length) return;
+          const fotoId = lista[idx].id;
+          let descripcion = 'Sin descripcion';
+          try {
+            const resp = await describirFotoDesdeId(fotoId);
+            descripcion = resp.descripcion || 'Sin descripcion';
+          } catch (_) { /* dejar default */ }
+          // Si el modal se cerró o se reabrió con OTRA lista, descartar este resultado.
+          if (_modalFotosSesionRef.current !== sesion) return;
           setModalFotos(function(prev) {
             if (!prev) return prev;
-            var next = prev.slice();
-            next[idx] = Object.assign({}, next[idx], {
-              descripcion: resp.descripcion || 'Sin descripcion',
-              descBusy: false,
-            });
-            return next;
+            const arr = prev.slice();
+            arr[idx] = Object.assign({}, arr[idx], { descripcion: descripcion, descBusy: false });
+            return arr;
           });
-        }).catch(function() {
-          setModalFotos(function(prev) {
-            if (!prev) return prev;
-            var next = prev.slice();
-            next[idx] = Object.assign({}, next[idx], { descripcion: 'Sin descripcion', descBusy: false });
-            return next;
-          });
-        });
-      });
+        }
+      }
+      const workers = [];
+      for (let w = 0; w < MAX_CONC; w++) workers.push(worker());
+      Promise.all(workers); // sin await — no bloquear el cierre del try
     } catch (e) {
       await appAlert('Error cargando fotos: ' + e.message, { titulo: 'Error' });
       setCargandoFotos(false);
@@ -3504,11 +3516,14 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={confirmarYGenerarRF} disabled={modalFotos.some(function(f) { return f.descBusy; })}
+              <button onClick={confirmarYGenerarRF}
+                disabled={modalFotos.length === 0 || modalFotos.some(function(f) { return f.descBusy; })}
                 className="btn-principal secundario" style={{ flex: 1, margin: 0, padding: 12, fontSize: 14 }}>
-                {modalFotos.some(function(f) { return f.descBusy; })
-                  ? 'Generando descripciones...'
-                  : 'Confirmar y generar'}
+                {modalFotos.length === 0
+                  ? 'No hay fotos'
+                  : modalFotos.some(function(f) { return f.descBusy; })
+                    ? 'Generando descripciones...'
+                    : 'Confirmar y generar'}
               </button>
               <button onClick={function() { setModalFotos(null); }} style={{
                 background: 'var(--gris-bg)', border: 'none', borderRadius: 8,
@@ -3565,10 +3580,18 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
       appAlert(rechazados + ' foto(s) superan 8MB y fueron excluidas.', { titulo: 'Fotos grandes' });
     }
     if (validos.length === 0) return;
-    setCola(validos);
+    // Acumular en lugar de sobrescribir: si el inspector selecciona más fotos
+    // mientras se está subiendo el batch anterior, las nuevas se agregan a la
+    // cola y se procesan a continuación (antes se perdían).
+    setCola(function(prev) { return prev.concat(validos); });
     // Reset input para poder seleccionar los mismos archivos de nuevo
     if (inputRef.current) inputRef.current.value = '';
   }
+
+  // Ref con la cola actual — el while loop lee aquí para detectar nuevas
+  // adiciones después de iniciar la subida.
+  const colaRef = React.useRef([]);
+  React.useEffect(function() { colaRef.current = cola; }, [cola]);
 
   // Subir cola secuencialmente cuando cambie
   React.useEffect(function() {
@@ -3576,15 +3599,18 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
     var cancelado = false;
     async function subirTodos() {
       setSubiendo(true);
-      for (var i = 0; i < cola.length; i++) {
+      var i = 0;
+      // Loop dinámico: la cola puede crecer mientras subimos (ver alSeleccionar).
+      while (i < colaRef.current.length) {
         if (cancelado) break;
-        setProgreso('Subiendo ' + (i + 1) + '/' + cola.length + '...');
+        var f = colaRef.current[i];
+        setProgreso('Subiendo ' + (i + 1) + '/' + colaRef.current.length + '...');
         try {
-          var base64 = await _aBase64(cola[i]);
-          var r = await subirFotoConDescripcion(idCarpetaFotos, base64, cola[i].type, '', cola[i].name);
+          var base64 = await _aBase64(f);
+          var r = await subirFotoConDescripcion(idCarpetaFotos, base64, f.type, '', f.name);
           setFotos(function(prev) {
             return prev.concat([{
-              nombre: r.nombre || cola[i].name,
+              nombre: r.nombre || f.name,
               link:   r.link,
               descripcion: r.descripcion || '',
               pendiente: !!r.encolado,  // sin red: foto pendiente de subir a Drive
@@ -3593,14 +3619,17 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
         } catch (err) {
           console.warn('Error subiendo foto:', err);
         }
+        i++;
       }
-      setCola([]);
+      // Truncar la cola: si crecio durante el loop (alSeleccionar concurrente),
+      // dejar las nuevas para que el siguiente ciclo las procese.
+      setCola(function(prev) { return prev.slice(i); });
       setProgreso('');
       setSubiendo(false);
     }
     subirTodos();
     return function() { cancelado = true; };
-  }, [cola]);
+  }, [cola.length, subiendo]);
 
   return (
     <div className="form-seccion" style={{ marginTop: 14 }}>

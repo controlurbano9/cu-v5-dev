@@ -1284,6 +1284,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Referencia estable al recognition de voz (debe estar ANTES del early return de fase=modal,
   // de lo contrario React lanza error #310 al cambiar de modal a formulario).
   const recognitionRef = React.useRef(null);
+  // Sesión del modal de fotos — descarta callbacks de aperturas anteriores
+  // (ver abrirModalFotos). DEBE estar antes del early return de fase=modal:
+  // tenerlo más abajo causaba React #310 al transicionar modal → formulario.
+  const _modalFotosSesionRef = React.useRef(0);
 
   // Estado online/offline reactivo — el botón Guardar cambia su microcopy
   // cuando no hay red para comunicar que la visita se encolará y enviará
@@ -2294,8 +2298,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   // Abre el modal de fotos: carga la lista de Drive, genera descripciones IA
   // Generación de descripciones: throttle a 3 concurrentes para no saturar Gemini
   // y sesionRef para descartar callbacks de una apertura anterior si el inspector
-  // cerró y reabrió el modal antes de que terminaran.
-  const _modalFotosSesionRef = React.useRef(0);
+  // cerró y reabrió el modal antes de que terminaran (ref declarado arriba).
 
   async function abrirModalFotos() {
     if (!filaEditando) {

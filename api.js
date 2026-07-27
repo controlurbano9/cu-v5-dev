@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 const CFG = {
-  webhook: 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec',
+  webhook: (typeof CU_WEBHOOK_URL !== 'undefined' ? CU_WEBHOOK_URL : 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec'),
   hoja:    'BD VISITAS',
 };
 
@@ -18,9 +18,21 @@ async function hashPin(pin) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ── Adjuntar credenciales de sesión a cada request ─────────────
+// AP1 (auditoría 2026-07): el backend ahora exige sesionUsuario/sesionHash
+// en casi toda acción del router. Nombres distintos de "usuario"/"hash"
+// a propósito — varias acciones (ej. resetPin) ya usan "hash" con otro
+// significado (el hash del PIN NUEVO a fijar, no el del que llama) y no
+// deben pisarse. Sin sesión activa (pre-login) no se agrega nada.
+function _conCredencialesSesion(obj) {
+  const s = (typeof SESSION !== 'undefined') ? SESSION.leer() : null;
+  if (!s || !s.usuario || !s.hash) return obj;
+  return Object.assign({ sesionUsuario: s.usuario, sesionHash: s.hash }, obj);
+}
+
 // ── GET con accion ─────────────────────────────────────────────
 async function gasGet(params) {
-  const qs = new URLSearchParams(params).toString();
+  const qs = new URLSearchParams(_conCredencialesSesion(params)).toString();
   const r = await fetch(CFG.webhook + '?' + qs);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const d = await r.json();
@@ -33,7 +45,7 @@ async function gasPost(payload) {
   const r = await fetch(CFG.webhook, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(_conCredencialesSesion(payload)),
   });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const d = await r.json();
@@ -230,6 +242,10 @@ async function guardarVisita(payload) {
   const accion = payload.fila ? 'actualizar' : 'agregar';
   const body = { accion, valores: payload.valores };
   if (payload.fila) body.fila = payload.fila;
+  // AP2: timestamp de la última modificación que el cliente conoce — el
+  // backend lo compara contra el valor actual en BD para detectar si otro
+  // co-asignado guardó cambios en el medio (ver ULTIMA_MODIFICACION).
+  if (payload.fila && payload.ultimaModConocida) body.ultimaModConocida = payload.ultimaModConocida;
   // clientId solo aplica para 'agregar': permite a AS deduplicar reintentos
   // offline (misma sesión → mismo clientId → siempre devuelve la misma fila).
   if (!payload.fila && payload.clientId) body.clientId = payload.clientId;

@@ -289,17 +289,82 @@ body{
   background:var(--brand-bg); color:var(--brand-ink); font-size:11px;
   padding:3px 10px; border-radius:var(--r-lg); font-weight:500;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   WORKSPACE v2 (beta ?ui=v2) — auditoría UX 2026-07.
+   Reusa las mismas cards/ids del wizard legacy; solo cambia cómo
+   se agrupan (data-momento) y la navegación (rail de 4 en vez de
+   sidebar de 5 pasos). El wizard legacy sigue intacto sin el flag.
+═══════════════════════════════════════════════════════════════ */
+body.v2-mode .ptitle,
+body.v2-mode .psub,
+body.v2-mode .wizard-nav{display:none !important}
+body.v2-mode .legacy-only{display:none !important}
+/* Los 5 contenedores legacy (#p1-#p5) siguen usando .hidden con
+   !important — hay que forzarlos visibles como simples envoltorios;
+   el control fino de qué se ve queda 100% en [data-momento]. */
+body.v2-mode #p1, body.v2-mode #p2, body.v2-mode #p3,
+body.v2-mode #p4, body.v2-mode #p5{display:block !important}
+body.v2-mode [data-momento]{display:none}
+body.v2-mode [data-momento].momento-activo{display:block}
+/* .br y .stbox usan display:flex en su regla base — más específicas
+   que la genérica de arriba, deben ganar para no romper su layout. */
+body.v2-mode .br[data-momento].momento-activo{display:flex}
+body.v2-mode .stbox[data-momento].momento-activo{display:flex}
+
+.v2-rail{display:none}
+body.v2-mode .v2-rail{display:flex; flex-direction:column; gap:4px}
+.v2-rail-item{
+  display:flex; align-items:center; gap:10px; background:transparent; border:none;
+  color:var(--texto-suave); font-family:inherit; font-size:13px; font-weight:500;
+  padding:9px 12px; border-radius:var(--r-sm); cursor:pointer; text-align:left; width:100%;
+  transition:background-color 150ms ease, color 150ms ease;
+}
+.v2-rail-item:hover{background:var(--brand-bg); color:var(--brand-ink)}
+.v2-rail-item.activo{background:var(--brand-bg); color:var(--brand-ink); font-weight:600}
+.v2-rail-item.bloqueado{opacity:.5; cursor:not-allowed}
+.v2-rail-item .estado{
+  width:20px; height:20px; border-radius:50%; border:1.5px solid currentColor;
+  display:flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0;
+}
+.v2-rail-item.completo .estado{background:var(--verde); border-color:var(--verde); color:#fff}
+.v2-rail-item.completo .estado::before{content:'✓'}
+
+.v2-autosave{
+  font-size:11px; color:var(--texto-suave); display:none; align-items:center; gap:6px;
+  padding:6px 10px; border:0.5px solid var(--borde); border-radius:var(--r-sm); background:var(--fondo);
+}
+body.v2-mode .v2-autosave{display:inline-flex}
+
+/* Modal unificado: recibo → generando → error → éxito (mismo contenedor, sin salto de layout) */
+#modal-emision{
+  position:fixed; inset:0; background:rgba(31,27,22,0.55); z-index:9500;
+  display:none; align-items:center; justify-content:center;
+}
+#modal-emision.visible{display:flex}
+#modal-emision .caja{
+  width:440px; max-width:90vw; background:var(--superficie); border-radius:var(--r-md);
+  padding:24px; box-shadow:var(--sombra); transform:scale(0.95); opacity:0;
+  transition:transform 180ms cubic-bezier(0.23,1,0.32,1), opacity 180ms ease-out;
+}
+#modal-emision.visible .caja{transform:scale(1); opacity:1}
+#modal-emision .fase{display:flex; align-items:center; gap:10px; font-size:13px; color:var(--texto-suave); margin-bottom:8px}
+#modal-emision .fase.hecha{color:var(--verde-dark)}
+#modal-emision .fase.activa{color:var(--brand-ink); font-weight:600}
+@media (prefers-reduced-motion: reduce){#modal-emision .caja{transition:opacity 1ms}}
 </style>
 </head>
 <body>
 <div class="shell">
 <aside class="sb">
   <div class="sb-logo">Control Urbano <span>Informe F-GGO-43</span></div>
-  <button class="sbt active" id="sb1" onclick="ir(1)"><span class="sbn">1</span>Datos del caso</button>
-  <button class="sbt" id="sb2" onclick="ir(2)"><span class="sbn">2</span>Licencia</button>
-  <button class="sbt" id="sb3" onclick="ir(3)"><span class="sbn">3</span>Observaciones</button>
-  <button class="sbt" id="sb4" onclick="ir(4)"><span class="sbn">4</span>Art. 135 / POT</button>
-  <button class="sbt" id="sb5" onclick="ir(5)"><span class="sbn">5</span>Generar informe</button>
+  <button class="sbt active legacy-only" id="sb1" onclick="ir(1)"><span class="sbn">1</span>Datos del caso</button>
+  <button class="sbt legacy-only" id="sb2" onclick="ir(2)"><span class="sbn">2</span>Licencia</button>
+  <button class="sbt legacy-only" id="sb3" onclick="ir(3)"><span class="sbn">3</span>Observaciones</button>
+  <button class="sbt legacy-only" id="sb4" onclick="ir(4)"><span class="sbn">4</span>Art. 135 / POT</button>
+  <button class="sbt legacy-only" id="sb5" onclick="ir(5)"><span class="sbn">5</span>Generar informe</button>
+  <div class="v2-rail" id="v2-rail"></div>
+  <div class="v2-autosave" id="v2-autosave">⏺ <span id="v2-autosave-txt">Guardado</span></div>
   <div id="sb-visita-info" class="sb-info hidden">
     <div style="font-size:10px;color:var(--texto-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Visita asociada</div>
     <div id="sb-visita-rad" style="font-family:var(--font-mono);font-size:12px"></div>
@@ -315,7 +380,7 @@ body{
 <div id="p1">
   <h1 class="ptitle">Datos del caso</h1>
   <p class="psub">Informacion de la visita y ubicacion del inmueble</p>
-  <div class="card">
+  <div class="card" id="card-identificacion" data-momento="1">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg></div><div><div class="ct">Expediente y visita</div><div class="cst">Datos de radicacion</div></div></div>
     <div class="fg">
       <div class="f"><label>Fecha de la visita</label><input type="date" id="fechaVisita"></div>
@@ -333,7 +398,7 @@ body{
       </label>
     </div>
   </div>
-  <div class="card">
+  <div class="card" id="card-ubicacion" data-momento="1">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><div><div class="ct">Ubicacion del inmueble</div><div class="cst">Direccion y datos catastrales</div></div></div>
     <div class="fg">
       <div class="f ff"><label>Direccion completa</label><input type="text" id="direccion" placeholder="Carrera 50 # 32-15"></div>
@@ -477,12 +542,12 @@ body{
       <div class="f"><label>Codigo catastral</label><input type="text" id="catastral" placeholder="Codigo catastral"></div>
     </div>
   </div>
-  <div class="br"><button class="btn btn-p" onclick="ir(2)">Continuar &rarr;</button></div>
+  <div class="br wizard-nav"><button class="btn btn-p" onclick="ir(2)">Continuar &rarr;</button></div>
 </div>
 <div id="p2" class="hidden">
   <h1 class="ptitle">Licencia urbanistica</h1>
   <p class="psub">Complete los datos de la licencia aportada</p>
-  <div class="card">
+  <div class="card" id="card-licencia" data-momento="1">
     <label class="chkblock"><input type="checkbox" id="sinLic" onchange="toggleSinLic(this)"><span>No se aporto documentacion urbanistica</span></label>
     <div id="lic-fields">
       <div class="fg">
@@ -533,7 +598,7 @@ body{
       </div>
     </div>
   </div>
-  <div class="br">
+  <div class="br wizard-nav">
     <button class="btn btn-o" onclick="ir(1)">&larr; Atras</button>
     <button class="btn btn-p" onclick="ir(3)">Continuar &rarr;</button>
   </div>
@@ -541,7 +606,7 @@ body{
 <div id="p3" class="hidden">
   <h1 class="ptitle">Observaciones de campo</h1>
   <p class="psub">Ingrese el texto tal como lo tomo en campo</p>
-  <div class="nota"><b>Que incluir en las observaciones (segun la plantilla F-GGO-43):</b><br>
+  <div class="nota" data-momento="2"><b>Que incluir en las observaciones (segun la plantilla F-GGO-43):</b><br>
   &bull; <b>Verificacion integral:</b> estado actual del proyecto vs lo aprobado en licencia<br>
   &bull; <b>Distribucion arquitectonica:</b> cantidad de destinaciones, usos, volumetria, niveles<br>
   &bull; <b>Sistema estructural:</b> fundaciones, elementos verticales (columnas/muros), cantidad, dimensiones, materialidad y tipo de losa<br>
@@ -552,7 +617,7 @@ body{
   &bull; <b>Parqueaderos:</b> presencia y conformacion de celdas<br>
   &bull; <b>Antejardín:</b> materiales, usos, dimensiones, cerramientos, cubiertas, elementos verticales de apoyo<br>
   </div>
-  <div class="card">
+  <div class="card" id="card-observaciones" data-momento="2">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg></div><div><div class="ct">Texto en bruto</div><div class="cst">Lo que encontro en campo</div></div></div>
     <div class="f">
       <label>Observaciones (texto libre)</label>
@@ -566,7 +631,7 @@ body{
     </div>
   </div>
 
-  <div class="card hidden" id="card-obs-mejorada" style="border-left:3px solid var(--brand-accent)">
+  <div class="card hidden" id="card-obs-mejorada" data-momento="2" style="border-left:3px solid var(--brand-accent)">
     <div class="ch" style="margin-bottom:10px;padding-bottom:10px">
       <div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4L2 9.4h7.6z"/></svg></div>
       <div>
@@ -583,14 +648,14 @@ body{
       <span style="font-size:11px;color:var(--texto-3);margin-left:auto">Al usarla, reemplaza el texto en bruto.</span>
     </div>
   </div>
-  <div class="card">
+  <div class="card" id="card-areas" data-momento="2">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div><div><div class="ct">Area en contravencion</div><div class="cst">Discriminada por concepto y nivel</div></div></div>
     <div class="f">
       <label>Detalle de areas (m2)</label>
       <textarea id="areas" style="min-height:60px" placeholder="Antejardín: 10 m2 / Piso adicional sin licencia: 65 m2 / Total: 75 m2"></textarea>
     </div>
   </div>
-  <div class="br">
+  <div class="br wizard-nav">
     <button class="btn btn-o" onclick="ir(2)">&larr; Atras</button>
     <button class="btn btn-p" onclick="ir(4)">Continuar &rarr;</button>
   </div>
@@ -598,7 +663,7 @@ body{
 <div id="p4" class="hidden">
   <h1 class="ptitle">Art. 135 y datos POT</h1>
   <p class="psub">Tabla de verificacion y normativa del predio</p>
-  <div class="card">
+  <div class="card" id="card-art135-tabla" data-momento="4">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div><div><div class="ct">Verificacion Art. 135 Ley 1801/2016</div><div class="cst">Literales C y D. Incluir en proyectos mayores de 2.000 m2</div></div></div>
     <label class="chkblock"><input type="checkbox" id="incluirArt" onchange="toggleArt(this)"><span>Incluir tabla de verificacion en el informe</span></label>
     <div id="art-table" class="hidden">
@@ -630,7 +695,7 @@ body{
       </table>
     </div>
   </div>
-  <div class="card">
+  <div class="card" id="card-pot" data-momento="4">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg></div><div><div class="ct">Consulta norma POT - Acuerdo 033/2009</div><div class="cst">Normativa urbanistica del predio inspeccionado</div></div></div>
     <div class="fg">
       <div class="f"><label>Clasificacion del suelo</label>
@@ -686,8 +751,9 @@ body{
       </div>
     </div>
   </div>
-  <div class="card">
+  <div class="card" id="card-hallazgos" data-momento="2">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2zm12 4c0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3 3 1.34 3 3zm-9 8c0-2 4-3.1 6-3.1s6 1.1 6 3.1v1H6v-1z"/></svg></div><div><div class="ct">Hallazgos principales</div><div class="cst">Marque los que aplican</div></div></div>
+    <div id="hallazgos-sugerencia-art135" class="hidden" style="margin-bottom:10px"></div>
     <div class="hlist">
       <label class="hitem"><input type="checkbox" class="hallazgo" value="ocupacion en antejardín"><span>Ocupacion o intervencion en antejardín</span></label>
       <label class="hitem"><input type="checkbox" class="hallazgo" value="construccion sin licencia urbanistica"><span>Construccion sin licencia urbanistica</span></label>
@@ -700,7 +766,7 @@ body{
       <label class="hitem"><input type="checkbox" class="hallazgo" value="uso diferente al senalado en la licencia de construccion"><span>Uso diferente al senalado en la licencia de construccion</span></label>
     </div>
   </div>
-  <div class="card">
+  <div class="card" id="card-art135-comp" data-momento="2">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div><div><div class="ct">Comportamientos contrarios - Art. 135 Ley 1801/2016</div><div class="cst">Literales A, C y D. Marque los que aplican para incluir en conclusiones</div></div></div>
     <div style="margin-bottom:8px"><small style="font-size:11px;color:#2E5496;font-weight:700">LITERAL A — Comportamientos contra la integridad urbanistica:</small></div>
     <div class="hlist" style="margin-bottom:14px">
@@ -732,7 +798,7 @@ body{
       <label class="hitem"><input type="checkbox" class="comp-ac" value="D24 - No demoler, construir o reparar entre las 6 pm y las 8 am ni en dias festivos en zonas residenciales"><span>24. No demoler, construir o reparar entre 6pm-8am ni festivos en zonas residenciales</span></label>
     </div>
   </div>
-  <div class="br">
+  <div class="br wizard-nav">
     <button class="btn btn-o" onclick="ir(3)">&larr; Atras</button>
     <button class="btn btn-p" onclick="ir(5)">Continuar &rarr;</button>
   </div>
@@ -742,7 +808,7 @@ body{
   <p class="psub">Cargue el registro fotografico, revise el resumen y genere el informe F-GGO-43</p>
 
   <!-- Imagen de localización (sección LOCALIZACIÓN del informe) -->
-  <div class="card">
+  <div class="card" id="card-localizacion" data-momento="3">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><div><div class="ct">Localización</div><div class="cst">Imagen aérea para la sección LOCALIZACIÓN del informe</div></div></div>
     <div class="nota" style="margin-bottom:12px">
       Se genera automáticamente una imagen satelital con marcador. Puede <b>reemplazarla</b> con su captura propia de QGIS (con la capa de predios) para mayor precisión.
@@ -766,7 +832,7 @@ body{
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="card-fotos" data-momento="3">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div><div><div class="ct">Registro fotografico</div><div class="cst">Fotos de la subcarpeta <b>Fotos</b> de la visita</div></div></div>
     <div class="nota" id="fotos-info" style="margin-bottom:12px">
       Las fotografias se leen automaticamente desde la carpeta Drive de la visita asociada (subcarpeta <b>Fotos</b>). Se incluyen en el informe y dan contexto a la IA.
@@ -780,15 +846,15 @@ body{
     <div id="fotos-list"></div>
   </div>
 
-  <div class="card" id="res-box"><p style="color:var(--texto-3);font-size:12px">Complete los pasos anteriores para ver el resumen.</p></div>
+  <div class="card" id="res-box" data-momento="4"><p style="color:var(--texto-3);font-size:12px">Complete los pasos anteriores para ver el resumen.</p></div>
 
-  <div class="br">
-    <button class="btn btn-o" onclick="ir(4)">&larr; Atras</button>
+  <div class="br" data-momento="4">
+    <button class="btn btn-o wizard-nav" onclick="ir(4)">&larr; Atras</button>
     <button class="btn btn-p" id="btn-gen" onclick="generarInforme()" style="margin-left:auto">Generar informe</button>
   </div>
-  <div id="stbox" class="stbox hidden"></div>
-  <div id="dl-status" class="hidden" style="margin-top:10px;font-size:12px;color:var(--texto-suave)"></div>
-  <div id="prev-area" class="hidden">
+  <div id="stbox" class="stbox hidden" data-momento="4"></div>
+  <div id="dl-status" class="hidden" data-momento="4" style="margin-top:10px;font-size:12px;color:var(--texto-suave)"></div>
+  <div id="prev-area" class="hidden" data-momento="4">
     <div class="sep"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:10px;flex-wrap:wrap">
       <p style="font-size:11px;color:var(--texto-suave);margin:0">Vista previa del texto generado:</p>
@@ -799,10 +865,37 @@ body{
 </div>
 </main>
 </div>
+<div id="modal-emision" aria-live="polite">
+  <div class="caja" id="modal-emision-caja"></div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<script src="../env.js"></script>
 <script>
-// Webhook único — cambiar aquí si se redeploya Apps Script.
-var WH = 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec';
+// Webhook único — única fuente: env.js (auditoría 2026-07, hallazgo Arch#6/MP1).
+var WH = CU_WEBHOOK_URL;
+
+// AP1 (auditoría 2026-07): esta página corre fuera de api.js (iframe o
+// pestaña nueva) y no comparte su auto-adjunto de credenciales de sesión.
+// informe-modal.jsx las pasa por query string al abrir esta página.
+var _SESION_QS = new URLSearchParams(window.location.search);
+var SESION_USUARIO = _SESION_QS.get('sesionUsuario') || '';
+var SESION_HASH    = _SESION_QS.get('sesionHash') || '';
+
+// UI_MODE: 'v2' (workspace de 4 momentos, beta) o 'legacy' (wizard de 5
+// pasos, sin cambios). Plan de convivencia (auditoría UX 2026-07): mismo
+// archivo, misma capa de datos — informe-modal.jsx pasa ?ui=v2 solo si el
+// inspector activó el flag beta en localStorage. Se decide una sola vez
+// al abrir, nunca cambia a mitad de un informe en curso.
+var UI_MODE = (_SESION_QS.get('ui') === 'v2') ? 'v2' : 'legacy';
+function _qsConSesion(extra) {
+  var qs = new URLSearchParams(extra || {});
+  if (SESION_USUARIO) qs.set('sesionUsuario', SESION_USUARIO);
+  if (SESION_HASH)    qs.set('sesionHash', SESION_HASH);
+  return qs;
+}
+function _bodyConSesion(obj) {
+  return Object.assign({ sesionUsuario: SESION_USUARIO, sesionHash: SESION_HASH }, obj || {});
+}
 
 var BARRIO_COMUNA = {"Los Sauces": "1", "El Cafetal": "1", "La Pradera": "1", "La Esmeralda": "1", "Paris": "1", "La Maruchenga": "1", "Jose Antonio Galan": "1", "Salvador Allende": "1", "Barrio Nuevo": "2", "La Cabanita": "2", "La Cabana": "2", "La Madera": "2", "La Florida": "2", "Gran Avenida": "2", "San Jose Obrero": "2", "Zona Industrial #1": "2", "Villas de Occidente": "3", "Molinares": "3", "San Simon": "3", "Amazonia": "3", "Santa Ana": "3", "Los Bucaros": "3", "Serramonte": "3", "Salento": "3", "Zona Industrial #2": "3", "Suarez": "4", "Puerto Bello": "4", "Rincon Santos": "4", "Central": "4", "Espiritu Santo": "4", "Centro": "4", "Perez": "4", "Nazaret": "4", "La Meseta": "4", "El Rosario": "4", "Andalucia": "4", "Lopez de Mesa": "4", "El Cairo": "4", "La Milagrosa": "4", "El Congolo": "4", "Las Granjas": "4", "Prado": "4", "Manchester": "4", "La Estacion": "4", "Zona Industrial #3": "4", "La Cumbre": "5", "Altavista": "5", "El Carmelo": "5", "Hato Viejo": "5", "El Porvenir": "5", "Briceno": "5", "Buenos Aires": "5", "El Paraiso": "5", "Riachuelos": "5", "Valadares": "5", "El Trapiche": "5", "Aralias": "5", "Urapanes": "5", "La Primavera": "5", "Villa Maria": "5", "Villas de Comfenalco": "5", "Bellavista": "6", "Playa Rica": "6", "San Gabriel": "6", "San Martin": "6", "Villas del Sol": "6", "Tierradentro": "6", "Villa Linda": "6", "Girasoles": "6", "Pachelly": "6", "Los Alpes": "6", "El Ducado": "6", "La Aldea": "6", "La Selva": "7", "El Mirador": "7", "Niquía Bifamiliares": "7", "Altos de Niquía": "7", "Altos de Quitasol": "7", "Ciudad Niquía": "8", "Panamericano": "8", "Ciudadela del Norte": "8", "Terranova": "8", "Hermosa Provincia": "8", "Zona Industrial #4": "8", "La Navarra": "9", "El Trebol": "9", "Guasimalito": "9", "Zona Industrial #5": "9", "La Virginia": "10", "Fontidueno": "10", "La Mina": "10", "Alcala": "10", "Los Ciruelos": "10", "Estacion Primera": "10", "Las Vegas": "10", "La Camila": "10", "Cinco Estrellas": "10", "Marco Fidel Suarez": "10", "Zona Industrial #6": "10", "La Gabriela": "11", "Belvedere": "11", "Acevedo": "11", "Zamora": "11", "Alpes del Norte": "11", "Santa Rita": "11", "Zona Industrial #7": "11", "Vda. Croacia": "12", "Vda. El Pinar": "12"};
 function autoComuna(sel) {
@@ -830,6 +923,245 @@ function toggleModalidades() {
     // Limpiar modalidades si el tipo de trámite ya no las requiere
     document.querySelectorAll('.mod-chk').forEach(function(cb) { cb.checked = false; });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WORKSPACE v2 — 4 momentos en vez de 5 páginas (auditoría UX 2026-07).
+// Reusa las mismas cards/campos del wizard legacy vía data-momento;
+// no se mueve ningún nodo del DOM ni se duplica ningún id.
+// ═══════════════════════════════════════════════════════════════
+var MOMENTOS_V2 = [
+  { n: 1, titulo: 'Confirmar contexto' },
+  { n: 2, titulo: 'Narrar hallazgos' },
+  { n: 3, titulo: 'Adjuntar evidencia' },
+  { n: 4, titulo: 'Revisar y emitir' },
+];
+var momentoActivo = 1;
+
+// Mapeo hallazgo → sugerencia Art. 135 (100% cliente, sin backend nuevo).
+// Se sugiere, NUNCA se auto-aplica — mismo patrón ya validado en
+// nueva-visita.jsx para Literal A. Solo 5 de 9 hallazgos tienen
+// correspondencia real; los otros 4 quedan sin sugerencia a propósito
+// (no se fuerza una categoría legal que no existe).
+var HALLAZGO_ART135 = {
+  'ocupacion en antejardín': ['A1', 'A3'],
+  'construccion sin licencia urbanistica': ['A4'],
+  'construccion con desconocimiento de la licencia': ['A2'],
+  'materiales de construccion en espacio publico': ['D13'],
+  'uso diferente al senalado en la licencia de construccion': ['C9'],
+};
+
+function _normalizarHallazgo(s) {
+  return (s || '').toString().trim().toLowerCase();
+}
+
+// Pinta sugerencias de Art.135 debajo del listado de hallazgos, sin
+// tocar los checkboxes comp-ac hasta que el inspector acepte.
+function actualizarSugerenciaArt135() {
+  var box = document.getElementById('hallazgos-sugerencia-art135');
+  if (!box) return;
+  var marcados = [];
+  document.querySelectorAll('.hallazgo:checked').forEach(function(c) { marcados.push(c.value); });
+
+  var sugeridos = {};
+  marcados.forEach(function(h) {
+    var codigos = HALLAZGO_ART135[_normalizarHallazgo(h)];
+    if (codigos) codigos.forEach(function(c) { sugeridos[c] = true; });
+  });
+  var codigos = Object.keys(sugeridos);
+  if (!codigos.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+  var yaMarcados = [];
+  document.querySelectorAll('.comp-ac:checked').forEach(function(c) { yaMarcados.push(c.value); });
+  var faltantes = codigos.filter(function(c) {
+    return !yaMarcados.some(function(v) { return v.indexOf(c + ' -') === 0; });
+  });
+  if (!faltantes.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+  box.classList.remove('hidden');
+  box.innerHTML = '<div class="nota" style="margin-bottom:0">'
+    + '<b>Sugerencia Art. 135:</b> segun lo marcado, podria aplicar '
+    + faltantes.join(', ')
+    + '. <button type="button" class="btn btn-o" style="padding:4px 10px;font-size:11px;margin-left:6px" onclick="aceptarSugerenciaArt135()">Marcar sugeridos</button>'
+    + '</div>';
+  box.setAttribute('data-faltantes', faltantes.join(','));
+}
+
+// Acepta la sugerencia: marca los comp-ac correspondientes. Nunca ocurre
+// solo — siempre requiere el clic explícito del inspector.
+function aceptarSugerenciaArt135() {
+  var box = document.getElementById('hallazgos-sugerencia-art135');
+  var faltantes = (box.getAttribute('data-faltantes') || '').split(',').filter(Boolean);
+  document.querySelectorAll('.comp-ac').forEach(function(cb) {
+    faltantes.forEach(function(c) {
+      if (cb.value.indexOf(c + ' -') === 0) cb.checked = true;
+    });
+  });
+  guardar();
+  actualizarSugerenciaArt135();
+}
+
+// ── Validaciones centralizadas (una sola fuente, spec funcional §06) ──
+function puedeAvanzarA(n) {
+  if (n <= 1 || n === 3) return true;
+  if (n === 4) {
+    var hayHallazgo = document.querySelectorAll('.hallazgo:checked').length > 0;
+    var hayObs = (gv('obs') || '').trim().length > 0;
+    if (!hayHallazgo && !hayObs) return false;
+  }
+  return true;
+}
+
+function estadoMomento(n) {
+  if (n === momentoActivo) return 'activo';
+  if (n === 4 && !puedeAvanzarA(4)) return 'bloqueado';
+  if (n === 1) return gv('inspector') ? 'completo' : 'pendiente';
+  if (n === 2) return (document.querySelectorAll('.hallazgo:checked').length > 0 || (gv('obs')||'').trim()) ? 'completo' : 'pendiente';
+  if (n === 3) return document.querySelectorAll('#fotos-list > div[id^="foto-"]').length > 0 ? 'completo' : 'pendiente';
+  return 'pendiente';
+}
+
+function renderRail() {
+  var rail = document.getElementById('v2-rail');
+  if (!rail) return;
+  rail.innerHTML = MOMENTOS_V2.map(function(m) {
+    var estado = estadoMomento(m.n);
+    var clases = 'v2-rail-item'
+      + (estado === 'activo' ? ' activo' : '')
+      + (estado === 'completo' ? ' completo' : '')
+      + (estado === 'bloqueado' ? ' bloqueado' : '');
+    var titleAttr = estado === 'bloqueado'
+      ? ' title="Marca al menos un hallazgo o escribe una observacion para continuar."'
+      : '';
+    return '<button type="button" class="' + clases + '" onclick="irMomento(' + m.n + ')"'
+      + titleAttr + (estado === 'bloqueado' ? ' aria-disabled="true"' : '') + '>'
+      + '<span class="estado">' + (estado === 'completo' ? '' : m.n) + '</span>'
+      + '<span>' + m.titulo + '</span></button>';
+  }).join('');
+}
+
+function irMomento(n) {
+  if (n === 4 && !puedeAvanzarA(4)) return; // bloqueo blando: el tooltip del rail ya explica por qué
+  momentoActivo = n;
+  document.querySelectorAll('[data-momento]').forEach(function(el) {
+    el.classList.toggle('momento-activo', el.getAttribute('data-momento') === String(n));
+  });
+  renderRail();
+  if (n === 4) buildRes();
+  window.scrollTo(0, 0);
+}
+
+// Indicador de autoguardado persistente (reemplaza el flash de 1.4s en v2).
+function actualizarIndicadorAutosaveV2() {
+  var txt = document.getElementById('v2-autosave-txt');
+  if (!txt) return;
+  var hoy = new Date();
+  var hh = String(hoy.getHours()).padStart(2, '0');
+  var mm = String(hoy.getMinutes()).padStart(2, '0');
+  txt.textContent = 'Guardado · ' + hh + ':' + mm;
+}
+
+// ── Modal unificado de emision: recibo → generando → error → éxito ──
+// Mismo contenedor para las 4 fases (spec funcional, pantallas 7-10):
+// nunca hay salto de layout entre una fase y la siguiente.
+function mostrarModalEmision(estado, datos) {
+  datos = datos || {};
+  var modal = document.getElementById('modal-emision');
+  var caja  = document.getElementById('modal-emision-caja');
+  if (!modal || !caja) return;
+
+  if (estado === 'cerrar') { modal.classList.remove('visible'); return; }
+
+  var html = '';
+  if (estado === 'recibo') {
+    var nFotos = document.querySelectorAll('#fotos-list > div[id^="foto-"]').length;
+    var nHallazgos = document.querySelectorAll('.hallazgo:checked').length;
+    var sinLicEl = document.getElementById('sinLic');
+    var sinLic = sinLicEl ? sinLicEl.checked : false;
+    html = '<div style="font-family:var(--font-serif);font-size:17px;font-weight:600;margin-bottom:14px">Confirmar emision</div>'
+      + '<div style="font-size:13px;color:var(--texto-2);line-height:1.9">'
+      + '<div><b>' + nHallazgos + '</b> hallazgo' + (nHallazgos === 1 ? '' : 's') + '</div>'
+      + '<div><b>' + nFotos + '</b> fotografia' + (nFotos === 1 ? '' : 's') + '</div>'
+      + '<div>' + (sinLic ? 'Sin licencia aportada' : 'Con licencia aportada') + '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:10px;margin-top:18px">'
+      + '<button class="btn btn-p" onclick="mostrarModalEmision(\'cerrar\');generarInformeV2()">Confirmar y generar</button>'
+      + '<button class="btn btn-o" onclick="mostrarModalEmision(\'cerrar\')">Revisar de nuevo</button>'
+      + '</div>';
+  } else if (estado === 'generando') {
+    var fases = ['Leyendo visita', 'Redactando', 'Verificando'];
+    var activaIdx = datos.fase || 0;
+    html = '<div style="font-family:var(--font-serif);font-size:17px;font-weight:600;margin-bottom:14px">Generando informe</div>'
+      + fases.map(function(f, i) {
+          var cls = i < activaIdx ? 'fase hecha' : (i === activaIdx ? 'fase activa' : 'fase');
+          return '<div class="' + cls + '">' + (i < activaIdx ? '✓' : (i === activaIdx ? '●' : '○')) + ' ' + f + '</div>';
+        }).join('');
+  } else if (estado === 'error') {
+    html = '<div style="font-family:var(--font-serif);font-size:17px;font-weight:600;margin-bottom:10px;color:var(--rojo)">No pudimos generar el informe</div>'
+      + '<div style="font-size:13px;color:var(--texto-2);margin-bottom:16px">' + (datos.mensaje || 'Intenta de nuevo en unos segundos.') + '</div>'
+      + '<div style="display:flex;gap:10px">'
+      + '<button class="btn btn-p" onclick="mostrarModalEmision(\'cerrar\');generarInformeV2()">Reintentar</button>'
+      + '<button class="btn btn-o" onclick="mostrarModalEmision(\'cerrar\')">Cerrar</button>'
+      + '</div>';
+  } else if (estado === 'exito') {
+    html = '<div style="font-family:var(--font-serif);font-size:17px;font-weight:600;margin-bottom:10px;color:var(--verde-dark)">✓ Informe generado</div>'
+      + '<div style="font-size:13px;color:var(--texto-2);margin-bottom:16px">Guardado en Drive. Puedes descargarlo o seguir editando.</div>'
+      + (datos.link ? '<a href="' + datos.link + '" target="_blank" style="color:var(--brand-accent);font-size:13px">Ver archivo en Drive</a><br><br>' : '')
+      + '<button class="btn btn-p" onclick="mostrarModalEmision(\'cerrar\')">Cerrar</button>';
+  }
+  caja.innerHTML = html;
+  modal.classList.add('visible');
+}
+
+// Orquestador v2: recibo → misma logica de siempre (pedirJsonIA,
+// renderDocx, descargarDocx, subirInformeAlDrive) — solo cambia cómo se
+// muestra el progreso/resultado (modal unificado en vez de showStatus).
+async function generarInformeV2() {
+  mostrarModalEmision('generando', { fase: 0 });
+  var ctx    = recolectarDatosWizard();
+  var prompt = construirPromptF43(ctx);
+  mostrarModalEmision('generando', { fase: 1 });
+  var ia = await pedirJsonIA(prompt);
+  if (!ia.ok) {
+    mostrarModalEmision('error', { mensaje: 'El servicio de IA no respondio: ' + ia.error + '.' });
+    return;
+  }
+  tglobal = ia.json || {};
+  tglobal.antecedentes          = tglobal.antecedentes          || '';
+  tglobal.observaciones         = tglobal.observaciones         || '';
+  tglobal.conclusiones_items    = Array.isArray(tglobal.conclusiones_items)    ? tglobal.conclusiones_items    : [];
+  tglobal.recomendaciones_items = Array.isArray(tglobal.recomendaciones_items) ? tglobal.recomendaciones_items : [];
+  tglobal._d = ctx.d;
+  mostrarModalEmision('generando', { fase: 2 });
+  try {
+    var blob = await renderDocx(tglobal);
+    var d = tglobal._d;
+    var nombre = 'F-GGO-43_' + (d.direccion || 'informe').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25) + '_' + (d.fecha_visita || 'sin_fecha') + '.docx';
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    var link = null;
+    if (V6_CTX.fila && V6_CTX.idCarpeta) link = await subirInformeAlDrive(blob);
+    mostrarModalEmision('exito', { link: link });
+  } catch (e) {
+    mostrarModalEmision('error', { mensaje: e.message });
+  }
+}
+
+function activarV2() {
+  document.body.classList.add('v2-mode');
+  renderRail();
+  irMomento(1);
+  actualizarIndicadorAutosaveV2();
+  // El boton "Generar informe" del footer legacy dispara el recibo de
+  // confirmacion v2 en vez de generarInforme() directo.
+  var btnGen = document.getElementById('btn-gen');
+  if (btnGen) btnGen.setAttribute('onclick', "mostrarModalEmision('recibo')");
+  document.querySelectorAll('.hallazgo, .comp-ac').forEach(function(cb) {
+    cb.addEventListener('change', actualizarSugerenciaArt135);
+  });
 }
 
 // Inspectores firmantes — se carga desde la hoja USUARIOS al iniciar.
@@ -900,7 +1232,7 @@ async function mejorarObservaciones() {
     var r = await fetch(WH, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ accion: 'mejorarTexto', texto: texto })
+      body: JSON.stringify(_bodyConSesion({ accion: 'mejorarTexto', texto: texto }))
     });
     var d = await r.json();
     if (!d.ok || !d.texto) throw new Error(d.error || 'Sin respuesta');
@@ -969,6 +1301,19 @@ function gv(id) {
   var el = document.getElementById(id);
   return el ? (el.value || '') : '';
 }
+// AP4 (auditoria 2026-07): buildRes() arma HTML por concatenacion de string
+// con datos que vienen de BD VISITAS (observaciones, direccion, areas...) y
+// lo inyecta con innerHTML — sin esto, un campo de texto libre con
+// "<img src=x onerror=...>" ejecuta JS en el navegador de quien abra el
+// informe. Se escapa todo valor de datos antes de concatenar.
+function escapeHtml(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function buildRes() {
   var sinLic = document.getElementById('sinLic').checked;
   var hs = [], tts = [], mods = [], comps = [];
@@ -980,7 +1325,7 @@ function buildRes() {
   var inclArt = document.getElementById('incluirArt').checked;
 
   function fila(label, val) {
-    return '<div><small>' + label + '</small><b>' + (val || '&mdash;') + '</b></div>';
+    return '<div><small>' + label + '</small><b>' + (val ? escapeHtml(val) : '&mdash;') + '</b></div>';
   }
   function bloque(titulo, contenido) {
     return '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde)">'
@@ -989,7 +1334,7 @@ function buildRes() {
   }
   function chips(arr) {
     if (!arr.length) return '<div style="color:var(--texto-3);font-size:11px;margin-top:6px">Ninguno seleccionado</div>';
-    return '<div class="res-chips">' + arr.map(function(x) { return '<span>' + x + '</span>'; }).join('') + '</div>';
+    return '<div class="res-chips">' + arr.map(function(x) { return '<span>' + escapeHtml(x) + '</span>'; }).join('') + '</div>';
   }
 
   var h = '<div style="font-family:var(--font-serif);font-size:20px;font-weight:600;color:var(--texto);letter-spacing:-0.3px">Resumen del caso</div>';
@@ -1028,7 +1373,7 @@ function buildRes() {
     h += '</div>';
     if (tts.length)  h += '<div style="margin-top:10px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Tipo de tramite</small>' + chips(tts) + '</div>';
     if (mods.length) h += '<div style="margin-top:8px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Modalidades</small>' + chips(mods) + '</div>';
-    if (gv('dest'))  h += '<div style="margin-top:10px;font-size:12px;color:var(--texto-2)"><b>Destinaciones aprobadas:</b> ' + gv('dest') + '</div>';
+    if (gv('dest'))  h += '<div style="margin-top:10px;font-size:12px;color:var(--texto-2)"><b>Destinaciones aprobadas:</b> ' + escapeHtml(gv('dest')) + '</div>';
     h += '</div>';
   }
 
@@ -1039,11 +1384,11 @@ function buildRes() {
       h += '<small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Observaciones de campo</small>';
       var obs = gv('obs');
       var resumen = obs.length > 280 ? obs.substring(0, 280) + '…' : obs;
-      h += '<div style="margin-top:6px;font-size:12px;color:var(--texto-2);line-height:1.6;white-space:pre-wrap">' + resumen + '</div>';
+      h += '<div style="margin-top:6px;font-size:12px;color:var(--texto-2);line-height:1.6;white-space:pre-wrap">' + escapeHtml(resumen) + '</div>';
     }
     if (gv('areas')) {
       h += '<div style="margin-top:10px"><small style="color:var(--texto-3);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:600">Area en contravencion</small>';
-      h += '<div style="margin-top:4px;font-size:13px;color:var(--texto)">' + gv('areas') + '</div></div>';
+      h += '<div style="margin-top:4px;font-size:13px;color:var(--texto)">' + escapeHtml(gv('areas')) + '</div></div>';
     }
     h += '</div>';
   }
@@ -1058,7 +1403,7 @@ function buildRes() {
     h += fila('Poligono tratamiento', gv('poligTrat'));
     h += fila('Franja intensidad',   gv('franja'));
     h += '</div>';
-    if (gv('proteccion')) h += '<div style="margin-top:8px;font-size:12px;color:var(--texto-2)"><b>Suelo de proteccion / amenaza:</b> ' + gv('proteccion') + '</div>';
+    if (gv('proteccion')) h += '<div style="margin-top:8px;font-size:12px;color:var(--texto-2)"><b>Suelo de proteccion / amenaza:</b> ' + escapeHtml(gv('proteccion')) + '</div>';
     h += '</div>';
   }
 
@@ -1072,7 +1417,7 @@ function buildRes() {
   h += '<div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--borde);display:flex;gap:18px;flex-wrap:wrap;font-size:11px;color:var(--texto-suave)">';
   h += '<span><b style="color:var(--texto)">' + nFotos + '</b> fotografia' + (nFotos === 1 ? '' : 's') + '</span>';
   h += '<span>Tabla Art. 135: <b style="color:var(--texto)">' + (inclArt ? 'Si' : 'No') + '</b></span>';
-  h += '<span>Fecha emision: <b style="color:var(--texto)">' + (gv('fechaInforme') || '—') + '</b></span>';
+  h += '<span>Fecha emision: <b style="color:var(--texto)">' + (gv('fechaInforme') ? escapeHtml(gv('fechaInforme')) : '—') + '</b></span>';
   h += '</div>';
 
   document.getElementById('res-box').innerHTML = h;
@@ -1169,7 +1514,7 @@ async function pedirJsonIA(prompt) {
     var r = await fetch(WH, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ accion: 'mejorarTexto', texto: prompt })
+      body: JSON.stringify(_bodyConSesion({ accion: 'mejorarTexto', texto: prompt }))
     });
     var data = await r.json();
     if (!data.ok || !data.texto) throw new Error(data.error || 'Sin respuesta');
@@ -1412,7 +1757,7 @@ async function renderDocx(tglobal) {
       var fid    = fidEl  ? fidEl.value  : '';
       var desc   = descEl ? descEl.value : '';
       if (!fid) return Promise.resolve(null);
-      return fetch(WH + '?accion=obtenerFotoBase64&fileId=' + encodeURIComponent(fid))
+      return fetch(WH + '?' + _qsConSesion({ accion: 'obtenerFotoBase64', fileId: fid }).toString())
         .then(function(r) { return r.json(); })
         .then(function(d) {
           if (!d.ok || !d.base64) return null;
@@ -1741,6 +2086,11 @@ function nuevoInforme() {
   document.getElementById('fechaVisita').value = hoy;
   document.getElementById('fechaInforme').value = hoy;
   ir(1);
+  if (UI_MODE === 'v2') {
+    var sug = document.getElementById('hallazgos-sugerencia-art135');
+    if (sug) { sug.classList.add('hidden'); sug.innerHTML = ''; }
+    irMomento(1);
+  }
 }
 var fotoCount = 0;
 
@@ -1761,12 +2111,12 @@ async function cargarFotosDeVisita() {
   status.style.color = 'var(--texto-suave)';
   status.textContent = 'Buscando subcarpeta Fotos...';
   try {
-    var rIds = await fetch(WH + '?accion=obtenerIdFotos&idCarpeta=' + encodeURIComponent(V6_CTX.idCarpeta));
+    var rIds = await fetch(WH + '?' + _qsConSesion({ accion: 'obtenerIdFotos', idCarpeta: V6_CTX.idCarpeta }).toString());
     var dIds = await rIds.json();
     if (!dIds.ok || !dIds.idFotos) throw new Error(dIds.error || 'Subcarpeta Fotos no encontrada');
 
     status.textContent = 'Listando fotos...';
-    var rList = await fetch(WH + '?accion=listarFotosActa&idCarpeta=' + encodeURIComponent(dIds.idFotos));
+    var rList = await fetch(WH + '?' + _qsConSesion({ accion: 'listarFotosActa', idCarpeta: dIds.idFotos }).toString());
     var dList = await rList.json();
     if (!dList.ok) throw new Error(dList.error || 'No se pudo listar fotos');
     var fotos = dList.fotos || [];
@@ -1818,7 +2168,7 @@ async function describirFotosConIA() {
     status.style.color = 'var(--texto-suave)';
     status.textContent = 'Analizando con IA ' + (i + 1) + '/' + total + '...';
     try {
-      var r = await fetch(WH + '?accion=describirFotoDesdeId&fileId=' + encodeURIComponent(fidEl.value));
+      var r = await fetch(WH + '?' + _qsConSesion({ accion: 'describirFotoDesdeId', fileId: fidEl.value }).toString());
       var d = await r.json();
       if (d.ok && d.descripcion && descEl) {
         descEl.value = d.descripcion;
@@ -2099,6 +2449,10 @@ function _hoyLocal() {
     ind.style.opacity = '1';
     clearTimeout(ind._t);
     ind._t = setTimeout(function() { ind.style.opacity = '0'; }, 1400);
+    // v2: indicador persistente (no un flash) + rail actualizado si
+    // cambió algo que afecta puedeAvanzarA()/estadoMomento().
+    actualizarIndicadorAutosaveV2();
+    renderRail();
   };
   // Autosave periódico eliminado: ya hay listeners input/change en todos los
   // campos y wrapper en ir(); el setInterval de 30s solo parpadeaba "Guardado".
@@ -2119,6 +2473,8 @@ function _hoyLocal() {
   //  Se hace después de prefillDesdeURL para que el data-prefill ya
   //  esté seteado y se aplique cuando termine el fetch.
   cargarInspectoresDesdeBD();
+
+  if (UI_MODE === 'v2') activarV2();
 })();
 
 function normalizar(s) {
@@ -2341,6 +2697,8 @@ async function subirInformeAlDrive(blob) {
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify({
         accion: 'subirInformeF43',
+        sesionUsuario: SESION_USUARIO,
+        sesionHash: SESION_HASH,
         fila: V6_CTX.fila,
         idCarpeta: V6_CTX.idCarpeta,
         nombreArchivo: nombre,

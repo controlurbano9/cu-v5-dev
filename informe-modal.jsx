@@ -19,7 +19,19 @@
 const { useState: useStateIF, useEffect: useEffectIF, useRef: useRefIF } = React;
 
 const INFORME_PATH = 'informe/index.html';
-const MIN_DESKTOP = 900;
+// Subido de 900 a 1200 (auditoría UX 2026-07): el workspace v2 usa 3
+// columnas (índice + canvas + panel contextual) que no respiran por
+// debajo de ~1200px reales — 900px alcanzaba para el wizard de 1 columna.
+const MIN_DESKTOP = 1200;
+
+// Flag de beta del workspace v2 — opt-in manual (localStorage), sin
+// tocar BD ni Admin todavía. Plan de convivencia: mismo archivo
+// informe/index.html, misma capa de datos, solo cambia ?ui=v2 en la
+// URL. Reversión = borrar la clave o ponerla en '0'.
+function _uiModeInforme() {
+  try { return localStorage.getItem('cu_informe_v2_beta') === '1' ? 'v2' : 'legacy'; }
+  catch (e) { return 'legacy'; }
+}
 
 let _pushInforme = null; // bridge con el host (idéntico al patrón de modal.jsx)
 
@@ -69,9 +81,14 @@ function InformeIframeUI({ params, onCerrar }) {
       if (e.target === e.currentTarget) onCerrar();
     }} style={{
       position: 'fixed', inset: 0, background: 'rgba(31,27,22,0.65)',
-      zIndex: 9000, padding: '24px 28px',
-      display: 'flex', flexDirection: 'column',
+      zIndex: 9000, padding: '4vh 4vw',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
       backdropFilter: 'blur(2px)',
+    }}>
+    {/* Contenedor de la "ventana" — ~92vw/92vh, tope 1440px (revisión UX 2026-07) */}
+    <div style={{
+      width: '100%', height: '100%', maxWidth: 1440,
+      display: 'flex', flexDirection: 'column',
     }}>
       {/* Toolbar de la "ventana" */}
       <div style={{
@@ -125,6 +142,7 @@ function InformeIframeUI({ params, onCerrar }) {
         }}
       />
     </div>
+    </div>
   );
 }
 
@@ -150,12 +168,22 @@ function extraerIdCarpetaDrive(url) {
 //   - Si hay ModalHost montado y el viewport es desktop → modal.
 //   - Si no → window.open en pestaña nueva (móvil o sin host).
 window.abrirInformeF43 = function(params) {
+  // AP1 (auditoría 2026-07): informe/index.html corre fuera de api.js
+  // (iframe o pestaña nueva) y no comparte el auto-adjunto de credenciales
+  // de gasGet/gasPost — se pasan aquí, una sola vez, vía query string.
+  const s = (typeof SESSION_V6 !== 'undefined') ? SESSION_V6.leer() : null;
+  const paramsConSesion = (s && s.usuario && s.hash)
+    ? Object.assign({ sesionUsuario: s.usuario, sesionHash: s.hash }, params || {})
+    : (params || {});
+  // Beta workspace v2 (opt-in localStorage) — ver _uiModeInforme().
+  paramsConSesion.ui = _uiModeInforme();
+
   const esDesktop = window.innerWidth >= MIN_DESKTOP;
   if (_pushInforme && esDesktop) {
-    _pushInforme(params || {});
+    _pushInforme(paramsConSesion);
     return;
   }
-  const url = INFORME_PATH + '?' + _toQuery(params || {});
+  const url = INFORME_PATH + '?' + _toQuery(paramsConSesion);
   window.open(url, '_blank', 'noopener');
 };
 

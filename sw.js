@@ -4,12 +4,12 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v80';
+const CACHE_NAME = 'cu-v6-cache-v82';
 
-// URL del webhook unificado de Apps Script (espejo de api.js CFG.webhook).
-// Hardcoded aquí porque el SW no puede importar api.js. Si cambia el deploy
-// de Apps Script, actualizar también en api.js.
-const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec';
+// URL del webhook unificado de Apps Script — única fuente: env.js
+// (auditoría 2026-07, hallazgo Arch#6/MP1: antes vivía copiada 3 veces).
+importScripts('./env.js');
+const WEBHOOK_URL = CU_WEBHOOK_URL;
 
 // IndexedDB compartida con offline-queue.js — mismo nombre/version/store.
 const IDB_NAME = 'cu_offline_v1';

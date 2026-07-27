@@ -191,12 +191,21 @@ function hoyDDMMAAAA() {
   return _padFecha(d.getDate(), d.getMonth() + 1, d.getFullYear());
 }
 
-// Exportar al scope global
-Object.assign(window, {
+// Exportar al scope global (navegador) o CommonJS (Node, tests)
+var _cuUtilsExports = {
   formatearFecha: formatearFecha,
   parsearFecha: parsearFecha,
   esDiaHabil: esDiaHabil,
   diasHabilesHasta: diasHabilesHasta,
   diasDesde: diasDesde,
   hoyDDMMAAAA: hoyDDMMAAAA,
-});
+  // expuestas para pruebas unitarias (auditoría 2026-07, QA#3/MP7)
+  _festivosColombia: _festivosColombia,
+  _calcularPascua: _calcularPascua,
+  _alLunes: _alLunes,
+};
+if (typeof window !== 'undefined') {
+  Object.assign(window, _cuUtilsExports);
+} else if (typeof module !== 'undefined' && module.exports) {
+  module.exports = _cuUtilsExports;
+}

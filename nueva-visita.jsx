@@ -265,6 +265,10 @@ function _estadoInicial(datosIniciales) {
   return {
     // Identificación
     radicado:       d['RADICADO']             || '',
+    // AP2 (auditoría 2026-07): timestamp de última modificación conocido al
+    // abrir la visita — se reenvía al guardar para que el backend detecte
+    // si otro co-asignado ya guardó cambios en el medio.
+    ultimaModConocida: d['ULTIMA_MODIFICACION'] || '',
     fechaRadicado:  _fechaAIso(d['FECHA RADICADO'] || ''),
     // NO se prellenan con hoy: el inspector debe ingresar manualmente la fecha
     // real de la inspección en campo (puede diligenciar después del mismo día).
@@ -1425,7 +1429,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         const barrioFinal = dCur.barrio === '__otro__' ? (bCur || '') : dCur.barrio;
         const dFinal = Object.assign({}, dCur, { barrio: barrioFinal });
         const vals = _construirPayload(dFinal, estadoVisita, dCur.linkDrive || '', datosIniciales);
-        await guardarVisita({ valores: vals, fila: filaEditando });
+        const rAuto = await guardarVisita({ valores: vals, fila: filaEditando, ultimaModConocida: dCur.ultimaModConocida });
+        if (rAuto && rAuto.ultimaModConocida) setD(prev => ({ ...prev, ultimaModConocida: rAuto.ultimaModConocida }));
         _lastSavedRef.current = snap;
         setUltimoGuardadoMs(Date.now());
       } catch(e) {
@@ -1556,13 +1561,15 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         if (!linkDrive) return;
         // Persistir en BD: re-armar payload con linkDrive y actualizar la fila.
         const vals = _construirPayload(d, estadoVisita, linkDrive, datosIniciales);
+        let rBg = null;
         try {
-          await guardarVisita({ valores: vals, fila: filaEditando });
+          rBg = await guardarVisita({ valores: vals, fila: filaEditando, ultimaModConocida: d.ultimaModConocida });
         } catch (e) { /* silencioso, se reintenta al próximo save */ }
         if (cancelado) return;
         setD(prev => ({
           ...prev,
           linkDrive: linkDrive,
+          ultimaModConocida: (rBg && rBg.ultimaModConocida) || prev.ultimaModConocida,
           idCarpetaVisita: _idCarpetaDeLink(linkDrive),
           idCarpetaFotos: c.idFotos || '',
         }));
@@ -2024,18 +2031,20 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const vals = _construirPayload(dFinal, 'INICIADO', linkDrive, datosIniciales);
 
       // 3. POST único — clientId para que AS deduplique reintentos offline
-      const r = await guardarVisita({ valores: vals, fila: filaEditando, clientId });
+      const r = await guardarVisita({ valores: vals, fila: filaEditando, clientId, ultimaModConocida: dFinal.ultimaModConocida });
       if (r && r.fila) setFE(r.fila);
 
       // 4. Actualizar state local con metadatos derivados
       setEstV('INICIADO');
-      const dPersistido = { ...dFinal, linkDrive, idCarpetaVisita, idCarpetaFotos };
+      const nuevaModConocida = (r && r.ultimaModConocida) || dFinal.ultimaModConocida;
+      const dPersistido = { ...dFinal, linkDrive, idCarpetaVisita, idCarpetaFotos, ultimaModConocida: nuevaModConocida };
       setD(prev => ({
         ...prev,
         barrio: barrioFinal,
         linkDrive,
         idCarpetaVisita,
         idCarpetaFotos,
+        ultimaModConocida: nuevaModConocida,
       }));
       // Sincronizar el snapshot del autoguardado: este estado está "limpio"
       // hasta que el inspector vuelva a tocar un campo.
@@ -2079,7 +2088,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     const dirNotifFinal = d.dirNotifIgual ? (d.direccion || '') : (d.atiendeDir || '');
     return {
       radicado:       d.esOficio ? ('OFICIO-' + d.orden) : d.radicado,
-      fechaRadicado:  _isoAFecha(d.fechaRadicado),
+      // Oficio: no hay radicado externo previo, el campo de fecha de
+      // radicado ni se muestra en el formulario — usar fecha de visita
+      // (misma regla que _construirPayload al guardar en BD).
+      fechaRadicado:  d.esOficio ? _isoAFecha(d.fechaVisita) : _isoAFecha(d.fechaRadicado),
       fechaVisita:    _isoAFecha(d.fechaVisita),
       objetoVisita:   d.esOficio ? 'Inspección de oficio' : 'Atención de PQR',
       direccion:      d.direccion,
@@ -2163,10 +2175,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     req(d.comuna, 'Comuna');
     req(d.lat != null && d.lon != null, 'Coordenadas GPS (capturar ubicación)');
 
-    // Persona que atiende
-    req(d.atiendeNombre, 'Nombre de la persona que atiende');
-    req(d.atiendeId, 'Identificación de la persona que atiende');
-    req(d.atiendeRelacion, 'Relación con el evento');
+    // Persona que atiende (si se marcó "No se atiende", la sección
+    // queda cerrada y estos campos no se diligencian — no bloquear).
+    if (!d.noAtiende) {
+      req(d.atiendeNombre, 'Nombre de la persona que atiende');
+      req(d.atiendeId, 'Identificación de la persona que atiende');
+      req(d.atiendeRelacion, 'Relación con el evento');
+    }
 
     // Características de la edificación
     req(d.estadoObra, 'Estado de la obra');
@@ -2363,7 +2378,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     setGRF(true);
     setModalFotos(null);
     try {
-      const payload = Object.assign({ accion: 'generarRegistroFotos' }, _construirDatosF46());
+      const payload = Object.assign({ accion: 'generarRegistroFotos', regenerar: true }, _construirDatosF46());
       // Enviar array de fotos con fileId y descripcion editada
       payload.fotos = modalFotos.map(function(f) {
         return { fileId: f.id, descripcion: f.descripcion || '' };

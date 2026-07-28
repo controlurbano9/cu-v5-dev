@@ -149,6 +149,8 @@ body{
   padding:12px 16px; font-size:12px; color:var(--texto-2); margin-bottom:14px; line-height:1.55;
 }
 .nota b{color:var(--texto); font-weight:600}
+/* Variante informativa (no es una advertencia, solo contexto) */
+.nota-info{background:var(--azul-bg); border-color:var(--azul); border-left-color:var(--azul)}
 
 /* Barra inferior con botones de navegación entre pasos */
 .br{display:flex; gap:10px; margin-top:22px; align-items:center}
@@ -810,20 +812,21 @@ body.v2-mode .v2-autosave{display:inline-flex}
   <!-- Imagen de localización (sección LOCALIZACIÓN del informe) -->
   <div class="card" id="card-localizacion" data-momento="3">
     <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div><div><div class="ct">Localización</div><div class="cst">Imagen aérea para la sección LOCALIZACIÓN del informe</div></div></div>
-    <div class="nota" style="margin-bottom:12px">
-      Se genera automáticamente una imagen satelital con marcador. Puede <b>reemplazarla</b> con su captura propia de QGIS (con la capa de predios) para mayor precisión.
+    <div class="nota nota-info" style="margin-bottom:12px">
+      Se genera automáticamente una imagen satelital con el polígono del predio (cuando hay GPS de la visita y el predio está en el catastro) o un marcador sobre la dirección. Puede <b>reemplazarla</b> con su captura propia de QGIS (con la capa de predios) para mayor precisión.
     </div>
     <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
       <div style="flex:1;min-width:280px">
         <div id="loc-preview" style="background:var(--fondo);border:1px solid var(--borde-med);border-radius:var(--r-sm);min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--texto-3);font-size:12px;overflow:hidden">
           Esperando dirección…
         </div>
+        <div id="loc-caption" style="font-size:11px;color:var(--texto-3);margin-top:6px"></div>
       </div>
       <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:8px">
-        <div id="loc-fuente" style="font-size:12px;color:var(--texto-suave)">—</div>
+        <div id="loc-resumen" class="sb-info" style="display:none"></div>
         <button class="btn btn-p" onclick="generarMapaLocalizacion()" id="btn-loc-gen">Regenerar mapa automático</button>
         <label class="btn btn-o" style="text-align:center;cursor:pointer;display:inline-block">
-          📁 Subir captura propia (QGIS)
+          📁 Reemplazar por captura QGIS
           <input type="file" id="input-loc-qgis" accept="image/*" style="display:none" onchange="subirImagenLocalizacion(this)">
         </label>
         <button class="btn btn-o" id="btn-loc-restaurar" onclick="borrarImagenLocalizacion()" style="display:none;color:var(--brand-ink);border-color:var(--brand-accent)">Volver al mapa automático</button>
@@ -1132,6 +1135,13 @@ async function generarInformeV2() {
   tglobal.conclusiones_items    = Array.isArray(tglobal.conclusiones_items)    ? tglobal.conclusiones_items    : [];
   tglobal.recomendaciones_items = Array.isArray(tglobal.recomendaciones_items) ? tglobal.recomendaciones_items : [];
   tglobal._d = ctx.d;
+
+  var validacionInforme = validarInformeIA(tglobal, ctx);
+  if (!validacionInforme.ok) {
+    mostrarModalEmision('error', { mensaje: validacionInforme.problemas.join(' ') });
+    return;
+  }
+
   mostrarModalEmision('generando', { fase: 2 });
   try {
     var blob = await renderDocx(tglobal);
@@ -1477,34 +1487,152 @@ function recolectarDatosWizard() {
 
 // ── Construir el prompt para la IA ───────────────────────────────────────────
 //  Solo lógica de texto — no toca DOM. Recibe el ctx de recolectarDatosWizard().
+// Revision 2026-07 (hallazgos de un informe real generado): el prompt
+// anterior dejaba que la IA inventara motivos de visita, citara articulos
+// de memoria y emitiera juicios juridicos que corresponden al Inspector,
+// no al arquitecto. Este informe es la prueba tecnica principal del
+// proceso sancionatorio — mezclar hecho observado con conclusion juridica
+// es exactamente lo que un abogado ataca primero. Reglas 1-6 de abajo
+// existen para cerrar cada uno de esos huecos, no son estilo.
 function construirPromptF43(ctx) {
   var d = ctx.d, hs = ctx.hs, fotoDescs = ctx.fotoDescs, sinLic = ctx.sinLic;
   var licNota = sinLic
-    ? 'No se aporto documentacion urbanistica. Indicarlo claramente en antecedentes.'
-    : 'Se aporto licencia. Contrastar en observaciones: aprobado vs hallado en campo.';
+    ? 'No se aporto documentacion urbanistica. En antecedentes indicar solo que "no fue aportada/exhibida licencia" — nunca afirmar que la obra "no tiene licencia" (eso no se puede verificar en una sola visita).'
+    : 'Se aporto licencia. Contrastar en observaciones lo aprobado (segun DATOS) vs. lo hallado en campo, sin calificar si eso constituye infraccion.';
   var hsNota = hs.length ? hs.join(', ') : 'los identificados segun las observaciones';
-  var compsNota = (ctx.d.comportamientos || []).length ? ctx.d.comportamientos.join('; ') : '';
-  var prompt = 'Eres arquitecto inspector experto en normativa urbanistica de Bello, Antioquia. '
-    + 'Conoces NSR-10, Ley 400/1997, Decreto 1077/2015, Ley 388/1997, Ley 1801/2016, Acuerdo 033/2009 POT, Decreto 193/2011.\n\n'
-    + 'Redacta el informe F-GGO-43. Responde SOLO con JSON valido. Sin texto previo ni markdown.\n\n'
+  var compsList = ctx.d.comportamientos || [];
+  var compsNota = compsList.length ? compsList.join('; ') : '';
+  var prompt = 'Eres arquitecto inspector redactando la seccion tecnica de un informe F-GGO-43 de Control Urbano en Bello, Antioquia. '
+    + 'Tu rol es describir hechos observados y su correspondencia tecnica con la normativa YA IDENTIFICADA por el inspector — '
+    + 'no calificar juridicamente ni ordenar medidas (eso corresponde al Inspector de Convivencia, no a ti).\n\n'
+    + 'Responde SOLO con JSON valido. Sin texto previo ni markdown.\n\n'
     + 'DATOS: ' + JSON.stringify(d) + '\n'
     + 'NOTA LICENCIA: ' + licNota + '\n'
-    + 'HALLAZGOS PRIORITARIOS: ' + hsNota + '\n\n'
+    + 'HALLAZGOS MARCADOS EN CAMPO: ' + hsNota + '\n'
+    + 'COMPORTAMIENTOS ART.135 YA IDENTIFICADOS POR EL INSPECTOR (unica fuente valida de cita legal): ' + (compsNota || 'ninguno marcado') + '\n\n'
     + 'JSON exacto requerido:\n'
     + '{"antecedentes":"parrafos separados por \\n","observaciones":"parrafos separados por \\n",'
     + '"conclusiones_items":["item1","item2"],"recomendaciones_items":["item1","item2"]}\n\n'
-    + 'REGLAS:\n'
-    + '- antecedentes: 2 parrafos, tercera persona, fecha/direccion/origen/objeto de visita\n'
-    + '- observaciones: minimo 3 parrafos tecnicos, contrastar aprobado vs hallado, cerrar con area en contravencion: ' + (d.areas||'segun descripcion') + '\n'
-    + '- conclusiones: orden antejardiin > sin licencia > sin estructura > desconocimiento licencia > demas. Citar Art.135 Ley 1801/2016. Incluir area total.\n'
-    + (compsNota ? '- comportamientos contrarios Art.135 identificados: ' + compsNota + '. Referenciarlos en conclusiones.\n' : '')
-    + '- recomendaciones: imperativas, misma prioridad que conclusiones\n'
-    + '- lenguaje formal tecnico, sin puntos suspensivos, sin coloquialismos';
+    + 'REGLAS OBLIGATORIAS (incumplirlas invalida el informe como prueba tecnica):\n'
+    + '0. REGLA DE ORO: todo hecho afirmado debe tener respaldo directo en DATOS, HALLAZGOS MARCADOS EN CAMPO, '
+    + 'COMPORTAMIENTOS ART.135 ya listados o DESCRIPCION DE FOTOGRAFIAS. Si un dato no esta expresamente en esas '
+    + 'fuentes, se omite por completo — no completar con inferencias, conocimiento general ni probabilidades.\n'
+    + '1. ANTECEDENTES: usa unicamente fecha, direccion y objeto de la visita presentes en DATOS. Nunca inventes '
+    + 'un motivo, denuncia, radicado o solicitud que no aparezca explicitamente en DATOS — si ese dato no viene, '
+    + 'omite la frase de motivo por completo, no la sustituyas por una suposicion.\n'
+    + '2. OBSERVACIONES: describe solo lo fisicamente verificable en el predio (materiales, dimensiones, estado, '
+    + 'ubicacion relativa). Prohibido usar terminos juridicos o de intencion ("invasion", "infraccion", '
+    + '"desconocimiento", "ilegal") o afirmar lo que no se puede constatar en una visita puntual. No expliques el '
+    + 'motivo o significado tecnico de una clasificacion, poligono o campo POT (clasificacion, polig_uso, '
+    + 'polig_trat, franja, proteccion) salvo que esa explicacion este expresamente en DATOS — reproducelos '
+    + 'literalmente. Si hay discrepancia entre un dato de DATOS (ej. pisos aprobados) y lo observado en campo, '
+    + 'prevalece lo observado para describir el estado actual; la discrepancia puede mencionarse objetivamente '
+    + 'sin explicar su causa. Cierra siempre mencionando el area en contravencion: ' + (d.areas || 'segun descripcion') + '.\n'
+    + '3. CITAS LEGALES: cita exclusivamente los codigos de COMPORTAMIENTOS ART.135 ya listados arriba, tal como '
+    + 'aparecen (ej. "A1", "C9"). Prohibido inventar numerales, incisos o articulos adicionales que no esten en '
+    + 'esa lista — si no hay comportamientos marcados, no cites el Art. 135 en absoluto. Nunca escribas "conforme '
+    + 'a la normativa", "segun la legislacion vigente" ni "de acuerdo con el POT" de forma generica — menciona la '
+    + 'norma especifica solo si aparece en DATOS (ej. "Acuerdo 033 de 2009"); si no esta disponible, omite la '
+    + 'referencia.\n'
+    + '4. CONCLUSIONES: deben limitarse a sintetizar los hechos ya descritos en OBSERVACIONES o los '
+    + 'comportamientos ya marcados por el inspector — no incorporar hechos nuevos, interpretaciones adicionales '
+    + 'ni calificar si constituyen infraccion (esa calificacion es del Inspector). Incluye un item independiente '
+    + 'y explicito con el area total en contravencion.\n'
+    + '5. RECOMENDACIONES: cada item solo puede recomendar evaluar, verificar, requerir, remitir o considerar. '
+    + 'Prohibido imponer, sancionar, ordenar, iniciar procedimiento, declarar o resolver — quien decide esas '
+    + 'acciones es el Inspector, no el arquitecto. Si hay un comportamiento marcado en area protegida o espacio '
+    + 'publico, no recomiendes "obtener licencia" (esa obra no es susceptible de licenciamiento); orienta la '
+    + 'recomendacion al procedimiento administrativo correspondiente. No repitas el area en contravencion aqui.\n'
+    + '6. Lenguaje: prohibido "constituye", "demuestra", "acredita", "confirma", "prueba", "evidencia plenamente", '
+    + '"se encuentra plenamente establecido", "desconocimiento total", "carece de estructura aprobada" — usa '
+    + '"se observo", "se evidencio", "se identifico", "durante la visita", "no fue posible verificar". Sin puntos '
+    + 'suspensivos ni coloquialismos.\n'
+    + '7. VERIFICACION INTERNA (no la incluyas en la respuesta, es un paso silencioso antes de responder): '
+    + 'revisa que ningun comportamiento citado este fuera de la lista dada, que ninguna norma citada este fuera '
+    + 'de DATOS, que toda conclusion provenga de observaciones o comportamientos ya dados, que ninguna '
+    + 'recomendacion use un verbo prohibido, que no haya antecedentes inventados y que no haya contradiccion '
+    + 'entre observaciones y conclusiones. Elimina cualquier frase que no pase esta verificacion antes de emitir '
+    + 'el JSON final.';
   if (fotoDescs.length > 0) {
-    prompt += '\n\nDESCRIPCION DE FOTOGRAFIAS DE LA VISITA (usar como contexto adicional para las observaciones):\n';
+    prompt += '\n\nDESCRIPCION DE FOTOGRAFIAS DE LA VISITA (contexto adicional para observaciones, no citar como fuente legal):\n';
     fotoDescs.forEach(function(desc, i) { prompt += (i+1) + '. ' + desc + '\n'; });
   }
   return prompt;
+}
+
+// ── Validador de contenido (defensa en profundidad ademas del prompt) ──────
+// No verifica veracidad (eso no es mecanicamente comprobable) — atrapa
+// exactamente lo que SI se puede comprobar con texto: verbos prohibidos,
+// palabras de certeza excesiva, texto de plantilla filtrado y citas legales
+// fuera de lo que el inspector ya autorizo. El prompt reduce el riesgo de
+// que la IA se equivoque; esto lo atrapa si igual se equivoca.
+var PALABRAS_PROHIBIDAS_INFORME = [
+  'constituye', 'demuestra', 'acredita', 'confirma', 'prueba',
+  'evidencia plenamente', 'se encuentra plenamente establecido',
+  'desconocimiento total', 'carece de estructura aprobada'
+];
+var FRASES_NORMATIVA_VAGA_INFORME = [
+  'conforme a la normativa', 'segun la legislacion vigente', 'de acuerdo con el pot'
+];
+var VERBOS_PROHIBIDOS_RECOMENDACION = [
+  'ordenar', 'sancionar', 'imponer', 'iniciar procedimiento', 'declarar', 'resolver'
+];
+var TEXTO_PLANTILLA_FILTRADO_INFORME = ['(incluir', '(eliminar en caso'];
+
+function _quitarTildesInforme(s) {
+  return (s || '').toString().toLowerCase()
+    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
+    .replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u');
+}
+
+function validarInformeIA(json, ctx) {
+  var problemas = [];
+  var todoTexto = [json.antecedentes || '', json.observaciones || '']
+    .concat(json.conclusiones_items || [])
+    .concat(json.recomendaciones_items || [])
+    .join(' \n ');
+  var todoNorm = _quitarTildesInforme(todoTexto);
+
+  PALABRAS_PROHIBIDAS_INFORME.forEach(function(p) {
+    if (todoNorm.indexOf(_quitarTildesInforme(p)) >= 0) {
+      problemas.push('Usa una palabra de certeza no permitida: "' + p + '".');
+    }
+  });
+  FRASES_NORMATIVA_VAGA_INFORME.forEach(function(f) {
+    if (todoNorm.indexOf(_quitarTildesInforme(f)) >= 0) {
+      problemas.push('Cita la norma de forma generica: "' + f + '" (debe citar la norma especifica o nada).');
+    }
+  });
+  TEXTO_PLANTILLA_FILTRADO_INFORME.forEach(function(t) {
+    if (todoNorm.indexOf(t) >= 0) {
+      problemas.push('Quedo texto de plantilla sin reemplazar: "' + t + '...".');
+    }
+  });
+  if (/\bnumeral\b/.test(todoNorm)) {
+    problemas.push('Menciona un "numeral" del Art. 135 — se cita por literal y numero (ej. "A1", "C9"), nunca por "numeral".');
+  }
+
+  // Citas de comportamientos Art.135 fuera de lo que el inspector marco.
+  var autorizados = {};
+  (ctx.d.comportamientos || []).forEach(function(c) {
+    var m = /^([ACD]\d{1,2})/.exec(c);
+    if (m) autorizados[m[1]] = true;
+  });
+  var citados = {};
+  (todoTexto.match(/\b[ACD]\d{1,2}\b/g) || []).forEach(function(c) { citados[c] = true; });
+  Object.keys(citados).forEach(function(c) {
+    if (!autorizados[c]) problemas.push('Cita el comportamiento "' + c + '" que el inspector no marco.');
+  });
+
+  // Verbos prohibidos en recomendaciones (esas son ordenes del Inspector, no del arquitecto).
+  (json.recomendaciones_items || []).forEach(function(item, i) {
+    var norm = _quitarTildesInforme(item);
+    VERBOS_PROHIBIDOS_RECOMENDACION.forEach(function(v) {
+      if (norm.indexOf(v) >= 0) problemas.push('Recomendacion ' + (i + 1) + ' usa un verbo que no corresponde al arquitecto: "' + v + '".');
+    });
+  });
+
+  return { ok: problemas.length === 0, problemas: problemas };
 }
 
 // ── Pedir JSON a la IA (webhook → DeepSeek → Claude) ────────────────────────
@@ -1554,6 +1682,13 @@ async function generarInforme() {
   tglobal.recomendaciones_items= Array.isArray(tglobal.recomendaciones_items)? tglobal.recomendaciones_items: [];
   tglobal._d = ctx.d;
 
+  var validacionInforme = validarInformeIA(tglobal, ctx);
+  if (!validacionInforme.ok) {
+    showStatus('er', 'El borrador no paso la verificacion', validacionInforme.problemas.join(' '));
+    btn.disabled = false;
+    return;
+  }
+
   showStatus('ok', 'Informe generado correctamente', 'Revise la vista previa y descargue el Word.');
   document.getElementById('prev-txt').textContent =
       '=== ANTECEDENTES ===\n' + tglobal.antecedentes
@@ -1583,81 +1718,107 @@ function fmtFecha(iso) {
 //  (en tglobal._d) y devuelve un Blob listo para descargar o subir a Drive.
 //  Lee del DOM solo lo estrictamente UI (checkbox de Art.135 y filas de su
 //  tabla) — el resto vive en tglobal.
+// ── Motor docx: primitivas compartidas (auditoria 2026-07, refactor #1) ──
+// Antes vivian redefinidas dentro de renderDocx() en cada llamada. Se
+// hoistean aqui para que las secciones (buildSeccionPOT, y las que sigan)
+// las reusen sin duplicar codigo. El motor nunca decide contenido, solo
+// lo pinta con lo que cada seccion le entrega.
+var D = docx;
+var FONT = 'Arial';
+var SZ_NORMAL = 22;
+var SZ_SMALL = 20;
+var SZ_TINY = 18;
+var N = '000000', W = 'FFFFFF';
+var FILL_HEADER = 'A6A6A6';
+
+function bSingle(c, sz) {
+  return {style: D.BorderStyle.SINGLE, size: sz||4, color: c||'auto'};
+}
+function bAll(c) {
+  var b = bSingle(c);
+  return {top:b, bottom:b, left:b, right:b};
+}
+function bNone() {
+  var b = {style:D.BorderStyle.NONE, size:0, color:'auto'};
+  return {top:b, bottom:b, left:b, right:b};
+}
+function mkP(runs, opts) {
+  opts = opts||{};
+  return new D.Paragraph({
+    alignment: opts.jc || D.AlignmentType.BOTH,
+    spacing: {after: opts.spAfter!==undefined ? opts.spAfter : 200, line:276, lineRule:D.LineRuleType.AUTO},
+    numbering: opts.numRef ? {reference:opts.numRef, level:0} : undefined,
+    children: Array.isArray(runs) ? runs : [runs]
+  });
+}
+function mkR(text, opts) {
+  opts = opts||{};
+  return new D.TextRun({
+    text: String(text||''),
+    font: FONT,
+    size: opts.sz || SZ_NORMAL,
+    bold: opts.bold||false,
+    italics: opts.it||false,
+    color: opts.color||N
+  });
+}
+function p(text, opts) {
+  opts = opts||{};
+  return mkP(mkR(text, opts), opts);
+}
+function pTitle(text) {
+  return p(text, {bold:true, jc:D.AlignmentType.BOTH, spAfter:200});
+}
+function pNum(text) {
+  return new D.Paragraph({
+    numbering: {reference:'nums', level:0},
+    spacing: {after:200, line:276, lineRule:D.LineRuleType.AUTO},
+    children: [mkR(text)]
+  });
+}
+function mkCell(text, opts) {
+  opts = opts||{};
+  var fill = opts.fill||null;
+  return new D.TableCell({
+    width: opts.w ? {size:opts.w, type:D.WidthType.DXA} : undefined,
+    borders: opts.borders || bAll('auto'),
+    shading: fill ? {fill:fill, type:D.ShadingType.CLEAR} : undefined,
+    margins: {top:0, bottom:0, left:70, right:70},
+    verticalAlign: D.VerticalAlign.CENTER,
+    columnSpan: opts.span||undefined,
+    children: [new D.Paragraph({
+      alignment: opts.jc || D.AlignmentType.LEFT,
+      spacing: {after:0},
+      children: [mkR(text, {sz:opts.sz||SZ_NORMAL, bold:opts.bold||false, color:opts.color||N})]
+    })]
+  });
+}
+
+// ── Seccion: tabla de consulta POT ──────────────────────────────────────
+// Primera seccion extraida como prueba del patron (auditoria 2026-07,
+// refactor #1). Recibe solo los campos POT de d, devuelve la Table lista
+// para insertar — no decide nada, solo pinta lo que recibe.
+function buildSeccionPOT(d) {
+  var P1 = 3690, P2 = 5205;
+  var potRows = [
+    new D.TableRow({children:[
+      mkCell('CONSULTA NORMA DEL PREDIO SEGUN POT', {w:P1+P2, fill:FILL_HEADER, bold:true, sz:SZ_SMALL, span:2})
+    ]}),
+    new D.TableRow({children:[mkCell('Clasificacion general del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.clasificacion||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Poligono uso del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_uso||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Poligono de tratamiento:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_trat||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Franja de intensidad:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.franja||'', {w:P2, sz:SZ_SMALL})]}),
+    new D.TableRow({children:[mkCell('Suelo de proteccion o amenaza:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.proteccion||'', {w:P2, sz:SZ_SMALL})]})
+  ];
+  return new D.Table({width:{size:P1+P2, type:D.WidthType.DXA}, columnWidths:[P1,P2], rows:potRows});
+}
+
 async function renderDocx(tglobal) {
   var d = tglobal._d;
   var sl = d.sin_licencia;
-  var D = docx;
   var PAG_W = 12240, PAG_H = 15840;
   var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
   var CONT = PAG_W - MAR_L - MAR_R;
-  var FILL_HEADER = 'A6A6A6';
-  var FONT = 'Arial';
-  var SZ_NORMAL = 22;
-  var SZ_SMALL = 20;
-  var SZ_TINY = 18;
-  var N = '000000', W = 'FFFFFF';
-  function bSingle(c, sz) {
-    return {style: D.BorderStyle.SINGLE, size: sz||4, color: c||'auto'};
-  }
-  function bAll(c) {
-    var b = bSingle(c);
-    return {top:b, bottom:b, left:b, right:b};
-  }
-  function bNone() {
-    var b = {style:D.BorderStyle.NONE, size:0, color:'auto'};
-    return {top:b, bottom:b, left:b, right:b};
-  }
-  function mkP(runs, opts) {
-    opts = opts||{};
-    return new D.Paragraph({
-      alignment: opts.jc || D.AlignmentType.BOTH,
-      spacing: {after: opts.spAfter!==undefined ? opts.spAfter : 200, line:276, lineRule:D.LineRuleType.AUTO},
-      numbering: opts.numRef ? {reference:opts.numRef, level:0} : undefined,
-      children: Array.isArray(runs) ? runs : [runs]
-    });
-  }
-  function mkR(text, opts) {
-    opts = opts||{};
-    return new D.TextRun({
-      text: String(text||''),
-      font: FONT,
-      size: opts.sz || SZ_NORMAL,
-      bold: opts.bold||false,
-      italics: opts.it||false,
-      color: opts.color||N
-    });
-  }
-  function p(text, opts) {
-    opts = opts||{};
-    return mkP(mkR(text, opts), opts);
-  }
-  function pTitle(text) {
-    return p(text, {bold:true, jc:D.AlignmentType.BOTH, spAfter:200});
-  }
-  function pNum(text) {
-    return new D.Paragraph({
-      numbering: {reference:'nums', level:0},
-      spacing: {after:200, line:276, lineRule:D.LineRuleType.AUTO},
-      children: [mkR(text)]
-    });
-  }
-  function mkCell(text, opts) {
-    opts = opts||{};
-    var fill = opts.fill||null;
-    return new D.TableCell({
-      width: opts.w ? {size:opts.w, type:D.WidthType.DXA} : undefined,
-      borders: opts.borders || bAll('auto'),
-      shading: fill ? {fill:fill, type:D.ShadingType.CLEAR} : undefined,
-      margins: {top:0, bottom:0, left:70, right:70},
-      verticalAlign: D.VerticalAlign.CENTER,
-      columnSpan: opts.span||undefined,
-      children: [new D.Paragraph({
-        alignment: opts.jc || D.AlignmentType.LEFT,
-        spacing: {after:0},
-        children: [mkR(text, {sz:opts.sz||SZ_NORMAL, bold:opts.bold||false, color:opts.color||N})]
-      })]
-    });
-  }
   var header = new D.Header({children:[
     p('INFORME TECNICO DE VIGILANCIA Y CONTROL', {bold:true, jc:D.AlignmentType.CENTER, spAfter:0}),
     p('Secretaria de Seguridad y Convivencia Ciudadana', {jc:D.AlignmentType.CENTER, spAfter:0})
@@ -1809,18 +1970,7 @@ async function renderDocx(tglobal) {
       children:fotoChildren
     })]})]
   });
-  var P1=3690, P2=5205;
-  var potRows = [
-    new D.TableRow({children:[
-      mkCell('CONSULTA NORMA DEL PREDIO SEGUN POT', {w:P1+P2, fill:FILL_HEADER, bold:true, sz:SZ_SMALL, span:2})
-    ]}),
-    new D.TableRow({children:[mkCell('Clasificacion general del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.clasificacion||'', {w:P2, sz:SZ_SMALL})]}),
-    new D.TableRow({children:[mkCell('Poligono uso del suelo:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_uso||'', {w:P2, sz:SZ_SMALL})]}),
-    new D.TableRow({children:[mkCell('Poligono de tratamiento:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.polig_trat||'', {w:P2, sz:SZ_SMALL})]}),
-    new D.TableRow({children:[mkCell('Franja de intensidad:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.franja||'', {w:P2, sz:SZ_SMALL})]}),
-    new D.TableRow({children:[mkCell('Suelo de proteccion o amenaza:', {w:P1, bold:true, sz:SZ_SMALL}), mkCell(d.proteccion||'', {w:P2, sz:SZ_SMALL})]})
-  ];
-  var potTable = new D.Table({width:{size:P1+P2, type:D.WidthType.DXA}, columnWidths:[P1,P2], rows:potRows});
+  var potTable = buildSeccionPOT(d);
   var antecParrs = tglobal.antecedentes.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
   var obsParrs   = tglobal.observaciones.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
   var concItems  = tglobal.conclusiones_items.map(function(c){return pNum(c);});
@@ -1917,7 +2067,6 @@ async function renderDocx(tglobal) {
   .concat([
     p(''), p(''), p(''),
     fotoTable,
-    p('(Incluir cuantas requiera)', {it:true}),
     p(''),
     pTitle('CONCLUSIONES.'),
     p('Acorde con lo establecido en el Plan de Ordenamiento Territorial Acuerdo 033 de 2009, la ubicacion del predio posee la siguiente normatividad:'),
@@ -1927,13 +2076,11 @@ async function renderDocx(tglobal) {
   ])
   .concat(concItems)
   .concat([
-    p('(Incluir cuantos numerales requiera)', {it:true}),
     p(''),
     pTitle('RECOMENDACIONES')
   ])
   .concat(recItems)
   .concat([
-    p('(Incluir cuantos numerales requiera)', {it:true}),
     p(''), p(''),
     p('Atentamente,'),
     p(''), p(''), p(''),
@@ -2318,11 +2465,173 @@ function setLocPreview(dataUrl, fuenteLabel) {
   } else {
     preview.textContent = 'Sin imagen';
   }
-  var fuenteEl = document.getElementById('loc-fuente');
-  if (fuenteEl) fuenteEl.textContent = 'Fuente: ' + (fuenteLabel || '—');
+  // Pie de imagen (antes vivía como texto suelto en la columna derecha)
+  var caption = document.getElementById('loc-caption');
+  if (caption) caption.textContent = dataUrl ? ('Fuente: ' + (fuenteLabel || '—')) : '';
   // Mostrar el botón "Volver al mapa automático" solo si la fuente es QGIS
   var btnRestaurar = document.getElementById('btn-loc-restaurar');
   if (btnRestaurar) btnRestaurar.style.display = (locImg.fuente === 'qgis') ? 'inline-block' : 'none';
+  _actualizarResumenLoc();
+}
+
+// Panel de contexto que aprovecha el espacio libre de la columna derecha:
+// fuente, coordenadas, precisión honesta y fecha de generación.
+function _actualizarResumenLoc() {
+  var el = document.getElementById('loc-resumen');
+  if (!el) return;
+  if (!locImg.fuente) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  var filas = ['<b>Fuente:</b> ' + (locImg.fuenteLabel || '—')];
+  if (locImg.fuente === 'maps') {
+    var coords = (V6_CTX.lat && V6_CTX.lon)
+      ? (parseFloat(V6_CTX.lat).toFixed(6) + ', ' + parseFloat(V6_CTX.lon).toFixed(6))
+      : (gv('direccion') || '—');
+    filas.push('<b>Coordenadas:</b> ' + coords);
+    filas.push('<b>Precisión:</b> ' + (locImg.precisionLabel || '—'));
+  }
+  filas.push('<b>Generado:</b> ' + (locImg.generadoEn || '—'));
+  el.innerHTML = filas.join('<br>');
+  el.style.display = 'block';
+}
+
+// ── Polígono real del predio (catastro.json) ─────────────────────────────
+//  Reutiliza el mismo dataset y algoritmo de point-in-polygon que
+//  buscarCatastroGPS() en api.js, pero de forma autónoma (esta página no
+//  carga api.js): solo necesitamos la geometría, no las fichas de propietario.
+var _catastroPolys = null; // array p: [tcod, latMin, lonMin, latMax, lonMax, [[lat,lon],...]]
+
+function _pointInPolygon(lat, lon, poly) {
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var lat_i = poly[i][0], lon_i = poly[i][1];
+    var lat_j = poly[j][0], lon_j = poly[j][1];
+    var intersect = ((lat_i > lat) !== (lat_j > lat)) &&
+      (lon < (lon_j - lon_i) * (lat - lat_i) / (lat_j - lat_i) + lon_i);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+async function _buscarPoligonoPredio(lat, lon) {
+  try {
+    if (_catastroPolys === null) {
+      var r = await fetch('../catastro.json');
+      if (!r.ok) throw new Error('catastro.json HTTP ' + r.status);
+      _catastroPolys = (await r.json()).p || [];
+    }
+    for (var i = 0; i < _catastroPolys.length; i++) {
+      var p = _catastroPolys[i];
+      if (lat < p[1] || lat > p[3] || lon < p[2] || lon > p[4]) continue;
+      if (_pointInPolygon(lat, lon, p[5])) return p[5];
+    }
+  } catch (e) { /* silencioso: sin catastro.json cae al marcador simple */ }
+  return null;
+}
+
+// ── Geometría auxiliar: bbox, zoom-to-fit y simplificación (Douglas-Peucker) ──
+function _bboxDePoligono(poly) {
+  var latMin = 90, latMax = -90, lonMin = 180, lonMax = -180;
+  for (var i = 0; i < poly.length; i++) {
+    var pt = poly[i];
+    if (pt[0] < latMin) latMin = pt[0];
+    if (pt[0] > latMax) latMax = pt[0];
+    if (pt[1] < lonMin) lonMin = pt[1];
+    if (pt[1] > lonMax) lonMax = pt[1];
+  }
+  return { latMin: latMin, latMax: latMax, lonMin: lonMin, lonMax: lonMax };
+}
+
+function _latRad(lat) {
+  var sin = Math.sin(lat * Math.PI / 180);
+  var radX2 = Math.log((1 + sin) / (1 - sin)) / 2;
+  return Math.max(Math.min(radX2, Math.PI), -Math.PI) / 2;
+}
+
+// Réplica del cálculo estándar de "zoom to fit bounds" de Google Maps,
+// con un margen (MARGEN<1) para que el polígono no toque los bordes.
+function _zoomParaBbox(bbox, mapPxW, mapPxH, scale) {
+  var WORLD_DIM = 256 * scale;
+  var ZOOM_MAX = 20;
+  var MARGEN = 0.78;
+
+  var latFraction = (_latRad(bbox.latMax) - _latRad(bbox.latMin)) / Math.PI;
+  var lngDiff = bbox.lonMax - bbox.lonMin;
+  var lngFraction = ((lngDiff < 0) ? (lngDiff + 360) : lngDiff) / 360;
+
+  function zoomPara(mapPx, fraction) {
+    if (fraction <= 0) return ZOOM_MAX;
+    return Math.floor(Math.log(mapPx / WORLD_DIM / (fraction / MARGEN)) / Math.LN2);
+  }
+
+  var z = Math.min(zoomPara(mapPxH, latFraction), zoomPara(mapPxW, lngFraction), ZOOM_MAX);
+  return Math.max(14, isFinite(z) ? z : 18);
+}
+
+function _distanciaPuntoSegmento(p, a, b) {
+  var dx = b[1] - a[1], dy = b[0] - a[0];
+  if (dx === 0 && dy === 0) {
+    dx = p[1] - a[1]; dy = p[0] - a[0];
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  var t = ((p[1] - a[1]) * dx + (p[0] - a[0]) * dy) / (dx * dx + dy * dy);
+  t = Math.max(0, Math.min(1, t));
+  var ddx = p[1] - (a[1] + t * dx), ddy = p[0] - (a[0] + t * dy);
+  return Math.sqrt(ddx * ddx + ddy * ddy);
+}
+
+// Simplifica un polígono con muchos vértices para que el path quepa en el
+// límite práctico (~8192 caracteres) de la URL de Google Static Maps.
+function _douglasPeucker(pts, epsilon) {
+  if (pts.length < 3) return pts.slice();
+  var dmax = 0, index = 0;
+  for (var i = 1; i < pts.length - 1; i++) {
+    var d = _distanciaPuntoSegmento(pts[i], pts[0], pts[pts.length - 1]);
+    if (d > dmax) { dmax = d; index = i; }
+  }
+  if (dmax > epsilon) {
+    var izq = _douglasPeucker(pts.slice(0, index + 1), epsilon);
+    var der = _douglasPeucker(pts.slice(index), epsilon);
+    return izq.slice(0, -1).concat(der);
+  }
+  return [pts[0], pts[pts.length - 1]];
+}
+
+function _formatearPuntos(poly) {
+  return poly.map(function(pt) { return pt[0].toFixed(6) + ',' + pt[1].toFixed(6); }).join('|');
+}
+
+var STATIC_MAPS_MAX_LEN = 7800; // margen bajo el límite práctico de ~8192 caracteres
+
+// Construye la URL de Google Static Maps. Si hay polígono del predio, lo
+// dibuja nativamente (path=) con zoom ajustado a su bounding box; si no,
+// cae al marcador simple con zoom fijo (comportamiento anterior).
+function _construirUrlMapaEstatico(lat, lon, poligono) {
+  var size = '800x500', scale = 2;
+  var base = 'https://maps.googleapis.com/maps/api/staticmap'
+    + '?size=' + size + '&maptype=hybrid&scale=' + scale
+    + '&style=feature:poi|visibility:off'
+    + '&markers=color:0xC96442%7C' + lat.toFixed(6) + ',' + lon.toFixed(6)
+    + '&key=' + MAPS_KEY;
+
+  if (!poligono || poligono.length < 3) {
+    return base + '&center=' + lat.toFixed(6) + ',' + lon.toFixed(6) + '&zoom=18';
+  }
+
+  var epsilons = [0, 0.00001, 0.00002, 0.00005, 0.0001, 0.0002];
+  for (var i = 0; i < epsilons.length; i++) {
+    var pts = epsilons[i] === 0 ? poligono : _douglasPeucker(poligono, epsilons[i]);
+    var bbox = _bboxDePoligono(pts);
+    var centro = ((bbox.latMin + bbox.latMax) / 2).toFixed(6) + ',' + ((bbox.lonMin + bbox.lonMax) / 2).toFixed(6);
+    var zoom = _zoomParaBbox(bbox, 800, 500, scale);
+    var path = '&path=color:0x2E64C8CC%7Cweight:2%7Cfillcolor:0x2E64C833%7C' + _formatearPuntos(pts);
+    var url = base + '&center=' + centro + '&zoom=' + zoom + path;
+    if (url.length <= STATIC_MAPS_MAX_LEN) return url;
+  }
+  // Fallback final: rectángulo del bounding box en vez del polígono completo
+  var bboxF = _bboxDePoligono(poligono);
+  var rect = [[bboxF.latMin, bboxF.lonMin], [bboxF.latMin, bboxF.lonMax], [bboxF.latMax, bboxF.lonMax], [bboxF.latMax, bboxF.lonMin]];
+  var centroF = ((bboxF.latMin + bboxF.latMax) / 2).toFixed(6) + ',' + ((bboxF.lonMin + bboxF.lonMax) / 2).toFixed(6);
+  var zoomF = _zoomParaBbox(bboxF, 800, 500, scale);
+  return base + '&center=' + centroF + '&zoom=' + zoomF + '&path=color:0x2E64C8CC%7Cweight:2%7Cfillcolor:0x2E64C833%7C' + _formatearPuntos(rect);
 }
 
 async function generarMapaLocalizacion() {
@@ -2332,20 +2641,31 @@ async function generarMapaLocalizacion() {
   if (btn) btn.disabled = true;
 
   try {
-    var center;
+    var url, precisionLabel;
     if (V6_CTX.lat && V6_CTX.lon) {
-      center = V6_CTX.lat + ',' + V6_CTX.lon;
+      // GPS real capturado en la visita: máxima precisión disponible.
+      // Solo aquí tiene sentido buscar el polígono catastral — un punto
+      // geocodificado por dirección no es confiable para point-in-polygon
+      // (podría caer en la vía o en el predio vecino).
+      var lat = parseFloat(V6_CTX.lat), lon = parseFloat(V6_CTX.lon);
+      var poligono = await _buscarPoligonoPredio(lat, lon);
+      url = _construirUrlMapaEstatico(lat, lon, poligono);
+      precisionLabel = poligono
+        ? 'Alta — GPS real de la visita + polígono catastral'
+        : 'Alta — GPS real de la visita (predio no encontrado en catastro)';
     } else {
       var dir = gv('direccion');
       if (!dir) throw new Error('Ingrese una dirección o pase coordenadas');
       var barrio = gv('barrio');
-      center = encodeURIComponent(dir + (barrio ? ', ' + barrio : '') + ', Bello, Antioquia, Colombia');
+      var center = encodeURIComponent(dir + (barrio ? ', ' + barrio : '') + ', Bello, Antioquia, Colombia');
+      url = 'https://maps.googleapis.com/maps/api/staticmap'
+        + '?center=' + center
+        + '&zoom=18&size=800x500&maptype=hybrid&scale=2'
+        + '&style=feature:poi|visibility:off'
+        + '&markers=color:0xC96442%7C' + center
+        + '&key=' + MAPS_KEY;
+      precisionLabel = 'Aproximada — geocodificación por dirección';
     }
-    var url = 'https://maps.googleapis.com/maps/api/staticmap'
-      + '?center=' + center
-      + '&zoom=18&size=800x500&maptype=satellite&scale=2'
-      + '&markers=color:red%7Clabel:P%7C' + center
-      + '&key=' + MAPS_KEY;
 
     var res = await fetch(url);
     if (!res.ok) throw new Error('Maps HTTP ' + res.status);
@@ -2357,10 +2677,12 @@ async function generarMapaLocalizacion() {
       r.readAsDataURL(blob);
     });
     var partes = b64.split(',');
-    locImg.fuente      = 'maps';
-    locImg.base64      = partes.length > 1 ? partes[1] : '';
-    locImg.mimeType    = blob.type || 'image/png';
-    locImg.fuenteLabel = 'Google Maps satelital';
+    locImg.fuente        = 'maps';
+    locImg.base64        = partes.length > 1 ? partes[1] : '';
+    locImg.mimeType      = blob.type || 'image/png';
+    locImg.fuenteLabel   = 'Google Maps satelital';
+    locImg.precisionLabel = precisionLabel;
+    locImg.generadoEn    = new Date().toLocaleString('es-CO', { hour12: false });
     setLocPreview(b64, locImg.fuenteLabel);
     if (statusEl) { statusEl.style.color = 'var(--verde-dark)'; statusEl.textContent = '✓ Mapa generado'; }
   } catch (e) {
@@ -2381,6 +2703,7 @@ function subirImagenLocalizacion(input) {
     locImg.base64      = partes.length > 1 ? partes[1] : '';
     locImg.mimeType    = file.type || 'image/png';
     locImg.fuenteLabel = 'Captura propia (' + file.name + ')';
+    locImg.generadoEn  = new Date().toLocaleString('es-CO', { hour12: false });
     setLocPreview(dataUrl, locImg.fuenteLabel);
     if (statusEl) { statusEl.style.color = 'var(--verde-dark)'; statusEl.textContent = '✓ Captura cargada — reemplaza al mapa automático'; }
   };
@@ -2408,7 +2731,7 @@ var V6_CTX = {
   lat: null,
   lon: null
 };
-var locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '' };
+var locImg = { fuente: null, base64: '', mimeType: 'image/png', fuenteLabel: '', precisionLabel: '', generadoEn: '' };
 
 function _hoyLocal() {
   var d = new Date();

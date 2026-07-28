@@ -46,6 +46,7 @@ function InformeModalHost() {
   // Escuchar mensaje del iframe cuando termina la subida a Drive.
   useEffectIF(() => {
     function onMsg(e) {
+      if (e.origin !== window.location.origin) return; // el iframe es same-origin (informe/index.html)
       if (e && e.data && e.data.tipo === 'informe-f43-subido') {
         // El BD cambió (LINK_INFORME_F43, etc.) → invalidar caché.
         if (typeof invalidarCache === 'function') invalidarCache('visitas');
@@ -168,6 +169,10 @@ function extraerIdCarpetaDrive(url) {
 //   - Si hay ModalHost montado y el viewport es desktop → modal.
 //   - Si no → window.open en pestaña nueva (móvil o sin host).
 window.abrirInformeF43 = function(params) {
+  if (!params || !params.fila || !params.radicado) {
+    console.error('[abrirInformeF43] faltan params obligatorios (fila/radicado):', params);
+    return;
+  }
   // AP1 (auditoría 2026-07): informe/index.html corre fuera de api.js
   // (iframe o pestaña nueva) y no comparte el auto-adjunto de credenciales
   // de gasGet/gasPost — se pasan aquí, una sola vez, vía query string.

@@ -4,3 +4,6 @@ node_modules/
 
 # Bundle viejo (concatenación pre-esbuild) — ya no se usa
 bundle.jsx
+
+# Sourcemaps de build --dev — artefacto local, nunca al repo de produccion
+*.map

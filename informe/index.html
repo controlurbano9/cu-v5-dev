@@ -292,6 +292,16 @@ body{
   padding:3px 10px; border-radius:var(--r-lg); font-weight:500;
 }
 
+/* Momento 5 — items editables de conclusiones/recomendaciones */
+.revitem{
+  display:flex; align-items:flex-start; gap:10px; padding:10px 12px;
+  border:1px solid var(--borde-med); border-radius:var(--r-sm);
+  margin-bottom:8px; background:var(--fondo); transition:opacity .15s;
+}
+.revitem input[type=checkbox]{margin-top:11px; accent-color:var(--brand-accent); width:15px; height:15px; flex-shrink:0}
+.revitem textarea{flex:1; min-height:52px; line-height:1.5}
+.revitem.excluido{opacity:.5}
+
 /* ═══════════════════════════════════════════════════════════════
    WORKSPACE v2 (beta ?ui=v2) — auditoría UX 2026-07.
    Reusa las mismas cards/ids del wizard legacy; solo cambia cómo
@@ -866,6 +876,7 @@ body.v2-mode .v2-autosave{display:inline-flex}
     <div class="prev-box" id="prev-txt"></div>
   </div>
 </div>
+<div class="card hidden" id="card-revision-ia" data-momento="5"></div>
 </main>
 </div>
 <div id="modal-emision" aria-live="polite">
@@ -937,9 +948,11 @@ var MOMENTOS_V2 = [
   { n: 1, titulo: 'Confirmar contexto' },
   { n: 2, titulo: 'Narrar hallazgos' },
   { n: 3, titulo: 'Adjuntar evidencia' },
-  { n: 4, titulo: 'Revisar y emitir' },
+  { n: 4, titulo: 'Revisar y emitir', bloqueo: 'Marca al menos un hallazgo o escribe una observacion para continuar.' },
+  { n: 5, titulo: 'Confirmar borrador', bloqueo: 'Disponible despues de generar el borrador con IA.' },
 ];
 var momentoActivo = 1;
+var borradorIA = null;
 
 // Mapeo hallazgo → sugerencia Art. 135 (100% cliente, sin backend nuevo).
 // Se sugiere, NUNCA se auto-aplica — mismo patrón ya validado en
@@ -1012,15 +1025,17 @@ function puedeAvanzarA(n) {
     var hayObs = (gv('obs') || '').trim().length > 0;
     if (!hayHallazgo && !hayObs) return false;
   }
+  if (n === 5) return !!borradorIA;
   return true;
 }
 
 function estadoMomento(n) {
   if (n === momentoActivo) return 'activo';
-  if (n === 4 && !puedeAvanzarA(4)) return 'bloqueado';
+  if (!puedeAvanzarA(n)) return 'bloqueado';
   if (n === 1) return gv('inspector') ? 'completo' : 'pendiente';
   if (n === 2) return (document.querySelectorAll('.hallazgo:checked').length > 0 || (gv('obs')||'').trim()) ? 'completo' : 'pendiente';
   if (n === 3) return document.querySelectorAll('#fotos-list > div[id^="foto-"]').length > 0 ? 'completo' : 'pendiente';
+  if (n === 5) return 'pendiente';
   return 'pendiente';
 }
 
@@ -1033,8 +1048,8 @@ function renderRail() {
       + (estado === 'activo' ? ' activo' : '')
       + (estado === 'completo' ? ' completo' : '')
       + (estado === 'bloqueado' ? ' bloqueado' : '');
-    var titleAttr = estado === 'bloqueado'
-      ? ' title="Marca al menos un hallazgo o escribe una observacion para continuar."'
+    var titleAttr = estado === 'bloqueado' && m.bloqueo
+      ? ' title="' + m.bloqueo + '"'
       : '';
     return '<button type="button" class="' + clases + '" onclick="irMomento(' + m.n + ')"'
       + titleAttr + (estado === 'bloqueado' ? ' aria-disabled="true"' : '') + '>'
@@ -1044,13 +1059,14 @@ function renderRail() {
 }
 
 function irMomento(n) {
-  if (n === 4 && !puedeAvanzarA(4)) return; // bloqueo blando: el tooltip del rail ya explica por qué
+  if (!puedeAvanzarA(n)) return; // bloqueo blando: el tooltip del rail ya explica por qué
   momentoActivo = n;
   document.querySelectorAll('[data-momento]').forEach(function(el) {
     el.classList.toggle('momento-activo', el.getAttribute('data-momento') === String(n));
   });
   renderRail();
   if (n === 4) buildRes();
+  if (n === 5) renderRevisionIA();
   window.scrollTo(0, 0);
 }
 
@@ -1136,16 +1152,37 @@ async function generarInformeV2() {
   tglobal.recomendaciones_items = Array.isArray(tglobal.recomendaciones_items) ? tglobal.recomendaciones_items : [];
   tglobal._d = ctx.d;
 
+  mostrarModalEmision('generando', { fase: 2 });
   var validacionInforme = validarInformeIA(tglobal, ctx);
   if (!validacionInforme.ok) {
     mostrarModalEmision('error', { mensaje: validacionInforme.problemas.join(' ') });
     return;
   }
 
+  // A partir de aqui, revision humana obligatoria (momento 5) — nunca se
+  // genera el .docx directo desde este orquestador.
+  borradorIA = {
+    antecedentes:  tglobal.antecedentes,
+    observaciones: tglobal.observaciones,
+    conclusiones:    tglobal.conclusiones_items.map(_itemBorrador),
+    recomendaciones: tglobal.recomendaciones_items.map(_itemBorrador),
+    override: false
+  };
+  guardarBorradorIA();
+  mostrarModalEmision('cerrar');
+  irMomento(5);
+}
+
+function _itemBorrador(t) { return { texto: t, incluido: true, manual: false }; }
+
+// Genera el .docx real a partir del borrador ya revisado por el inspector
+// (tFinal), separado de generarInformeV2() para que nunca se dispare la
+// descarga sin pasar por el momento 5.
+async function finalizarInforme(tFinal) {
   mostrarModalEmision('generando', { fase: 2 });
   try {
-    var blob = await renderDocx(tglobal);
-    var d = tglobal._d;
+    var blob = await renderDocx(tFinal);
+    var d = tFinal._d;
     var nombre = 'F-GGO-43_' + (d.direccion || 'informe').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25) + '_' + (d.fecha_visita || 'sin_fecha') + '.docx';
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -1154,16 +1191,20 @@ async function generarInformeV2() {
     URL.revokeObjectURL(url);
     var link = null;
     if (V6_CTX.fila && V6_CTX.idCarpeta) link = await subirInformeAlDrive(blob);
+    limpiarBorradorIA();
     mostrarModalEmision('exito', { link: link });
   } catch (e) {
-    mostrarModalEmision('error', { mensaje: e.message });
+    // No usar mostrarModalEmision('error'): su boton "Reintentar" llama
+    // generarInformeV2() y sobrescribiria el borrador ya revisado.
+    mostrarModalEmision('cerrar');
+    mostrarErrorRevisionIA([e.message]);
   }
 }
 
 function activarV2() {
   document.body.classList.add('v2-mode');
   renderRail();
-  irMomento(1);
+  if (cargarBorradorIA()) { irMomento(5); } else { irMomento(1); }
   actualizarIndicadorAutosaveV2();
   // El boton "Generar informe" del footer legacy dispara el recibo de
   // confirmacion v2 en vez de generarInforme() directo.
@@ -1287,6 +1328,159 @@ function descartarVersionMejorada() {
     stEl.textContent = 'Sugerencia descartada.';
   }
 }
+
+// ── Momento 5: revision humana del borrador generado por IA ─────────────
+// Nunca se genera el .docx sin pasar por aqui. validarInformeIA() ya corrio
+// sobre el texto crudo de la IA (generarInformeV2); aqui se vuelve a
+// aplicar sobre lo que el inspector termine editando/incluyendo — la
+// defensa en profundidad no debe debilitarse por permitir edicion manual.
+
+function _arrBorrador(tipo) { return borradorIA[tipo === 'conclusion' ? 'conclusiones' : 'recomendaciones']; }
+function _incluidos(arr) {
+  return arr.filter(function(it) { return it.incluido && (it.texto || '').trim(); })
+            .map(function(it) { return it.texto.trim(); });
+}
+
+function renderRevisionIA() {
+  var box = document.getElementById('card-revision-ia');
+  if (!box || !borradorIA) return;
+  box.classList.remove('hidden');
+
+  var ctx = recolectarDatosWizard();
+  var avisos = detectarAclaracionesInforme(ctx);
+  var bloqueaBoton = avisos.length > 0 && !borradorIA.override;
+
+  var h = '<div class="ch"><div class="ci">5</div><div><div class="ct">Borrador generado por IA</div>'
+    + '<div class="cst">Revise, edite o descarte antes de generar el documento final.</div></div></div>';
+
+  h += '<div class="nota nota-info">Este es el texto que se insertara en el .docx. Puede editar cualquier campo, '
+    + 'excluir items desmarcandolos, o agregar items propios.</div>';
+
+  h += '<div class="f" style="margin-top:14px"><label>Antecedentes</label>'
+    + '<textarea id="rev-antecedentes" style="min-height:100px" oninput="editarCampoBorrador(\'antecedentes\',this.value)">'
+    + escapeHtml(borradorIA.antecedentes) + '</textarea></div>';
+  h += '<div class="f" style="margin-top:12px"><label>Observaciones</label>'
+    + '<textarea id="rev-observaciones" style="min-height:160px" oninput="editarCampoBorrador(\'observaciones\',this.value)">'
+    + escapeHtml(borradorIA.observaciones) + '</textarea></div>';
+
+  h += '<div id="rev-lista-conclusion" style="margin-top:16px"></div>';
+  h += '<div id="rev-lista-recomendacion" style="margin-top:16px"></div>';
+
+  if (avisos.length) {
+    h += '<div class="nota" style="border-color:var(--rojo);background:var(--rojo-bg);color:var(--rojo);margin-top:16px" id="rev-checklist">'
+      + '<b>Para revisar antes de generar:</b><br>' + avisos.map(escapeHtml).join('<br>')
+      + '<label class="chkblock" style="margin-top:10px"><input type="checkbox" id="rev-override" '
+      + (borradorIA.override ? 'checked' : '') + ' onchange="toggleOverrideBorrador(this)">'
+      + '<span>Entiendo las advertencias y quiero continuar</span></label>'
+      + '</div>';
+  }
+
+  h += '<div id="rev-error" class="nota hidden" style="border-color:var(--rojo);background:var(--rojo-bg);color:var(--rojo);margin-top:16px"></div>';
+
+  h += '<div class="br" style="margin-top:20px">'
+    + '<button type="button" class="btn btn-o" onclick="reintentarGeneracionIA()">Volver a generar con IA</button>'
+    + '<button type="button" class="btn btn-p" id="btn-rev-generar" onclick="confirmarYGenerarInforme()"'
+    + (bloqueaBoton ? ' disabled' : '') + ' style="margin-left:auto">Generar informe</button>'
+    + '</div>';
+
+  box.innerHTML = h;
+  renderListaBorrador('conclusion');
+  renderListaBorrador('recomendacion');
+}
+
+function renderListaBorrador(tipo) {
+  var cont = document.getElementById('rev-lista-' + tipo);
+  if (!cont) return;
+  var arr = _arrBorrador(tipo);
+  var label = tipo === 'conclusion' ? 'Conclusiones' : 'Recomendaciones';
+  var h = '<label>' + label + '</label>';
+  arr.forEach(function(it, i) {
+    h += '<div class="revitem' + (it.incluido ? '' : ' excluido') + '">'
+      + '<input type="checkbox" ' + (it.incluido ? 'checked' : '') + ' onchange="toggleItemBorrador(\'' + tipo + '\',' + i + ',this)">'
+      + '<textarea oninput="editarItemBorrador(\'' + tipo + '\',' + i + ',this.value)">' + escapeHtml(it.texto) + '</textarea>'
+      + (it.manual ? '<button type="button" class="btn btn-o" style="padding:4px 10px;font-size:11px" onclick="eliminarItemBorrador(\'' + tipo + '\',' + i + ')">Quitar</button>' : '')
+      + '</div>';
+  });
+  h += '<button type="button" class="btn btn-o" style="font-size:11px;padding:6px 12px" onclick="agregarItemBorrador(\'' + tipo + '\')">+ Agregar '
+    + (tipo === 'conclusion' ? 'conclusion' : 'recomendacion') + '</button>';
+  cont.innerHTML = h;
+}
+
+function editarCampoBorrador(campo, valor) {
+  if (!borradorIA) return;
+  borradorIA[campo] = valor;
+  guardarBorradorIA();
+}
+function editarItemBorrador(tipo, i, valor) {
+  _arrBorrador(tipo)[i].texto = valor;
+  guardarBorradorIA();
+}
+function toggleItemBorrador(tipo, i, cb) {
+  _arrBorrador(tipo)[i].incluido = cb.checked;
+  var row = cb.closest('.revitem');
+  if (row) row.classList.toggle('excluido', !cb.checked);
+  guardarBorradorIA();
+}
+function agregarItemBorrador(tipo) {
+  _arrBorrador(tipo).push({ texto: '', incluido: true, manual: true });
+  guardarBorradorIA();
+  renderListaBorrador(tipo);
+  var el = document.querySelector('#rev-lista-' + tipo + ' textarea:last-of-type');
+  if (el) el.focus();
+}
+function eliminarItemBorrador(tipo, i) {
+  _arrBorrador(tipo).splice(i, 1);
+  guardarBorradorIA();
+  renderListaBorrador(tipo);
+}
+function toggleOverrideBorrador(cb) {
+  if (!borradorIA) return;
+  borradorIA.override = cb.checked;
+  guardarBorradorIA();
+  var btn = document.getElementById('btn-rev-generar');
+  if (btn) btn.disabled = !cb.checked;
+}
+
+function mostrarErrorRevisionIA(problemas) {
+  var el = document.getElementById('rev-error');
+  if (!el) return;
+  el.innerHTML = '<b>No se pudo generar:</b><br>' + problemas.map(escapeHtml).join('<br>');
+  el.classList.remove('hidden');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function reintentarGeneracionIA() {
+  if (!confirm('Se descartara el borrador actual y se generara uno nuevo con la IA. ¿Continuar?')) return;
+  limpiarBorradorIA();
+  tglobal = null;
+  irMomento(4);
+  generarInformeV2();
+}
+
+async function confirmarYGenerarInforme() {
+  if (!borradorIA) return;
+  var ctx = recolectarDatosWizard();
+  var tFinal = {
+    antecedentes:  (borradorIA.antecedentes  || '').trim(),
+    observaciones: (borradorIA.observaciones || '').trim(),
+    conclusiones_items:    _incluidos(borradorIA.conclusiones),
+    recomendaciones_items: _incluidos(borradorIA.recomendaciones),
+    _d: ctx.d
+  };
+  if (!tFinal.conclusiones_items.length) {
+    mostrarErrorRevisionIA(['Incluye al menos una conclusion.']);
+    return;
+  }
+  var validacion = validarInformeIA(tFinal, ctx);
+  if (!validacion.ok) {
+    mostrarErrorRevisionIA(validacion.problemas);
+    return;
+  }
+  document.getElementById('rev-error').classList.add('hidden');
+  tglobal = tFinal;
+  await finalizarInforme(tFinal);
+}
+
 var paso = 1;
 var tglobal = null;
 function ir(n) {
@@ -1482,7 +1676,27 @@ function recolectarDatosWizard() {
     var desc = (document.getElementById('desc-' + div.id)||{}).value || '';
     if (desc) fotoDescs.push(desc);
   });
-  return { d: d, hs: hs, tts: tts, mods: mods, fotoDescs: fotoDescs, sinLic: sinLic };
+  var nFotos = document.querySelectorAll('#fotos-list > div[id^="foto-"]').length;
+  return { d: d, hs: hs, tts: tts, mods: mods, fotoDescs: fotoDescs, sinLic: sinLic, nFotos: nFotos };
+}
+
+// ── Checklist de aclaraciones (momento 5) ────────────────────────────────
+// Funcion pura sobre ctx, sin IA ni efectos: solo detecta huecos probables
+// para avisar al inspector antes de generar. El guard !ctx.sinLic es
+// obligatorio — con sinLic marcado, recolectarDatosWizard() ya rellena esos
+// campos con 'No se aporto'/'No aplica', asi que serian falsos positivos.
+function detectarAclaracionesInforme(ctx) {
+  var d = ctx.d, avisos = [];
+  if (!ctx.sinLic) {
+    if (!d.cubierta) avisos.push('No se registro el tipo de cubierta aprobada.');
+    if (!d.sist)     avisos.push('No se registro el sistema estructural aprobado.');
+    if (!d.dest)     avisos.push('No se registraron las destinaciones aprobadas.');
+  }
+  if (!(d.areas || '').trim())                avisos.push('El area en contravencion esta vacia.');
+  if (ctx.nFotos === 0)                        avisos.push('No hay fotografias cargadas — el informe saldra sin registro fotografico. Vuelva al momento 3 y pulse "Cargar fotos de la visita".');
+  else if (ctx.nFotos > ctx.fotoDescs.length)  avisos.push('Hay fotografias sin descripcion.');
+  if ((d.obs || '').trim().length < 120)       avisos.push('Las observaciones de campo son muy breves — revise si falta detalle.');
+  return avisos;
 }
 
 // ── Construir el prompt para la IA ───────────────────────────────────────────
@@ -1794,6 +2008,16 @@ function mkCell(text, opts) {
   });
 }
 
+// ── Encabezado de pagina (header de Word, se repite en cada hoja) ───────
+// Refactor #2 (auditoria 2026-07): sin parametros porque el encabezado es
+// estatico — no depende de los datos de la visita.
+function buildEncabezado() {
+  return new D.Header({children:[
+    p('INFORME TECNICO DE VIGILANCIA Y CONTROL', {bold:true, jc:D.AlignmentType.CENTER, spAfter:0}),
+    p('Secretaria de Seguridad y Convivencia Ciudadana', {jc:D.AlignmentType.CENTER, spAfter:0})
+  ]});
+}
+
 // ── Seccion: tabla de consulta POT ──────────────────────────────────────
 // Primera seccion extraida como prueba del patron (auditoria 2026-07,
 // refactor #1). Recibe solo los campos POT de d, devuelve la Table lista
@@ -1813,30 +2037,12 @@ function buildSeccionPOT(d) {
   return new D.Table({width:{size:P1+P2, type:D.WidthType.DXA}, columnWidths:[P1,P2], rows:potRows});
 }
 
-async function renderDocx(tglobal) {
-  var d = tglobal._d;
-  var sl = d.sin_licencia;
-  var PAG_W = 12240, PAG_H = 15840;
-  var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
-  var CONT = PAG_W - MAR_L - MAR_R;
-  var header = new D.Header({children:[
-    p('INFORME TECNICO DE VIGILANCIA Y CONTROL', {bold:true, jc:D.AlignmentType.CENTER, spAfter:0}),
-    p('Secretaria de Seguridad y Convivencia Ciudadana', {jc:D.AlignmentType.CENTER, spAfter:0})
-  ]});
-  var footer = new D.Footer({children:[
-    new D.Paragraph({
-      spacing:{after:0},
-      children:[
-        mkR('Codigo : F-GGO-43', {sz:18}),
-        mkR('     Version: 01', {sz:18}),
-        mkR('     Fecha de aprobacion: 2026/03/10', {sz:18}),
-        mkR('     Pagina ', {sz:18}),
-        new D.TextRun({children:[D.PageNumber.CURRENT], font:FONT, size:18}),
-        mkR(' de ', {sz:18}),
-        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:18})
-      ]
-    })
-  ]});
+// ── Seccion: tabla "resumen de lo aprobado por curaduria" ───────────────
+// Refactor #3 (auditoria 2026-07). Recibe solo los campos de licencia de d,
+// devuelve la Table lista para insertar. La decision de mostrar esta tabla
+// o el texto "no se aporto licencia" (segun d.sin_licencia) queda en
+// renderDocx — esta funcion solo construye la tabla, no decide si se usa.
+function buildSeccionLicencia(d) {
   var LIC_C1 = 3820, LIC_C2 = 5180;
   var licRows = [
     new D.TableRow({children:[
@@ -1861,34 +2067,73 @@ async function renderDocx(tglobal) {
       mkCell(it[1]||'', {w:LIC_C2, sz:SZ_SMALL})
     ]}));
   });
-  var licTable = new D.Table({width:{size:LIC_C1+LIC_C2, type:D.WidthType.DXA}, columnWidths:[LIC_C1,LIC_C2], rows:licRows});
+  return new D.Table({width:{size:LIC_C1+LIC_C2, type:D.WidthType.DXA}, columnWidths:[LIC_C1,LIC_C2], rows:licRows});
+}
+
+// ── Seccion: verificacion literales C y D del Articulo 135 ──────────────
+// Refactor #4 (auditoria 2026-07). Lee el checkbox #incluirArt y las filas
+// de #art-table directo del DOM (igual que la version original inline) —
+// mismo criterio que renderDocx usa para fotos: el wizard es la fuente de
+// verdad en el momento de generar, no hay estado paralelo que sincronizar.
+// Devuelve el array listo para concatenar en children ([] si no se incluye).
+function buildSeccionArt135() {
   var A1=3510,A2=993,A3=992,A4=3572;
   var inclArt = document.getElementById('incluirArt').checked;
   var artRows = [];
-  if (inclArt) {
-    artRows.push(new D.TableRow({children:[
-      mkCell('Usar o destinar un inmueble a:', {w:A1, bold:true, sz:SZ_TINY}),
-      mkCell('Cumple', {w:A2, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
-      mkCell('No Cumple', {w:A3, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
-      mkCell('Observaciones', {w:A4, bold:true, sz:SZ_TINY})
-    ]}));
-    document.querySelectorAll('#art-table tbody tr').forEach(function(tr) {
-      if (tr.classList.contains('cbrow')) {
-        var txt = tr.querySelector('td').textContent.trim();
-        artRows.push(new D.TableRow({children:[mkCell(txt, {w:A1+A2+A3+A4, bold:true, sz:SZ_TINY, span:4})]}));
-      } else {
-        var tds = tr.querySelectorAll('td');
-        var sels = tr.querySelectorAll('select');
-        var inp = tr.querySelector('input[type=text]');
-        artRows.push(new D.TableRow({children:[
-          mkCell(tds[0]?tds[0].textContent.trim():'', {w:A1, sz:SZ_TINY}),
-          mkCell(sels[0]?sels[0].value:'', {w:A2, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
-          mkCell(sels[1]?sels[1].value:'', {w:A3, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
-          mkCell(inp?inp.value:'', {w:A4, sz:SZ_TINY})
-        ]}));
-      }
-    });
-  }
+  if (!inclArt) return [];
+  artRows.push(new D.TableRow({children:[
+    mkCell('Usar o destinar un inmueble a:', {w:A1, bold:true, sz:SZ_TINY}),
+    mkCell('Cumple', {w:A2, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+    mkCell('No Cumple', {w:A3, bold:true, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+    mkCell('Observaciones', {w:A4, bold:true, sz:SZ_TINY})
+  ]}));
+  document.querySelectorAll('#art-table tbody tr').forEach(function(tr) {
+    if (tr.classList.contains('cbrow')) {
+      var txt = tr.querySelector('td').textContent.trim();
+      artRows.push(new D.TableRow({children:[mkCell(txt, {w:A1+A2+A3+A4, bold:true, sz:SZ_TINY, span:4})]}));
+    } else {
+      var tds = tr.querySelectorAll('td');
+      var sels = tr.querySelectorAll('select');
+      var inp = tr.querySelector('input[type=text]');
+      artRows.push(new D.TableRow({children:[
+        mkCell(tds[0]?tds[0].textContent.trim():'', {w:A1, sz:SZ_TINY}),
+        mkCell(sels[0]?sels[0].value:'', {w:A2, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+        mkCell(sels[1]?sels[1].value:'', {w:A3, sz:SZ_TINY, jc:D.AlignmentType.CENTER}),
+        mkCell(inp?inp.value:'', {w:A4, sz:SZ_TINY})
+      ]}));
+    }
+  });
+  return [
+    p(''),
+    pTitle('VERIFICACION OBLIGACIONES LITERALES C y D ARTICULO 135 LEY 1801 DE 2016'),
+    p('(Incluir en proyectos que sea necesario realizar la revision, especialmente proyectos de mas de 2000m2)', {it:true}),
+    new D.Table({width:{size:A1+A2+A3+A4,type:D.WidthType.DXA}, columnWidths:[A1,A2,A3,A4], rows:artRows})
+  ];
+}
+
+async function renderDocx(tglobal) {
+  var d = tglobal._d;
+  var sl = d.sin_licencia;
+  var PAG_W = 12240, PAG_H = 15840;
+  var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
+  var CONT = PAG_W - MAR_L - MAR_R;
+  var header = buildEncabezado();
+  var footer = new D.Footer({children:[
+    new D.Paragraph({
+      spacing:{after:0},
+      children:[
+        mkR('Codigo : F-GGO-43', {sz:18}),
+        mkR('     Version: 01', {sz:18}),
+        mkR('     Fecha de aprobacion: 2026/03/10', {sz:18}),
+        mkR('     Pagina ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.CURRENT], font:FONT, size:18}),
+        mkR(' de ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:18})
+      ]
+    })
+  ]});
+  var licTable = buildSeccionLicencia(d);
+  var artBlock = buildSeccionArt135();
   // — Registro fotográfico: descarga las fotos via webhook (Drive no expone
   //   CORS para fetch directo) y las incrusta como ImageRun, manteniendo
   //   el orden visual del DOM (querySelectorAll respeta el orden de inserción).
@@ -1981,15 +2226,6 @@ async function renderDocx(tglobal) {
   var licBlock = sl
     ? [p('(No se aporto documentacion urbanistica que ampare las obras o intervenciones presentes en el inmueble inspeccionado.)', {it:true})]
     : [licTable];
-  var artBlock = [];
-  if (inclArt) {
-    artBlock = [
-      p(''),
-      pTitle('VERIFICACION OBLIGACIONES LITERALES C y D ARTICULO 135 LEY 1801 DE 2016'),
-      p('(Incluir en proyectos que sea necesario realizar la revision, especialmente proyectos de mas de 2000m2)', {it:true}),
-      new D.Table({width:{size:A1+A2+A3+A4,type:D.WidthType.DXA}, columnWidths:[A1,A2,A3,A4], rows:artRows})
-    ];
-  }
   var children = [
     p('Bello, ' + fmtFecha(d.fecha_informe)),
     p(''),
@@ -2163,6 +2399,31 @@ function _storageKey() {
   var fila = p.get('fila');
   return fila ? ('fggo43_datos_' + fila) : 'fggo43_datos';
 }
+// ── Persistencia del borrador IA (momento 5) — sobrevive un refresh ─────
+// Reutiliza V6_CTX.fila (ya poblado por prefillDesdeURL() antes de
+// activarV2()) en vez de re-parsear URLSearchParams como _storageKey().
+function _storageKeyBorrador() {
+  return V6_CTX.fila ? ('fggo43_borrador_ia_' + V6_CTX.fila) : 'fggo43_borrador_ia';
+}
+function guardarBorradorIA() {
+  try {
+    if (borradorIA) localStorage.setItem(_storageKeyBorrador(), JSON.stringify(borradorIA));
+    else localStorage.removeItem(_storageKeyBorrador());
+  } catch(e) {}
+}
+function cargarBorradorIA() {
+  var raw;
+  try { raw = localStorage.getItem(_storageKeyBorrador()); } catch(e) {}
+  if (!raw) return false;
+  try { borradorIA = JSON.parse(raw); } catch(e) { return false; }
+  return !!(borradorIA && (borradorIA.conclusiones || borradorIA.recomendaciones));
+}
+function limpiarBorradorIA() {
+  borradorIA = null;
+  try { localStorage.removeItem(_storageKeyBorrador()); } catch(e) {}
+  var box = document.getElementById('card-revision-ia');
+  if (box) box.classList.add('hidden');
+}
 function guardar() {
   var data = {};
   CAMPOS.forEach(function(id) {
@@ -2229,6 +2490,7 @@ function nuevoInforme() {
   var prev = document.getElementById('prev-area');
   if (prev) prev.classList.add('hidden');
   tglobal = null;
+  limpiarBorradorIA();
   var hoy = _hoyLocal();
   document.getElementById('fechaVisita').value = hoy;
   document.getElementById('fechaInforme').value = hoy;

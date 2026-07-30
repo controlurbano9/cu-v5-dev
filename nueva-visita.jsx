@@ -3269,6 +3269,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               sueloProt:        d.sueloProt,
               observaciones:    d.actuacion,
               areas:            d.area,
+              // Comportamientos contrarios (Art.135) ya marcados en la visita
+              // (columna BD "TIPO DE INFRACCION") — informe/index.html los
+              // matchea por codigo (A1, C9, ...) contra sus propios .comp-ac,
+              // que usan un texto mas largo/distinto al de estos chips.
+              infraccion:       d.infraccion,
               ...potExtra,
             });
           }} style={{

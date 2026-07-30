@@ -637,10 +637,16 @@ body.v2-mode .v2-autosave{display:inline-flex}
     </div>
     <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-o" id="btn-mejorar" onclick="mejorarObservaciones()">
-        ✨ Mejorar redacción con IA
+        ✨ Mejorar redacción
       </button>
       <span id="mejorar-status" style="font-size:11px;color:var(--texto-suave)"></span>
     </div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span id="sugerir-hallazgos-status" style="font-size:11px;color:var(--texto-suave)"></span>
+    </div>
+    <div id="hallazgos-sugerencia-catalogo" class="hidden" style="margin-top:10px"></div>
+    <div id="hallazgos-confirmados-catalogo" style="margin-top:10px"></div>
+    <div id="preguntas-clarificacion" class="hidden" style="margin-top:10px"></div>
   </div>
 
   <div class="card hidden" id="card-obs-mejorada" data-momento="2" style="border-left:3px solid var(--brand-accent)">
@@ -853,7 +859,7 @@ body.v2-mode .v2-autosave{display:inline-flex}
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
       <button class="btn btn-p" onclick="cargarFotosDeVisita()" id="btn-cargar-fotos">Cargar fotos de la visita</button>
-      <button class="btn btn-o" onclick="describirFotosConIA()" id="btn-describir-fotos" disabled style="opacity:.5" title="Genera una descripción técnica con IA solo para las fotos sin descripción manual">✨ Describir con IA</button>
+      <button class="btn btn-o" onclick="describirFotosConIA()" id="btn-describir-fotos" disabled style="opacity:.5" title="Genera una descripción técnica solo para las fotos sin descripción manual">✨ Describir</button>
       <span id="fotos-status" style="font-size:11px;color:var(--texto-suave)"></span>
     </div>
     <div id="fotos-list"></div>
@@ -949,7 +955,7 @@ var MOMENTOS_V2 = [
   { n: 2, titulo: 'Narrar hallazgos' },
   { n: 3, titulo: 'Adjuntar evidencia' },
   { n: 4, titulo: 'Revisar y emitir', bloqueo: 'Marca al menos un hallazgo o escribe una observacion para continuar.' },
-  { n: 5, titulo: 'Confirmar borrador', bloqueo: 'Disponible despues de generar el borrador con IA.' },
+  { n: 5, titulo: 'Confirmar borrador', bloqueo: 'Disponible despues de generar el borrador.' },
 ];
 var momentoActivo = 1;
 var borradorIA = null;
@@ -1094,7 +1100,11 @@ function mostrarModalEmision(estado, datos) {
   var html = '';
   if (estado === 'recibo') {
     var nFotos = document.querySelectorAll('#fotos-list > div[id^="foto-"]').length;
-    var nHallazgos = document.querySelectorAll('.hallazgo:checked').length;
+    // HALLAZGOS_CONFIRMADOS (catalogo) es la fuente real desde que
+    // construirPromptF43() dejo de leer los checkboxes .hallazgo legados —
+    // contar esos checkboxes aqui mostraba 0 aunque el inspector hubiera
+    // confirmado hallazgos sugeridos del catalogo.
+    var nHallazgos = HALLAZGOS_CONFIRMADOS.length;
     var sinLicEl = document.getElementById('sinLic');
     var sinLic = sinLicEl ? sinLicEl.checked : false;
     html = '<div style="font-family:var(--font-serif);font-size:17px;font-weight:600;margin-bottom:14px">Confirmar emision</div>'
@@ -1138,7 +1148,7 @@ function mostrarModalEmision(estado, datos) {
 async function generarInformeV2() {
   mostrarModalEmision('generando', { fase: 0 });
   var ctx    = recolectarDatosWizard();
-  var prompt = construirPromptF43(ctx);
+  var prompt = await construirPromptF43(ctx);
   mostrarModalEmision('generando', { fase: 1 });
   var ia = await pedirJsonIA(prompt);
   if (!ia.ok) {
@@ -1152,12 +1162,29 @@ async function generarInformeV2() {
   tglobal.recomendaciones_items = Array.isArray(tglobal.recomendaciones_items) ? tglobal.recomendaciones_items : [];
   tglobal._d = ctx.d;
 
+  // Cierre grave: frase fija pre-aprobada, insertada por codigo (nunca la
+  // redacta la IA) cuando algun hallazgo confirmado es Gravedad=Critico.
+  var catalogoParaCierre = await cargarCatalogoHallazgos();
+  if (_requiereCierreGrave(catalogoParaCierre) && tglobal.conclusiones_items.indexOf(CIERRE_GRAVE_TEXTO) < 0) {
+    tglobal.conclusiones_items.push(CIERRE_GRAVE_TEXTO);
+  }
+
   mostrarModalEmision('generando', { fase: 2 });
   var validacionInforme = validarInformeIA(tglobal, ctx);
   if (!validacionInforme.ok) {
-    mostrarModalEmision('error', { mensaje: validacionInforme.problemas.join(' ') });
+    // validacionInforme.problemas es un chequeo automatico interno sobre el
+    // texto que redacto la IA — no se le muestra el detalle al inspector
+    // (no es algo que el deba corregir a mano, solo regenerar). El detalle
+    // completo si queda registrado para revisar despues (ver
+    // _registrarBorradorRechazado / HOJA_INFORMES_RECHAZADOS).
+    mostrarModalEmision('error', {
+      mensaje: 'No se pudo generar la redaccion. Pulse "Reintentar" para generar una nueva version.'
+    });
+    _registrarBorradorRechazado(tglobal, ctx, validacionInforme.problemas);
     return;
   }
+
+  _registrarHallazgoPendienteSiAplica(tglobal, ctx);
 
   // A partir de aqui, revision humana obligatoria (momento 5) — nunca se
   // genera el .docx directo desde este orquestador.
@@ -1175,24 +1202,26 @@ async function generarInformeV2() {
 
 function _itemBorrador(t) { return { texto: t, incluido: true, manual: false }; }
 
-// Genera el .docx real a partir del borrador ya revisado por el inspector
+// Bandera de corte hacia la plantilla oficial (ver plan de migración,
+// docs/F-GGO-43_marcadores.md). Mientras se valida con casos reales
+// (Fase A3), queda en false — renderDocx() sigue siendo el camino de
+// producción. Cambiar a true una vez validado.
+var USAR_PLANTILLA_F43 = true;
+
+// Genera el informe real a partir del borrador ya revisado por el inspector
 // (tFinal), separado de generarInformeV2() para que nunca se dispare la
-// descarga sin pasar por el momento 5.
+// generación sin pasar por el momento 5. Enruta entre el camino legado
+// (renderDocx con docx.js, reconstruye todo el .docx en el navegador) y el
+// camino nuevo (plantilla oficial con marcadores, generada server-side en
+// Apps Script) según USAR_PLANTILLA_F43 — ambos devuelven { link }.
 async function finalizarInforme(tFinal) {
   mostrarModalEmision('generando', { fase: 2 });
   try {
-    var blob = await renderDocx(tFinal);
-    var d = tFinal._d;
-    var nombre = 'F-GGO-43_' + (d.direccion || 'informe').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25) + '_' + (d.fecha_visita || 'sin_fecha') + '.docx';
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url; a.download = nombre;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    var link = null;
-    if (V6_CTX.fila && V6_CTX.idCarpeta) link = await subirInformeAlDrive(blob);
+    var resultado = USAR_PLANTILLA_F43
+      ? await generarInformeF43ViaPlantilla(tFinal)
+      : await _finalizarInformeRenderDocx(tFinal);
     limpiarBorradorIA();
-    mostrarModalEmision('exito', { link: link });
+    mostrarModalEmision('exito', { link: resultado.link });
   } catch (e) {
     // No usar mostrarModalEmision('error'): su boton "Reintentar" llama
     // generarInformeV2() y sobrescribiria el borrador ya revisado.
@@ -1201,8 +1230,110 @@ async function finalizarInforme(tFinal) {
   }
 }
 
+// ── Camino legado — docx.js reconstruye el .docx completo en el navegador
+// (ver renderDocx()), se descarga localmente y, si hay visita asociada, se
+// sube vía subirInformeF43 (Apps Script solo guarda el blob ya armado).
+async function _finalizarInformeRenderDocx(tFinal) {
+  var blob = await renderDocx(tFinal);
+  var d = tFinal._d;
+  var nombre = 'F-GGO-43_' + (d.direccion || 'informe').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 25) + '_' + (d.fecha_visita || 'sin_fecha') + '.docx';
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = nombre;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  var link = null;
+  if (V6_CTX.fila && V6_CTX.idCarpeta) link = await subirInformeAlDrive(blob);
+  return { link: link };
+}
+
+// ── Lee las 16 filas de datos de la tabla Art.135 del DOM (#art-table),
+// en el mismo orden que buildSeccionArt135() usa para el camino legado —
+// pero devuelve datos planos en vez de construir la Table de docx.js.
+// Las filas ".cbrow" son encabezados de categoría (sin datos), se omiten.
+function _leerArt135FilasDOM() {
+  var filas = [];
+  document.querySelectorAll('#art-table tbody tr').forEach(function(tr) {
+    if (tr.classList.contains('cbrow')) return;
+    var sels = tr.querySelectorAll('select');
+    var inp  = tr.querySelector('input[type=text]');
+    filas.push({
+      cumple:   sels[0] ? sels[0].value : '',
+      nocumple: sels[1] ? sels[1].value : '',
+      obs:      inp ? inp.value : ''
+    });
+  });
+  return filas;
+}
+
+// ── Lee fotos del DOM (#fotos-list) como { fileId, descripcion } — mismos
+// elementos que renderDocx() usa (fid-<id>/desc-<id>), sin descargar bytes
+// aquí: Apps Script obtiene el blob directamente de Drive por fileId.
+function _leerFotosDOM() {
+  var fotos = [];
+  document.querySelectorAll('#fotos-list > div[id^="foto-"]').forEach(function(tj) {
+    var fidEl  = document.getElementById('fid-' + tj.id);
+    var descEl = document.getElementById('desc-' + tj.id);
+    var fid    = fidEl ? fidEl.value : '';
+    if (!fid) return;
+    fotos.push({ fileId: fid, descripcion: descEl ? descEl.value : '' });
+  });
+  return fotos;
+}
+
+// ── Arma el payload para 'generarInformeF43Doc' (Apps Script) — reusa las
+// claves snake_case de tFinal._d (= ctx.d de recolectarDatosWizard()) y
+// agrega los campos compuestos que solo existen tras el momento 5.
+function _construirPayloadF43Plantilla(tFinal) {
+  var d = tFinal._d;
+  var incluirArtEl = document.getElementById('incluirArt');
+  return Object.assign({}, d, {
+    antecedentes:            tFinal.antecedentes,
+    observaciones:           tFinal.observaciones,
+    conclusiones_items:      tFinal.conclusiones_items,
+    recomendaciones_items:   tFinal.recomendaciones_items,
+    conclusion_intro:        _construirConclusionIntro(d),
+    incluirArt:              incluirArtEl ? incluirArtEl.checked : false,
+    art135:                  _leerArt135FilasDOM(),
+    fotos:                   _leerFotosDOM(),
+    imagenLocalizacionBase64: locImg.base64 || '',
+    fuente_localizacion:     locImg.fuente === 'qgis' ? 'QGIS' : 'Google Maps',
+    idCarpetaVisita:         V6_CTX.idCarpeta,
+    fila:                    V6_CTX.fila,
+    radicado:                V6_CTX.radicado || 'informe',
+    regenerar:               false
+  });
+}
+
+// ── Camino nuevo — genera el .docx server-side desde la plantilla oficial
+// (generarInformeF43Doc en Apps Script). No hay descarga de blob local: el
+// documento queda directamente en Drive, igual que RF/Vigilancia. Requiere
+// visita asociada (idCarpeta) porque la plantilla se copia a esa carpeta —
+// no existe un camino "suelto" para este mecanismo (a diferencia del
+// legado, que igual permite descargar sin visita asociada).
+async function generarInformeF43ViaPlantilla(tFinal) {
+  if (!V6_CTX.fila || !V6_CTX.idCarpeta) {
+    throw new Error('La plantilla oficial requiere una visita asociada. Sin ella, use el camino de descarga local (desactive USAR_PLANTILLA_F43).');
+  }
+  var payload = _construirPayloadF43Plantilla(tFinal);
+  var r = await fetch(WH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify(_bodyConSesion(Object.assign({ accion: 'generarInformeF43Doc' }, payload)))
+  });
+  var d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'El servidor no pudo generar el informe.');
+  try {
+    var msg = { tipo: 'informe-f43-subido', fila: V6_CTX.fila, radicado: V6_CTX.radicado, link: d.link };
+    if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+    else if (window.opener && !window.opener.closed) window.opener.postMessage(msg, '*');
+  } catch (eMsg) {}
+  return { link: d.link };
+}
+
 function activarV2() {
   document.body.classList.add('v2-mode');
+  cargarCatalogoHallazgos(); // precarga en segundo plano — listo antes de llegar a Observaciones
   renderRail();
   if (cargarBorradorIA()) { irMomento(5); } else { irMomento(1); }
   actualizarIndicadorAutosaveV2();
@@ -1249,6 +1380,37 @@ async function cargarInspectoresDesdeBD() {
   }
 }
 
+// ── Catálogo de hallazgos (backend) ──────────────────────────────────────
+// Vive en la hoja 'CATALOGO_HALLAZGOS' del Sheet BD (98 hallazgos con
+// categoría, gravedad, fundamento normativo, numeral Art.135, clave API y
+// las sugerencias de conclusión/recomendación) — no se hardcodea en el
+// bundle para poder editarlo sin redeploy. Reusa la acción genérica
+// 'leerHoja' (ya usada para otras hojas no sensibles) en vez de escribir
+// una acción dedicada nueva. Se cachea en memoria para el resto de la
+// sesión del wizard (no cambia mientras el inspector diligencia).
+var CATALOGO_HALLAZGOS = null;
+
+async function cargarCatalogoHallazgos() {
+  if (CATALOGO_HALLAZGOS) return CATALOGO_HALLAZGOS;
+  try {
+    var r = await fetch(WH + '?' + _qsConSesion({ accion: 'leerHoja', hoja: 'CATALOGO_HALLAZGOS' }).toString());
+    var d = await r.json();
+    if (!d.ok || !Array.isArray(d.values) || d.values.length < 2) throw new Error(d.error || 'Catálogo vacío');
+    var headers = d.values[0];
+    CATALOGO_HALLAZGOS = d.values.slice(1)
+      .filter(function(fila) { return fila[0]; }) // descarta filas en blanco al final de la hoja
+      .map(function(fila) {
+        var obj = {};
+        headers.forEach(function(h, i) { obj[h] = fila[i]; });
+        return obj;
+      });
+  } catch (e) {
+    console.warn('cargarCatalogoHallazgos falló:', e.message);
+    CATALOGO_HALLAZGOS = [];
+  }
+  return CATALOGO_HALLAZGOS;
+}
+
 function onInspectorChange(sel) {
   var nom = sel.value;
   var cargoEl = document.getElementById('cargo');
@@ -1277,7 +1439,7 @@ async function mejorarObservaciones() {
 
   btn.disabled = true;
   stEl.style.color = 'var(--texto-suave)';
-  stEl.textContent = 'Mejorando redacción con IA...';
+  stEl.textContent = 'Mejorando redacción...';
 
   try {
     var r = await fetch(WH, {
@@ -1329,6 +1491,342 @@ function descartarVersionMejorada() {
   }
 }
 
+// ── Hallazgos del catálogo — sugerencia por IA desde texto libre ───────────
+// Extiende el patrón ya probado en actualizarSugerenciaArt135()/
+// aceptarSugerenciaArt135() (sugerir + boton confirmar, nunca auto-marcado)
+// al catálogo de 98 hallazgos del backend: en vez de 98 checkboxes en el
+// wizard, el inspector escribe observaciones en texto libre y la IA sugiere
+// que claves del catalogo aplican; el inspector rechaza las que no aplican
+// y confirma el resto. HALLAZGOS_CONFIRMADOS alimenta construirPromptF43()
+// (ver _construirPayloadHallazgosConfirmados) en vez de los 9 checkboxes
+// .hallazgo legados.
+//
+// Disparo automatico (sin boton): se llama sola mientras el inspector
+// escribe, con debounce de 1.5s tras la ultima tecla y solo si el texto
+// cambio desde el ultimo analisis — evita golpear la IA en cada letra.
+//
+// NOTA: por ahora HALLAZGOS_CONFIRMADOS vive solo en memoria de esta sesión
+// del wizard — no se persiste en el borrador local todavia. Si se recarga
+// a mitad de "Observaciones" se pierde la seleccion confirmada. Revisar en
+// una pasada futura si esto molesta en la practica (mismo mecanismo de
+// CHK_GROUPS no aplica directo porque no hay checkboxes DOM que restaurar).
+var HALLAZGOS_CONFIRMADOS = [];
+var HALLAZGOS_PENDIENTES_SUGERIDOS = [];
+// Preguntas de aclaracion propuestas por la IA junto con los hallazgos —
+// { pregunta, respuesta }. Responderlas es opcional; solo las respondidas
+// (respuesta no vacia) se suman como contexto a construirPromptF43().
+var PREGUNTAS_CLARIFICACION = [];
+var _ultimaObsAnalizadaCatalogo = '';
+var _debounceSugerirHallazgos = null;
+
+function _hallazgoPorClave(clave, catalogo) {
+  for (var i = 0; i < catalogo.length; i++) if (catalogo[i].clave_api === clave) return catalogo[i];
+  return null;
+}
+
+// ── Filtro mecanico de respaldo textual (segunda pasada, sin IA) ────────
+// Antes de aceptar un hallazgo sugerido por la IA, exige que al menos una
+// palabra distintiva de su descripcion aparezca literalmente en las
+// observaciones — asi un hallazgo que la IA sugirio sin que el texto
+// realmente lo mencione no pasa. Solo bloquea coincidencias con CERO
+// respaldo textual; no reemplaza el juicio de la IA sobre si es un
+// problema o una descripcion neutral (eso ya lo cubre el prompt).
+var PALABRAS_COMUNES_HALLAZGO_CATALOGO = [
+  'construccion', 'construido', 'construida', 'construidos', 'construidas',
+  'obra', 'obras', 'licencia', 'licencias', 'aprobado', 'aprobada',
+  'aprobados', 'aprobadas', 'nivel', 'niveles', 'area', 'areas', 'predio',
+  'edificacion', 'inspeccion', 'diferente', 'diferentes', 'segun',
+  'municipal', 'urbanistica', 'urbanistico'
+];
+
+function _normalizarParaMatch(s) {
+  return (s || '').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function _palabrasDistintivasHallazgo(texto) {
+  return _normalizarParaMatch(texto)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(function(p) { return p.length >= 5 && PALABRAS_COMUNES_HALLAZGO_CATALOGO.indexOf(p) < 0; });
+}
+
+function _hallazgoTieneRespaldoTextual(h, textoNormalizado) {
+  if (!h) return false;
+  var palabras = _palabrasDistintivasHallazgo(h.hallazgo);
+  if (!palabras.length) return true; // sin palabras distintivas que exigir, no bloquear
+  return palabras.some(function(p) { return textoNormalizado.indexOf(p) >= 0; });
+}
+
+// Quita los codigos tipo "A2"/"C.2"/"D11" de fundamento_normativo antes de
+// meterlo en el prompt. No basta con instruir "nunca citar esto" — se vio
+// en un caso real que la IA igual copio "C.2" del contexto interno y lo
+// reformateo como "C2" (el mismo formato de cita que usa en otra parte del
+// prompt), y validarInformeIA lo rechazo por citar un comportamiento que el
+// inspector no marco. Mas seguro que el codigo ni siquiera este disponible
+// para copiar, en vez de confiar solo en la instruccion.
+function _ocultarCodigosArt135(texto) {
+  return (texto || '').toString()
+    .replace(/\b[ACD]\.?\d{1,2}\b/g, '')
+    .replace(/\s*;\s*;/g, ';')
+    .replace(/^\s*;\s*|\s*;\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim() || 'N/A';
+}
+
+function _programarSugerenciaHallazgosAuto() {
+  clearTimeout(_debounceSugerirHallazgos);
+  _debounceSugerirHallazgos = setTimeout(sugerirHallazgosDesdeObs, 1500);
+}
+
+async function sugerirHallazgosDesdeObs() {
+  var obsEl = document.getElementById('obs');
+  var box   = document.getElementById('hallazgos-sugerencia-catalogo');
+  var stEl  = document.getElementById('sugerir-hallazgos-status');
+  if (!obsEl || !box) return;
+
+  var texto = (obsEl.value || '').trim();
+  if (texto.length < 80) {
+    if (stEl) {
+      stEl.style.color = 'var(--texto-suave)';
+      stEl.textContent = texto ? 'Siga escribiendo para que la IA sugiera hallazgos del catálogo...' : '';
+    }
+    return;
+  }
+  if (texto === _ultimaObsAnalizadaCatalogo) return; // ya se analizo este mismo texto
+  _ultimaObsAnalizadaCatalogo = texto;
+  _guardarHallazgosConfirmados(); // persiste tambien el "ya analizado", no solo confirmados
+
+  if (stEl) {
+    stEl.style.color = 'var(--texto-suave)';
+    stEl.textContent = 'Analizando observaciones...';
+  }
+
+  try {
+    var catalogo = await cargarCatalogoHallazgos();
+    if (!catalogo.length) throw new Error('El catálogo de hallazgos no está disponible.');
+
+    // Literal B (patrimonio/interes cultural) casi nunca aplica en Bello —
+    // se excluye de las candidatas salvo que el texto mencione el tema
+    // explicitamente, para no darle a la IA la opcion de sugerirlo sin base.
+    var mencionaPatrimonio = /patrimoni|interes cultural|interes historico/.test(_normalizarParaMatch(texto));
+    var catalogoCandidato = catalogo.filter(function(h) {
+      var esLiteralB = /^B\.?\d/i.test((h.numeral_art135 || '').toString());
+      return !esLiteralB || mencionaPatrimonio;
+    });
+
+    var listaCompacta = catalogoCandidato.map(function(h) { return h.clave_api + ': ' + h.hallazgo; }).join('\n');
+    var prompt = 'Eres un clasificador ESTRICTO y CONSERVADOR. Compara el TEXTO DE OBSERVACIONES DE CAMPO '
+      + 'contra este CATALOGO de hallazgos de control urbano (formato "clave: descripcion corta") y '
+      + 'ademas revisa si falta contexto para redactar un informe preciso.\n\n'
+      + 'PARTE 1 — HALLAZGOS: identifica SOLO las claves de los hallazgos que el texto describe como un '
+      + 'PROBLEMA o DESVIACION concreta — no basta con que el texto MENCIONE el elemento constructivo en '
+      + 'una descripcion neutral o conforme.\n'
+      + 'Ejemplo de lo que NO cuenta: el texto describe "columnas de 30x30cm en concreto" sin decir que '
+      + 'difieren de lo aprobado -> NO marques ningun hallazgo de columnas.\n'
+      + 'Ejemplo de lo que SI cuenta: el texto dice "las columnas construidas tienen dimensiones menores a '
+      + 'las aprobadas en los planos" -> SI marca el hallazgo de columnas incorrectas.\n'
+      + 'Un informe tipico tiene entre 0 y 6 hallazgos reales, casi nunca mas. Si dudas si un hallazgo '
+      + 'aplica, NO LO INCLUYAS — es preferible que falte uno a que sobren varios inventados. No inventes '
+      + 'hallazgos que no esten en el catalogo.\n\n'
+      + 'PARTE 2 — PREGUNTAS DE ACLARACION: propone hasta 3 preguntas CORTAS y CONCRETAS (nunca mas de 3, '
+      + '0 esta bien si el texto ya es completo). La PRIORIDAD es clarificar contexto para redactar mejor '
+      + '— ej. una medida que falta, una ambiguedad sobre si algo esta aprobado o no, un dato de la '
+      + 'licencia que no quedo claro. Secundariamente (no la prioridad), si dudas si un hallazgo del '
+      + 'catalogo aplica o no, puedes usar una de las 3 preguntas como confirmacion si/no puntual sobre '
+      + 'ese hallazgo especifico en vez de omitirlo de la PARTE 1. No preguntes algo que el texto ya '
+      + 'responde. No hagas preguntas genericas tipo "¿hay mas hallazgos?" — deben ser especificas al '
+      + 'contenido de este texto.\n\n'
+      + 'CATALOGO:\n' + listaCompacta + '\n\n'
+      + 'TEXTO DE OBSERVACIONES:\n' + texto + '\n\n'
+      + 'Responde SOLO con este JSON, sin texto adicional ni markdown:\n'
+      + '{"hallazgos":["clave1","clave2"],"preguntas":["pregunta1","pregunta2"]}';
+
+    var ia = await pedirJsonIA(prompt);
+    if (!ia.ok || !ia.json || !Array.isArray(ia.json.hallazgos)) throw new Error(ia.error || 'La IA no devolvió una respuesta válida.');
+
+    // Tope de sanidad: una respuesta con demasiadas coincidencias es en si
+    // misma la señal de que la clasificacion fallo (un informe real rara vez
+    // tiene mas de 6-8 hallazgos reales) — se descarta el lote completo en
+    // vez de mostrarle al inspector una lista inflada e inutil.
+    var LIMITE_SANIDAD_HALLAZGOS = 12;
+    if (ia.json.hallazgos.length > LIMITE_SANIDAD_HALLAZGOS) {
+      if (stEl) {
+        stEl.style.color = 'var(--rojo)';
+        stEl.textContent = 'La deteccion automatica encontro demasiadas coincidencias (' + ia.json.hallazgos.length + ') — '
+          + 'no es confiable, no se aplico ninguna. Marque los hallazgos manualmente si aplica.';
+      }
+      return;
+    }
+
+    var clavesValidas = {};
+    catalogoCandidato.forEach(function(h) { clavesValidas[h.clave_api] = true; });
+    var yaConfirmadas = {};
+    HALLAZGOS_CONFIRMADOS.forEach(function(c) { yaConfirmadas[c] = true; });
+    var textoNormalizado = _normalizarParaMatch(texto);
+    var sugeridas = ia.json.hallazgos.filter(function(c) {
+      if (!clavesValidas[c] || yaConfirmadas[c]) return false;
+      // Segunda pasada mecanica (sin IA): exige que al menos una palabra
+      // distintiva del hallazgo aparezca literalmente en el texto. No
+      // reemplaza el criterio de la IA, es una red de seguridad barata
+      // contra sobre-matcheo cuando el texto es largo y toca muchos temas.
+      return _hallazgoTieneRespaldoTextual(_hallazgoPorClave(c, catalogo), textoNormalizado);
+    });
+
+    var preguntasNuevas = (Array.isArray(ia.json.preguntas) ? ia.json.preguntas : [])
+      .filter(function(p) { return (p || '').toString().trim(); })
+      .slice(0, 3);
+    if (preguntasNuevas.length) {
+      // Fusion, no reemplazo: las preguntas YA RESPONDIDAS de un analisis
+      // anterior se conservan siempre (son contexto ya confirmado por el
+      // inspector); las sin responder de la ronda anterior se descartan a
+      // favor de las nuevas. Evita re-preguntar algo casi identico a lo que
+      // ya se respondio.
+      var yaRespondidas = PREGUNTAS_CLARIFICACION.filter(function(pc) { return (pc.respuesta || '').toString().trim(); });
+      var textosYaRespondidos = yaRespondidas.map(function(pc) { return _normalizarParaMatch(pc.pregunta); });
+      var preguntasAAgregar = preguntasNuevas
+        .filter(function(p) { return textosYaRespondidos.indexOf(_normalizarParaMatch(p)) < 0; })
+        .map(function(p) { return { pregunta: p, respuesta: '' }; });
+      PREGUNTAS_CLARIFICACION = yaRespondidas.concat(preguntasAAgregar);
+      _renderPreguntasClarificacion();
+      _guardarHallazgosConfirmados();
+    }
+
+    if (!sugeridas.length) {
+      stEl.style.color = 'var(--texto-suave)';
+      stEl.textContent = preguntasNuevas.length
+        ? 'No se identificaron hallazgos nuevos, pero hay preguntas de aclaracion abajo.'
+        : 'No se identificaron hallazgos nuevos del catálogo en el texto.';
+    } else {
+      stEl.style.color = 'var(--verde-dark)';
+      stEl.textContent = '✓ ' + sugeridas.length + ' hallazgo(s) sugerido(s) — revise y confirme abajo.';
+      HALLAZGOS_PENDIENTES_SUGERIDOS = sugeridas;
+      _renderChipsPendientesCatalogo(catalogo);
+    }
+  } catch (e) {
+    if (stEl) {
+      stEl.style.color = 'var(--rojo)';
+      stEl.textContent = 'Error: ' + e.message;
+    }
+  }
+}
+
+function _renderChipsPendientesCatalogo(catalogo) {
+  var box = document.getElementById('hallazgos-sugerencia-catalogo');
+  if (!box) return;
+  if (!HALLAZGOS_PENDIENTES_SUGERIDOS.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  var chips = HALLAZGOS_PENDIENTES_SUGERIDOS.map(function(clave) {
+    var h = _hallazgoPorClave(clave, catalogo);
+    var label = (h ? h.hallazgo : clave).toString().replace(/</g, '&lt;');
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.04);'
+      + 'border:1px dashed var(--brand-accent);border-radius:14px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0">'
+      + label
+      + ' <button type="button" onclick="_rechazarChipSugeridoCatalogo(\'' + clave.replace(/'/g, "\\'") + '\')" '
+      + 'style="border:none;background:none;cursor:pointer;color:var(--rojo);font-weight:bold">×</button></span>';
+  }).join('');
+  box.innerHTML = '<div class="nota" style="margin-bottom:8px">Hallazgos sugeridos (revise antes de confirmar):</div>'
+    + '<div>' + chips + '</div>'
+    + '<button type="button" class="btn btn-p" style="margin-top:8px;padding:6px 14px;font-size:12px" '
+    + 'onclick="_confirmarChipsSugeridosCatalogo()">Confirmar hallazgos</button>';
+}
+
+function _rechazarChipSugeridoCatalogo(clave) {
+  HALLAZGOS_PENDIENTES_SUGERIDOS = HALLAZGOS_PENDIENTES_SUGERIDOS.filter(function(c) { return c !== clave; });
+  cargarCatalogoHallazgos().then(_renderChipsPendientesCatalogo);
+}
+
+function _confirmarChipsSugeridosCatalogo() {
+  HALLAZGOS_PENDIENTES_SUGERIDOS.forEach(function(c) {
+    if (HALLAZGOS_CONFIRMADOS.indexOf(c) < 0) HALLAZGOS_CONFIRMADOS.push(c);
+  });
+  HALLAZGOS_PENDIENTES_SUGERIDOS = [];
+  var box = document.getElementById('hallazgos-sugerencia-catalogo');
+  if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+  _renderChipsConfirmadosCatalogo();
+  _guardarHallazgosConfirmados();
+}
+
+// ── Persistencia de HALLAZGOS_CONFIRMADOS (por visita, localStorage) ────
+// Sin esto, recargar la pagina perdia la seleccion confirmada y ademas
+// disparaba un reanalisis con IA de las mismas observaciones — se guarda
+// junto con _ultimaObsAnalizadaCatalogo para que, si el texto no cambio,
+// sugerirHallazgosDesdeObs() lo detecte como "ya analizado" y no repita.
+function _storageKeyHallazgosCatalogo() {
+  return _storageKey() + '_hallazgos_catalogo';
+}
+function _guardarHallazgosConfirmados() {
+  try {
+    localStorage.setItem(_storageKeyHallazgosCatalogo(), JSON.stringify({
+      confirmados: HALLAZGOS_CONFIRMADOS,
+      ultimaObsAnalizada: _ultimaObsAnalizadaCatalogo,
+      preguntas: PREGUNTAS_CLARIFICACION
+    }));
+  } catch (e) {}
+}
+function _restaurarHallazgosConfirmados() {
+  try {
+    var raw = localStorage.getItem(_storageKeyHallazgosCatalogo());
+    if (!raw) return;
+    var data = JSON.parse(raw);
+    HALLAZGOS_CONFIRMADOS = Array.isArray(data.confirmados) ? data.confirmados : [];
+    _ultimaObsAnalizadaCatalogo = data.ultimaObsAnalizada || '';
+    PREGUNTAS_CLARIFICACION = Array.isArray(data.preguntas) ? data.preguntas : [];
+    _renderChipsConfirmadosCatalogo();
+    _renderPreguntasClarificacion();
+  } catch (e) {}
+}
+
+// ── Preguntas de aclaracion — UI ─────────────────────────────────────────
+// Se muestran junto con los hallazgos sugeridos (misma pasada de IA).
+// Responderlas es opcional: el inspector puede ignorarlas y seguir.
+function _renderPreguntasClarificacion() {
+  var box = document.getElementById('preguntas-clarificacion');
+  if (!box) return;
+  if (!PREGUNTAS_CLARIFICACION.length) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+  var filas = PREGUNTAS_CLARIFICACION.map(function(pc, i) {
+    var preguntaSafe = (pc.pregunta || '').toString().replace(/</g, '&lt;');
+    var respuestaSafe = (pc.respuesta || '').toString().replace(/"/g, '&quot;');
+    return '<div style="margin-bottom:8px">'
+      + '<div style="font-size:12px;color:var(--texto-2);margin-bottom:4px">' + preguntaSafe + '</div>'
+      + '<input type="text" value="' + respuestaSafe + '" placeholder="Respuesta (opcional)" '
+      + 'oninput="_actualizarRespuestaPreguntaClarificacion(' + i + ', this.value)" '
+      + 'style="width:100%;box-sizing:border-box;padding:6px 8px;font-size:12px;border:1px solid var(--borde);border-radius:6px">'
+      + '</div>';
+  }).join('');
+  box.innerHTML = '<div class="nota" style="margin-bottom:8px">Preguntas de aclaracion (opcional, ayudan a redactar mejor):</div>' + filas;
+}
+
+function _actualizarRespuestaPreguntaClarificacion(idx, valor) {
+  if (!PREGUNTAS_CLARIFICACION[idx]) return;
+  PREGUNTAS_CLARIFICACION[idx].respuesta = valor;
+  _guardarHallazgosConfirmados();
+}
+
+function _renderChipsConfirmadosCatalogo() {
+  var box = document.getElementById('hallazgos-confirmados-catalogo');
+  if (!box) return;
+  if (!HALLAZGOS_CONFIRMADOS.length) { box.innerHTML = ''; return; }
+  cargarCatalogoHallazgos().then(function(catalogo) {
+    var chips = HALLAZGOS_CONFIRMADOS.map(function(clave) {
+      var h = _hallazgoPorClave(clave, catalogo);
+      var label = (h ? h.hallazgo : clave).toString().replace(/</g, '&lt;');
+      return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--verde-dark);color:#fff;'
+        + 'border-radius:14px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0">'
+        + label
+        + ' <button type="button" onclick="_quitarHallazgoConfirmadoCatalogo(\'' + clave.replace(/'/g, "\\'") + '\')" '
+        + 'style="border:none;background:none;cursor:pointer;color:#fff;font-weight:bold">×</button></span>';
+    }).join('');
+    box.innerHTML = '<div class="nota" style="margin-bottom:8px">Hallazgos confirmados para este informe:</div><div>' + chips + '</div>';
+  });
+}
+
+function _quitarHallazgoConfirmadoCatalogo(clave) {
+  HALLAZGOS_CONFIRMADOS = HALLAZGOS_CONFIRMADOS.filter(function(c) { return c !== clave; });
+  _renderChipsConfirmadosCatalogo();
+  _guardarHallazgosConfirmados();
+}
+
 // ── Momento 5: revision humana del borrador generado por IA ─────────────
 // Nunca se genera el .docx sin pasar por aqui. validarInformeIA() ya corrio
 // sobre el texto crudo de la IA (generarInformeV2); aqui se vuelve a
@@ -1350,7 +1848,7 @@ function renderRevisionIA() {
   var avisos = detectarAclaracionesInforme(ctx);
   var bloqueaBoton = avisos.length > 0 && !borradorIA.override;
 
-  var h = '<div class="ch"><div class="ci">5</div><div><div class="ct">Borrador generado por IA</div>'
+  var h = '<div class="ch"><div class="ci">5</div><div><div class="ct">Borrador generado</div>'
     + '<div class="cst">Revise, edite o descarte antes de generar el documento final.</div></div></div>';
 
   h += '<div class="nota nota-info">Este es el texto que se insertara en el .docx. Puede editar cualquier campo, '
@@ -1378,7 +1876,7 @@ function renderRevisionIA() {
   h += '<div id="rev-error" class="nota hidden" style="border-color:var(--rojo);background:var(--rojo-bg);color:var(--rojo);margin-top:16px"></div>';
 
   h += '<div class="br" style="margin-top:20px">'
-    + '<button type="button" class="btn btn-o" onclick="reintentarGeneracionIA()">Volver a generar con IA</button>'
+    + '<button type="button" class="btn btn-o" onclick="reintentarGeneracionIA()">Volver a generar</button>'
     + '<button type="button" class="btn btn-p" id="btn-rev-generar" onclick="confirmarYGenerarInforme()"'
     + (bloqueaBoton ? ' disabled' : '') + ' style="margin-left:auto">Generar informe</button>'
     + '</div>';
@@ -1611,8 +2109,20 @@ function buildRes() {
     h += '</div>';
   }
 
-  // ── Hallazgos ──────────────────────────────────────────────
+  // ── Hallazgos (legado, checkboxes .hallazgo) ────────────────
   if (hs.length) h += bloque('Hallazgos (' + hs.length + ')', chips(hs));
+
+  // ── Hallazgos del catalogo confirmados ──────────────────────
+  // HALLAZGOS_CONFIRMADOS es la fuente real desde que construirPromptF43()
+  // dejo de leer los checkboxes .hallazgo — este resumen tambien debe
+  // reflejarlos, no solo el bloque legado de arriba.
+  if (HALLAZGOS_CONFIRMADOS.length) {
+    var labelsHallazgosCatalogo = HALLAZGOS_CONFIRMADOS.map(function(clave) {
+      var hc = _hallazgoPorClave(clave, CATALOGO_HALLAZGOS || []);
+      return hc ? hc.hallazgo : clave;
+    });
+    h += bloque('Hallazgos del catalogo (' + labelsHallazgosCatalogo.length + ')', chips(labelsHallazgosCatalogo));
+  }
 
   // ── Comportamientos Art. 135 ──────────────────────────────
   if (comps.length) h += bloque('Comportamientos Art. 135 (' + comps.length + ')', chips(comps));
@@ -1708,12 +2218,36 @@ function detectarAclaracionesInforme(ctx) {
 // proceso sancionatorio — mezclar hecho observado con conclusion juridica
 // es exactamente lo que un abogado ataca primero. Reglas 1-6 de abajo
 // existen para cerrar cada uno de esos huecos, no son estilo.
-function construirPromptF43(ctx) {
-  var d = ctx.d, hs = ctx.hs, fotoDescs = ctx.fotoDescs, sinLic = ctx.sinLic;
+async function construirPromptF43(ctx) {
+  var d = ctx.d, fotoDescs = ctx.fotoDescs, sinLic = ctx.sinLic;
   var licNota = sinLic
     ? 'No se aporto documentacion urbanistica. En antecedentes indicar solo que "no fue aportada/exhibida licencia" — nunca afirmar que la obra "no tiene licencia" (eso no se puede verificar en una sola visita).'
     : 'Se aporto licencia. Contrastar en observaciones lo aprobado (segun DATOS) vs. lo hallado en campo, sin calificar si eso constituye infraccion.';
-  var hsNota = hs.length ? hs.join(', ') : 'los identificados segun las observaciones';
+  // Reemplaza el hsNota legado (9 checkboxes .hallazgo) por los hallazgos del
+  // catalogo backend que el inspector confirmo (sugerirHallazgosDesdeObs() +
+  // chips de confirmacion) — ver seccion "Hallazgos del catalogo" arriba.
+  // conclusion_sugerida/recomendacion_sugerida viajan como ORIENTACION, no
+  // como texto a copiar; fundamento_normativo es referencia interna, nunca
+  // se cita (esa fuente de cita sigue siendo, exclusivamente, Art.135 ya
+  // marcado — ver regla 3).
+  var catalogo = await cargarCatalogoHallazgos();
+  var hallazgosInfo = HALLAZGOS_CONFIRMADOS
+    .map(function(clave) { return _hallazgoPorClave(clave, catalogo); })
+    .filter(Boolean);
+  var hsNota = hallazgosInfo.length
+    ? hallazgosInfo.map(function(h) {
+        return '- ' + h.hallazgo
+          + '\n  Sugerencia de conclusion (adaptar al caso, no copiar literal): ' + (h.conclusion_sugerida || 'sin sugerencia disponible')
+          + '\n  Sugerencia de recomendacion (adaptar al caso, no copiar literal; solo verbos permitidos de la regla 5): ' + (h.recomendacion_sugerida || 'sin sugerencia disponible')
+          + '\n  Contexto normativo interno (NUNCA citar en el texto — solo para redactar con precision tecnica): ' + _ocultarCodigosArt135(h.fundamento_normativo);
+      }).join('\n')
+    : 'ninguno confirmado — usa unicamente lo que describan las observaciones';
+  // Preguntas de aclaracion respondidas por el inspector (opcional) — solo
+  // las que tienen respuesta no vacia se suman como contexto adicional.
+  var aclaracionesRespondidas = (PREGUNTAS_CLARIFICACION || []).filter(function(pc) { return (pc.respuesta || '').toString().trim(); });
+  var aclaracionesNota = aclaracionesRespondidas.length
+    ? aclaracionesRespondidas.map(function(pc) { return '- ' + pc.pregunta + ' -> ' + pc.respuesta; }).join('\n')
+    : '';
   var compsList = ctx.d.comportamientos || [];
   var compsNota = compsList.length ? compsList.join('; ') : '';
   var prompt = 'Eres arquitecto inspector redactando la seccion tecnica de un informe F-GGO-43 de Control Urbano en Bello, Antioquia. '
@@ -1722,14 +2256,15 @@ function construirPromptF43(ctx) {
     + 'Responde SOLO con JSON valido. Sin texto previo ni markdown.\n\n'
     + 'DATOS: ' + JSON.stringify(d) + '\n'
     + 'NOTA LICENCIA: ' + licNota + '\n'
-    + 'HALLAZGOS MARCADOS EN CAMPO: ' + hsNota + '\n'
+    + 'HALLAZGOS DEL CATALOGO CONFIRMADOS POR EL INSPECTOR (orientacion de redaccion — adaptar cada sugerencia al caso concreto de esta visita, PROHIBIDO copiarla tal cual; el "contexto normativo interno" es solo para precision tecnica, PROHIBIDO citarlo como fuente legal):\n' + hsNota + '\n\n'
+    + (aclaracionesNota ? 'ACLARACIONES DEL INSPECTOR (respuestas a preguntas de contexto, fuente valida igual que DATOS):\n' + aclaracionesNota + '\n\n' : '')
     + 'COMPORTAMIENTOS ART.135 YA IDENTIFICADOS POR EL INSPECTOR (unica fuente valida de cita legal): ' + (compsNota || 'ninguno marcado') + '\n\n'
     + 'JSON exacto requerido:\n'
     + '{"antecedentes":"parrafos separados por \\n","observaciones":"parrafos separados por \\n",'
     + '"conclusiones_items":["item1","item2"],"recomendaciones_items":["item1","item2"]}\n\n'
     + 'REGLAS OBLIGATORIAS (incumplirlas invalida el informe como prueba tecnica):\n'
-    + '0. REGLA DE ORO: todo hecho afirmado debe tener respaldo directo en DATOS, HALLAZGOS MARCADOS EN CAMPO, '
-    + 'COMPORTAMIENTOS ART.135 ya listados o DESCRIPCION DE FOTOGRAFIAS. Si un dato no esta expresamente en esas '
+    + '0. REGLA DE ORO: todo hecho afirmado debe tener respaldo directo en DATOS, HALLAZGOS DEL CATALOGO CONFIRMADOS, '
+    + 'ACLARACIONES DEL INSPECTOR (si las hay), COMPORTAMIENTOS ART.135 ya listados o DESCRIPCION DE FOTOGRAFIAS. Si un dato no esta expresamente en esas '
     + 'fuentes, se omite por completo — no completar con inferencias, conocimiento general ni probabilidades.\n'
     + '1. ANTECEDENTES: usa unicamente fecha, direccion y objeto de la visita presentes en DATOS. Nunca inventes '
     + 'un motivo, denuncia, radicado o solicitud que no aparezca explicitamente en DATOS — si ese dato no viene, '
@@ -1752,11 +2287,23 @@ function construirPromptF43(ctx) {
     + 'comportamientos ya marcados por el inspector — no incorporar hechos nuevos, interpretaciones adicionales '
     + 'ni calificar si constituyen infraccion (esa calificacion es del Inspector). Incluye un item independiente '
     + 'y explicito con el area total en contravencion.\n'
-    + '5. RECOMENDACIONES: cada item solo puede recomendar evaluar, verificar, requerir, remitir o considerar. '
-    + 'Prohibido imponer, sancionar, ordenar, iniciar procedimiento, declarar o resolver — quien decide esas '
-    + 'acciones es el Inspector, no el arquitecto. Si hay un comportamiento marcado en area protegida o espacio '
-    + 'publico, no recomiendes "obtener licencia" (esa obra no es susceptible de licenciamiento); orienta la '
-    + 'recomendacion al procedimiento administrativo correspondiente. No repitas el area en contravencion aqui.\n'
+    + '5. RECOMENDACIONES: cada item debe indicar directamente la accion correctiva concreta para lo YA '
+    + 'verificado en OBSERVACIONES/CONCLUSIONES — no es una sugerencia tentativa, ya se confirmo el hallazgo. '
+    + 'Usa verbos directos: restituir, demoler, ajustar, corregir, retirar, cerrar, desmontar, tramitar '
+    + '(legalizar mediante modificacion de licencia), abstenerse, garantizar. Si un hallazgo admite dos '
+    + 'salidas excluyentes (legalizar vs. restablecer a lo aprobado), dilo directamente como opcion binaria '
+    + '("legalizar mediante modificacion de licencia, o en su defecto, restablecer X a lo aprobado"), no como '
+    + 'pregunta abierta. No repitas como pendiente-de-verificar algo que OBSERVACIONES ya confirmo con '
+    + 'medidas concretas (ej. no pidas "un levantamiento que confirme las dimensiones" si esas dimensiones '
+    + 'ya se midieron y describieron en observaciones).\n'
+    + 'Prohibido recomendar directamente medidas administrativas o sancionatorias (imponer multa, sancionar, '
+    + 'ordenar, iniciar procedimiento, declarar, resolver) — esas decisiones formales son del Inspector, no '
+    + 'de esta seccion tecnica. "Remitir" solo aplica hacia una entidad con COMPETENCIA DISTINTA a la de '
+    + 'quien recibe este informe (ej. autoridad ambiental, movilidad/transito, curaduria) y solo si DATOS lo '
+    + 'sugiere explicitamente, nombrando la entidad — nunca remitas "a la autoridad competente" de forma '
+    + 'generica ni de vuelta al mismo Inspector que ya tiene el caso. Si hay un comportamiento marcado en '
+    + 'area protegida o espacio publico, no recomiendes "obtener licencia" (esa obra no es susceptible de '
+    + 'licenciamiento); recomienda la restitucion/demolicion directa. No repitas el area en contravencion aqui.\n'
     + '6. Lenguaje: prohibido "constituye", "demuestra", "acredita", "confirma", "prueba", "evidencia plenamente", '
     + '"se encuentra plenamente establecido", "desconocimiento total", "carece de estructura aprobada" — usa '
     + '"se observo", "se evidencio", "se identifico", "durante la visita", "no fue posible verificar". Sin puntos '
@@ -1765,8 +2312,19 @@ function construirPromptF43(ctx) {
     + 'revisa que ningun comportamiento citado este fuera de la lista dada, que ninguna norma citada este fuera '
     + 'de DATOS, que toda conclusion provenga de observaciones o comportamientos ya dados, que ninguna '
     + 'recomendacion use un verbo prohibido, que no haya antecedentes inventados y que no haya contradiccion '
-    + 'entre observaciones y conclusiones. Elimina cualquier frase que no pase esta verificacion antes de emitir '
-    + 'el JSON final.';
+    + 'entre observaciones y conclusiones, y que se cumplan las reglas 8 y 9 de abajo. Elimina cualquier frase '
+    + 'que no pase esta verificacion antes de emitir el JSON final.\n'
+    + '8. VERBO RECTOR DEL LITERAL A: si algun COMPORTAMIENTO ART.135 marcado empieza con "A" (A1-A4), tanto '
+    + 'OBSERVACIONES como la conclusion que cite ese codigo deben mencionar, en cualquier tiempo o forma, alguna '
+    + 'de estas acciones: parcelar, urbanizar, demoler, intervenir o construir — es el verbo rector del '
+    + 'encabezado del literal A, sin el cual la cita queda sin la conducta que la sostiene. No es una '
+    + 'calificacion juridica, es la accion fisica misma; describela solo si esta respaldada por DATOS u '
+    + 'OBSERVACIONES.\n'
+    + '9. CANTIDADES: si hay hallazgos del catalogo confirmados o comportamientos marcados, procura entre '
+    + (CONCLUSIONES_MIN||4) + ' y ' + (CONCLUSIONES_MAX||10) + ' conclusiones (fisicas/funcionales/espacio '
+    + 'publico segun aplique, mas el area en contravencion) y entre ' + (RECOMENDACIONES_MIN||3) + ' y ' +
+    (RECOMENDACIONES_MAX||8) + ' recomendaciones. No rellenes con relleno generico solo para llegar al minimo — '
+    + 'si los hechos dan para menos items, prioriza calidad sobre cantidad.';
   if (fotoDescs.length > 0) {
     prompt += '\n\nDESCRIPCION DE FOTOGRAFIAS DE LA VISITA (contexto adicional para observaciones, no citar como fuente legal):\n';
     fotoDescs.forEach(function(desc, i) { prompt += (i+1) + '. ' + desc + '\n'; });
@@ -1792,6 +2350,86 @@ var VERBOS_PROHIBIDOS_RECOMENDACION = [
   'ordenar', 'sancionar', 'imponer', 'iniciar procedimiento', 'declarar', 'resolver'
 ];
 var TEXTO_PLANTILLA_FILTRADO_INFORME = ['(incluir', '(eliminar en caso'];
+
+// Cantidades minimas/maximas (ver reglas de estructura del plan de
+// migracion — adaptadas del analisis de informes reales, min. solo aplica
+// si hay hallazgos/comportamientos confirmados; sin ellos un informe
+// "conforme" puede tener menos items legitimamente).
+var CONCLUSIONES_MIN = 4, CONCLUSIONES_MAX = 10;
+var RECOMENDACIONES_MIN = 3, RECOMENDACIONES_MAX = 8;
+
+// Verbo rector del encabezado del literal A del Art.135 ("Parcelar,
+// urbanizar, demoler, intervenir o construir..."), aplica a sus 4
+// numerales (A1-A4). Cualquier conjugacion, no hace falta texto exacto.
+var VERBO_RECTOR_LITERAL_A = /parcel|urbaniz|demol|interven|intervin|intervien|constru/;
+
+// Cierre grave — frase fija pre-aprobada, NUNCA redactada por la IA. Se
+// inserta por codigo cuando algun hallazgo confirmado es de Gravedad
+// Critico (ver _requiereCierreGrave), mismo principio que restringir la
+// cita de Art.135 a codigos ya marcados: la condicion es mecanica.
+var CIERRE_GRAVE_TEXTO = 'En consecuencia, la edificacion objeto de inspeccion incurre en una grave y reiterada infraccion urbanistica, afectando no solo los principios de legalidad, planificacion y proteccion del espacio publico, sino tambien en detrimento del ordenamiento territorial y la convivencia en el municipio de Bello.';
+
+function _requiereCierreGrave(catalogo) {
+  return HALLAZGOS_CONFIRMADOS.some(function(clave) {
+    var h = _hallazgoPorClave(clave, catalogo);
+    return h && _quitarTildesInforme(h.gravedad) === 'critico';
+  });
+}
+
+// ── Mejora continua: hallazgo nuevo pendiente de revision ───────────────
+// Si las observaciones son sustanciales pero ningun hallazgo del catalogo
+// quedo confirmado, probablemente el inspector describio algo que el
+// catalogo todavia no cubre — la IA igual redacta conclusiones/
+// recomendaciones desde las observaciones crudas (comportamiento actual,
+// sin cambios), pero aqui queda un registro para revisar despues y decidir
+// si conviene sumarlo al catalogo. Fire-and-forget: nunca bloquea el
+// flujo ni el envio del informe si falla.
+function _registrarHallazgoPendienteSiAplica(tglobalFinal, ctx) {
+  if (HALLAZGOS_CONFIRMADOS.length > 0) return; // hubo match, no es un hueco del catalogo
+  var obs = (tglobalFinal.observaciones || '').trim();
+  if (obs.length < 120) return; // muy corto para ser una descripcion real de un hallazgo nuevo
+  try {
+    fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify(_bodyConSesion({
+        accion: 'registrarHallazgoPendiente',
+        fecha: new Date().toISOString(),
+        radicado: V6_CTX.radicado || '',
+        fila: V6_CTX.fila || '',
+        inspector: (ctx.d && ctx.d.inspector) || '',
+        observaciones: obs,
+        conclusiones: tglobalFinal.conclusiones_items || [],
+        recomendaciones: tglobalFinal.recomendaciones_items || []
+      }))
+    }).catch(function(e) { console.warn('_registrarHallazgoPendienteSiAplica fallo:', e.message); });
+  } catch (e) { console.warn('_registrarHallazgoPendienteSiAplica fallo:', e.message); }
+}
+
+// ── Mejora continua: registrar cuando el borrador NO pasa validarInformeIA
+// (fire-and-forget, nunca bloquea) — permite revisar despues que se esta
+// rechazando seguido para ajustar el prompt/catalogo, sin exponerle al
+// inspector el detalle tecnico (el solo ve "regenere").
+function _registrarBorradorRechazado(tglobalFinal, ctx, problemas) {
+  try {
+    fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify(_bodyConSesion({
+        accion: 'registrarBorradorRechazado',
+        fecha: new Date().toISOString(),
+        radicado: V6_CTX.radicado || '',
+        fila: V6_CTX.fila || '',
+        inspector: (ctx.d && ctx.d.inspector) || '',
+        observaciones: (tglobalFinal.observaciones || ''),
+        problemas: problemas || [],
+        antecedentes: tglobalFinal.antecedentes || '',
+        conclusiones: tglobalFinal.conclusiones_items || [],
+        recomendaciones: tglobalFinal.recomendaciones_items || []
+      }))
+    }).catch(function(e) { console.warn('_registrarBorradorRechazado fallo:', e.message); });
+  } catch (e) { console.warn('_registrarBorradorRechazado fallo:', e.message); }
+}
 
 function _quitarTildesInforme(s) {
   return (s || '').toString().toLowerCase()
@@ -1838,13 +2476,61 @@ function validarInformeIA(json, ctx) {
     if (!autorizados[c]) problemas.push('Cita el comportamiento "' + c + '" que el inspector no marco.');
   });
 
-  // Verbos prohibidos en recomendaciones (esas son ordenes del Inspector, no del arquitecto).
+  // Verbos administrativos/sancionatorios prohibidos (esas son decisiones
+  // formales del Inspector, no de esta seccion tecnica) + "remitir" usado
+  // de forma generica hacia "la autoridad competente" en vez de nombrar
+  // una entidad con competencia distinta (ver regla 5).
   (json.recomendaciones_items || []).forEach(function(item, i) {
     var norm = _quitarTildesInforme(item);
     VERBOS_PROHIBIDOS_RECOMENDACION.forEach(function(v) {
       if (norm.indexOf(v) >= 0) problemas.push('Recomendacion ' + (i + 1) + ' usa un verbo que no corresponde al arquitecto: "' + v + '".');
     });
+    if (norm.indexOf('remitir') >= 0 && norm.indexOf('autoridad competente') >= 0) {
+      problemas.push('Recomendacion ' + (i + 1) + ' remite "a la autoridad competente" de forma generica — debe nombrar una entidad con competencia distinta (ambiental, movilidad, curaduria, etc.), nunca de vuelta al mismo Inspector que ya tiene el caso.');
+    }
   });
+
+  // Cantidades — el minimo solo aplica si hay algo confirmado que reportar
+  // (hallazgos del catalogo o comportamientos Art.135); un informe
+  // "conforme" (sin hallazgos) puede legitimamente tener menos items.
+  var conclusiones    = json.conclusiones_items    || [];
+  var recomendaciones = json.recomendaciones_items || [];
+  var hayHallazgosOComportamientos = HALLAZGOS_CONFIRMADOS.length > 0 || (ctx.d.comportamientos || []).length > 0;
+  if (hayHallazgosOComportamientos && conclusiones.length < CONCLUSIONES_MIN) {
+    problemas.push('Con hallazgos/comportamientos confirmados se esperan al menos ' + CONCLUSIONES_MIN + ' conclusiones (hay ' + conclusiones.length + ').');
+  }
+  if (conclusiones.length > CONCLUSIONES_MAX) {
+    problemas.push('Demasiadas conclusiones (maximo ' + CONCLUSIONES_MAX + ', hay ' + conclusiones.length + ') — revise si conviene fusionar items del mismo tema.');
+  }
+  if (hayHallazgosOComportamientos && recomendaciones.length < RECOMENDACIONES_MIN) {
+    problemas.push('Con hallazgos/comportamientos confirmados se esperan al menos ' + RECOMENDACIONES_MIN + ' recomendaciones (hay ' + recomendaciones.length + ').');
+  }
+  if (recomendaciones.length > RECOMENDACIONES_MAX) {
+    problemas.push('Demasiadas recomendaciones (maximo ' + RECOMENDACIONES_MAX + ', hay ' + recomendaciones.length + ').');
+  }
+
+  // Verbo rector del literal A (Art.135): si hay un codigo A1-A4 marcado,
+  // OBSERVACIONES y la conclusion que cite ese codigo deben mencionar
+  // alguna conjugacion de parcelar/urbanizar/demoler/intervenir/construir
+  // — sin eso, la cita del literal A queda sin la conducta tipica que la
+  // sostiene (no es calificacion juridica, es la accion misma).
+  var comportamientosA = [];
+  (ctx.d.comportamientos || []).forEach(function(c) {
+    var m = /^(A\d{1,2})/.exec(c);
+    if (m) comportamientosA.push(m[1]);
+  });
+  if (comportamientosA.length) {
+    var obsNorm = _quitarTildesInforme(json.observaciones || '');
+    if (!VERBO_RECTOR_LITERAL_A.test(obsNorm)) {
+      problemas.push('Hay comportamiento(s) del literal A marcado(s) (' + comportamientosA.join(', ') + ') pero OBSERVACIONES no menciona ninguna conjugacion de parcelar/urbanizar/demoler/intervenir/construir (verbo rector del literal A).');
+    }
+    comportamientosA.forEach(function(codigo) {
+      var conclusionQueCita = conclusiones.find(function(c) { return new RegExp('\\b' + codigo + '\\b').test(c); });
+      if (conclusionQueCita && !VERBO_RECTOR_LITERAL_A.test(_quitarTildesInforme(conclusionQueCita))) {
+        problemas.push('La conclusion que cita "' + codigo + '" no menciona ninguna conjugacion de parcelar/urbanizar/demoler/intervenir/construir (verbo rector del literal A).');
+      }
+    });
+  }
 
   return { ok: problemas.length === 0, problemas: problemas };
 }
@@ -1873,12 +2559,12 @@ async function generarInforme() {
   var btn = document.getElementById('btn-gen');
   btn.disabled = true;
   document.getElementById('prev-area').classList.add('hidden');
-  showStatus('load', 'Procesando con IA...', 'Conectando con el servidor...');
+  showStatus('load', 'Procesando...', 'Conectando con el servidor...');
 
   var ctx    = recolectarDatosWizard();
-  var prompt = construirPromptF43(ctx);
+  var prompt = await construirPromptF43(ctx);
 
-  showStatus('load', 'Generando informe con IA...', 'DeepSeek → Claude vía webhook...');
+  showStatus('load', 'Generando informe...', 'DeepSeek → Claude vía webhook...');
   var ia = await pedirJsonIA(prompt);
 
   if (!ia.ok) {
@@ -1896,12 +2582,24 @@ async function generarInforme() {
   tglobal.recomendaciones_items= Array.isArray(tglobal.recomendaciones_items)? tglobal.recomendaciones_items: [];
   tglobal._d = ctx.d;
 
+  // Cierre grave: frase fija pre-aprobada, insertada por codigo (nunca la
+  // redacta la IA) cuando algun hallazgo confirmado es Gravedad=Critico.
+  var catalogoParaCierreV1 = await cargarCatalogoHallazgos();
+  if (_requiereCierreGrave(catalogoParaCierreV1) && tglobal.conclusiones_items.indexOf(CIERRE_GRAVE_TEXTO) < 0) {
+    tglobal.conclusiones_items.push(CIERRE_GRAVE_TEXTO);
+  }
+
   var validacionInforme = validarInformeIA(tglobal, ctx);
   if (!validacionInforme.ok) {
-    showStatus('er', 'El borrador no paso la verificacion', validacionInforme.problemas.join(' '));
+    // No se muestra el detalle tecnico al inspector — solo que debe
+    // regenerar. El detalle completo queda registrado para revisar despues.
+    showStatus('er', 'No se pudo generar la redaccion', 'Pulse "Generar informe" de nuevo para intentarlo otra vez.');
+    _registrarBorradorRechazado(tglobal, ctx, validacionInforme.problemas);
     btn.disabled = false;
     return;
   }
+
+  _registrarHallazgoPendienteSiAplica(tglobal, ctx);
 
   showStatus('ok', 'Informe generado correctamente', 'Revise la vista previa y descargue el Word.');
   document.getElementById('prev-txt').textContent =
@@ -2111,6 +2809,15 @@ function buildSeccionArt135() {
   ];
 }
 
+// ── Intro de conclusiones — compartida entre renderDocx() (docx.js) y
+// generarInformeF43ViaPlantilla() (plantilla oficial), extraída para no
+// duplicar la misma frase en los dos caminos de generación.
+function _construirConclusionIntro(d) {
+  return d.sin_licencia
+    ? 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, se concluye:'
+    : 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, y del analisis de los planos aprobados mediante '+d.num_res+' expedida por '+d.curaduria+', se concluye:';
+}
+
 async function renderDocx(tglobal) {
   var d = tglobal._d;
   var sl = d.sin_licencia;
@@ -2220,9 +2927,7 @@ async function renderDocx(tglobal) {
   var obsParrs   = tglobal.observaciones.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
   var concItems  = tglobal.conclusiones_items.map(function(c){return pNum(c);});
   var recItems   = tglobal.recomendaciones_items.map(function(r){return pNum(r);});
-  var conclusIntro = sl
-    ? 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, se concluye:'
-    : 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, y del analisis de los planos aprobados mediante '+d.num_res+' expedida por '+d.curaduria+', se concluye:';
+  var conclusIntro = _construirConclusionIntro(d);
   var licBlock = sl
     ? [p('(No se aporto documentacion urbanistica que ampare las obras o intervenciones presentes en el inmueble inspeccionado.)', {it:true})]
     : [licTable];
@@ -2345,6 +3050,19 @@ async function descargarDocx() {
   if (!tglobal) { alert('Primero genere el informe.'); return; }
   var d = tglobal._d;
   try {
+    // Camino nuevo (plantilla oficial) — requiere visita asociada porque el
+    // documento se copia a la carpeta de esa visita; sin eso no hay donde
+    // generarlo server-side y se cae al camino legado (renderDocx local).
+    if (USAR_PLANTILLA_F43 && V6_CTX.fila && V6_CTX.idCarpeta) {
+      var resultadoPlantilla = await generarInformeF43ViaPlantilla(tglobal);
+      var dlStP = document.getElementById('dl-status');
+      if (dlStP) {
+        dlStP.innerHTML = '✓ Informe generado y registrado en BD. <a href="' + resultadoPlantilla.link + '" target="_blank" style="color:var(--brand-accent)">Ver archivo</a>';
+        dlStP.classList.remove('hidden');
+        dlStP.style.color = 'var(--verde-dark)';
+      }
+      return;
+    }
     var blob = await renderDocx(tglobal);
     var nombre = 'F-GGO-43_' + (d.direccion||'informe').replace(/[^a-zA-Z0-9]/g,'_').substring(0,25) + '_' + (d.fecha_visita||'sin_fecha') + '.docx';
     var url = URL.createObjectURL(blob);
@@ -2468,10 +3186,22 @@ function cargar() {
     }
   });
   toggleModalidades();
+
+  // Mismo caso que prefillDesdeURL(): "obs" se restauro con .value = ...,
+  // sin disparar 'input' — activar la sugerencia automatica de hallazgos
+  // explicitamente para no depender de que el inspector edite el texto.
+  _programarSugerenciaHallazgosAuto();
 }
 function nuevoInforme() {
   if (!confirm('¿Crear un nuevo informe? Se borraran todos los datos actuales.')) return;
   try { localStorage.removeItem(_storageKey()); } catch(e) {}
+  try { localStorage.removeItem(_storageKeyHallazgosCatalogo()); } catch(e) {}
+  HALLAZGOS_CONFIRMADOS = [];
+  HALLAZGOS_PENDIENTES_SUGERIDOS = [];
+  PREGUNTAS_CLARIFICACION = [];
+  _ultimaObsAnalizadaCatalogo = '';
+  _renderChipsConfirmadosCatalogo();
+  _renderPreguntasClarificacion();
   CAMPOS.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
@@ -2542,7 +3272,7 @@ async function cargarFotosDeVisita() {
       var thumbUrl = 'https://drive.google.com/thumbnail?id=' + f.id + '&sz=w400';
       crearTarjetaFoto({ url: thumbUrl, descripcion: '', fileId: f.id });
     });
-    status.textContent = fotos.length + ' fotos cargadas. Use ↑↓ para reordenar, "Describir con IA" para autocompletar.';
+    status.textContent = fotos.length + ' fotos cargadas. Use ↑↓ para reordenar, "Describir" para autocompletar.';
     status.style.color = 'var(--verde-dark)';
     var btnIA = document.getElementById('btn-describir-fotos');
     if (btnIA) { btnIA.disabled = false; btnIA.style.opacity = '1'; }
@@ -2575,7 +3305,7 @@ async function describirFotosConIA() {
     if (!fidEl || !fidEl.value) continue;
     if (descEl && descEl.value.trim()) continue; // no pisar lo escrito por el inspector
     status.style.color = 'var(--texto-suave)';
-    status.textContent = 'Analizando con IA ' + (i + 1) + '/' + total + '...';
+    status.textContent = 'Analizando ' + (i + 1) + '/' + total + '...';
     try {
       var r = await fetch(WH + '?' + _qsConSesion({ accion: 'describirFotoDesdeId', fileId: fidEl.value }).toString());
       var d = await r.json();
@@ -2588,7 +3318,7 @@ async function describirFotosConIA() {
       console.warn('describir foto fallo:', e.message);
     }
   }
-  status.textContent = ok + ' descripciones generadas con IA. Puede editarlas.';
+  status.textContent = ok + ' descripciones generadas. Puede editarlas.';
   status.style.color = 'var(--verde-dark)';
   btn.disabled = false;
 }
@@ -2698,7 +3428,7 @@ function crearTarjetaFoto(opts) {
   descInput.type = 'text';
   descInput.id    = 'desc-' + id;
   descInput.value = desc;
-  descInput.placeholder = 'Que muestra esta fotografia (se autocompleta con IA)';
+  descInput.placeholder = 'Que muestra esta fotografia (se autocompleta)';
   descField.appendChild(descLabel);
   descField.appendChild(descInput);
   fields.appendChild(descField);
@@ -3003,6 +3733,11 @@ function _hoyLocal() {
 // ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 (function() {
   var hoy = _hoyLocal();
+  // Restaurar HALLAZGOS_CONFIRMADOS antes de cargar()/prefillDesdeURL() —
+  // esas dos disparan _programarSugerenciaHallazgosAuto() al final, y si
+  // _ultimaObsAnalizadaCatalogo ya coincide con el texto restaurado no
+  // vuelve a analizar con IA algo que el inspector ya confirmo.
+  _restaurarHallazgosConfirmados();
   // Cargar SIEMPRE: la key es por-visita (fggo43_datos_<fila>), así que cada
   // visita restaura solo sus propios datos. Los comportamientos Art. 135 y
   // demás checkboxes quedan persistidos por visita.
@@ -3060,6 +3795,12 @@ function _hoyLocal() {
   cargarInspectoresDesdeBD();
 
   if (UI_MODE === 'v2') activarV2();
+
+  // Sugerencia de hallazgos del catalogo: automatica mientras el inspector
+  // escribe (debounce), sin boton — funciona en ambos modos (v2/legacy)
+  // porque HALLAZGOS_CONFIRMADOS alimenta construirPromptF43() en los dos.
+  var _obsElAuto = document.getElementById('obs');
+  if (_obsElAuto) _obsElAuto.addEventListener('input', _programarSugerenciaHallazgosAuto);
 })();
 
 function normalizar(s) {
@@ -3154,6 +3895,23 @@ function prefillDesdeURL() {
     var am = (p.get('amenaza') || '').toUpperCase();
     var sp = (p.get('sueloProt') || '').toUpperCase();
     if (am === 'NO' && sp === 'NO') setSelectByText('proteccion', 'No');
+  }
+
+  // Comportamientos contrarios (Art.135) ya marcados en la visita —
+  // d.infraccion de nueva-visita.jsx viene como "A1: Areas protegidas | C9: ..."
+  // pero los .comp-ac de este wizard usan un texto distinto ("A1 - En areas
+  // protegidas..."), asi que el match es por CODIGO (A1, C9), no por texto.
+  var infraccionParam = p.get('infraccion');
+  if (infraccionParam) {
+    var codigosContrarios = infraccionParam.split('|')
+      .map(function(s) { var m = /^\s*([ACD]\d{1,2})/.exec(s); return m ? m[1] : null; })
+      .filter(Boolean);
+    if (codigosContrarios.length) {
+      document.querySelectorAll('.comp-ac').forEach(function(cb) {
+        var m = /^([ACD]\d{1,2})/.exec(cb.value);
+        if (m && codigosContrarios.indexOf(m[1]) >= 0) cb.checked = true;
+      });
+    }
   }
 
   // Inspector: el <select> aún no tiene opciones cargadas (fetch async).
@@ -3261,6 +4019,12 @@ function prefillDesdeURL() {
 
   // Guardar prefill en localStorage para no perderlo al recargar
   guardar();
+
+  // El textarea de observaciones se llenó con .value = ... (arrastrado de
+  // la visita), lo que NO dispara el evento 'input' que activa la
+  // sugerencia automatica de hallazgos — dispararla explicitamente aqui
+  // para el caso comun de que el inspector nunca toque el campo a mano.
+  _programarSugerenciaHallazgosAuto();
 }
 
 // ── Subir docx generado a Drive + registrar link en BD VISITAS ──

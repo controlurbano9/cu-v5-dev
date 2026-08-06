@@ -1390,6 +1390,17 @@ async function cargarInspectoresDesdeBD() {
 // sesión del wizard (no cambia mientras el inspector diligencia).
 var CATALOGO_HALLAZGOS = null;
 
+// BUG (encontrado 2026-07-30 al diagnosticar "no analiza observaciones" con
+// una visita real): un array vacio [] es TRUTHY en JS, asi que un fallo
+// (sesion no lista aun, cold-start de Apps Script, hiccup de red) en la
+// primera llamada — la de activarV2()'s "precarga en segundo plano" al
+// cargar la pagina — quedaba cacheado para siempre como si fuera un
+// catalogo real pero vacio. Toda llamada posterior (la que sí dispara
+// sugerirHallazgosDesdeObs cuando el inspector escribe) devolvia ese mismo
+// [] sin reintentar jamas, matando la sugerencia de hallazgos y las
+// preguntas de clarificacion para el resto de la sesion. Ahora solo se
+// cachea un resultado EXITOSO; un fallo deja CATALOGO_HALLAZGOS en null
+// para que la proxima llamada reintente.
 async function cargarCatalogoHallazgos() {
   if (CATALOGO_HALLAZGOS) return CATALOGO_HALLAZGOS;
   try {
@@ -1404,11 +1415,11 @@ async function cargarCatalogoHallazgos() {
         headers.forEach(function(h, i) { obj[h] = fila[i]; });
         return obj;
       });
+    return CATALOGO_HALLAZGOS;
   } catch (e) {
-    console.warn('cargarCatalogoHallazgos falló:', e.message);
-    CATALOGO_HALLAZGOS = [];
+    console.warn('cargarCatalogoHallazgos falló (se reintentara en la proxima llamada):', e.message);
+    return [];
   }
-  return CATALOGO_HALLAZGOS;
 }
 
 function onInspectorChange(sel) {
@@ -1524,6 +1535,41 @@ function _hallazgoPorClave(clave, catalogo) {
   return null;
 }
 
+// Convierte el numeral_art135 del catalogo ("A.2", "D.11", "NO APLICA") al
+// prefijo de codigo que usan los .comp-ac ("A2", "D11") — MISMO formato y
+// regex que ya usa prefillDesdeURL para el parametro infraccion. Se aplica
+// solo a .comp-ac (comportamientos contrarios, lo que validarInformeIA
+// valida como ctx.d.comportamientos) — nunca a #art-table (tabla de
+// verificacion cumple/no-cumple de deberes, cosa distinta).
+function _numeralCatalogoACodigo(numeral) {
+  var m = /^\s*([ACD])\.?\s*(\d{1,2})\s*$/i.exec((numeral || '').toString());
+  return m ? (m[1].toUpperCase() + m[2]) : null;
+}
+
+// Marca (nunca desmarca) el .comp-ac cuyo codigo coincide — visible y
+// desmarcable por el inspector, mismo principio de "sugerir, nunca ocultar"
+// que ya rige el resto del flujo de catalogo/chips.
+function _marcarComportamientoPorCodigo(codigo) {
+  if (!codigo) return;
+  document.querySelectorAll('.comp-ac').forEach(function(cb) {
+    var m = /^([ACD]\d{1,2})/.exec(cb.value);
+    if (m && m[1] === codigo) cb.checked = true;
+  });
+}
+
+// Datos que la app YA capturo de forma estructurada en otro punto del flujo
+// (seccion de licencia de la visita, cruce POT por GPS al abrir el informe)
+// — se usan como señal adicional para sugerir/advertir hallazgos, en vez de
+// depender solo de que el inspector lo redacte en prosa libre.
+function _senalesEstructuradas() {
+  var sinLicEl = document.getElementById('sinLic');
+  var proteccionNorm = _normalizarParaMatch(gv('proteccion')).trim();
+  return {
+    sinLicencia: sinLicEl ? sinLicEl.checked : false,
+    sueloProtegido: !!proteccionNorm && proteccionNorm !== 'no' && proteccionNorm !== 'seleccione'
+  };
+}
+
 // ── Filtro mecanico de respaldo textual (segunda pasada, sin IA) ────────
 // Antes de aceptar un hallazgo sugerido por la IA, exige que al menos una
 // palabra distintiva de su descripcion aparezca literalmente en las
@@ -1555,6 +1601,27 @@ function _hallazgoTieneRespaldoTextual(h, textoNormalizado) {
   var palabras = _palabrasDistintivasHallazgo(h.hallazgo);
   if (!palabras.length) return true; // sin palabras distintivas que exigir, no bloquear
   return palabras.some(function(p) { return textoNormalizado.indexOf(p) >= 0; });
+}
+
+// Fragmento de observaciones (texto original, no normalizado) alrededor de
+// la primera palabra distintiva encontrada — solo para mostrarlo en el
+// resumen del caso como trazabilidad; no participa en ninguna validacion.
+// Aproximado: por el normalize/strip de acentos el indice puede desviarse
+// unos caracteres en textos con tildes, aceptable para un fragmento de
+// referencia visual.
+function _fragmentoRespaldoHallazgo(h, textoOriginal) {
+  if (!h || !textoOriginal) return '';
+  var textoNorm = _normalizarParaMatch(textoOriginal);
+  var palabras = _palabrasDistintivasHallazgo(h.hallazgo);
+  for (var i = 0; i < palabras.length; i++) {
+    var idx = textoNorm.indexOf(palabras[i]);
+    if (idx >= 0) {
+      var inicio = Math.max(0, idx - 40);
+      var fin = Math.min(textoOriginal.length, idx + palabras[i].length + 40);
+      return (inicio > 0 ? '…' : '') + textoOriginal.substring(inicio, fin).trim() + (fin < textoOriginal.length ? '…' : '');
+    }
+  }
+  return '';
 }
 
 // Quita los codigos tipo "A2"/"C.2"/"D11" de fundamento_normativo antes de
@@ -1672,6 +1739,23 @@ async function sugerirHallazgosDesdeObs() {
       return _hallazgoTieneRespaldoTextual(_hallazgoPorClave(c, catalogo), textoNormalizado);
     });
 
+    // Señales estructuradas (licencia/POT) — sin nueva llamada IA. Estos
+    // datos ya se capturaron de forma confiable en otro punto del flujo
+    // (seccion de licencia de la visita, cruce POT por GPS), asi que sirven
+    // de segunda fuente de recall ademas del texto libre: si la señal
+    // estructurada aplica Y el texto tambien respalda el hallazgo (mismo
+    // filtro _hallazgoTieneRespaldoTextual, nunca se relaja), se agrega
+    // aunque la IA no lo haya sugerido. Nunca agrega nada sin respaldo
+    // textual — no es un motor de reglas paralelo, es una señal mas para
+    // el mismo filtro.
+    var senales = _senalesEstructuradas();
+    catalogoCandidato.forEach(function(h) {
+      if (sugeridas.indexOf(h.clave_api) >= 0 || yaConfirmadas[h.clave_api]) return;
+      var aplicaSenal = (senales.sinLicencia && _numeralCatalogoACodigo(h.numeral_art135) === 'A4')
+        || (senales.sueloProtegido && _numeralCatalogoACodigo(h.numeral_art135) === 'A1');
+      if (aplicaSenal && _hallazgoTieneRespaldoTextual(h, textoNormalizado)) sugeridas.push(h.clave_api);
+    });
+
     var preguntasNuevas = (Array.isArray(ia.json.preguntas) ? ia.json.preguntas : [])
       .filter(function(p) { return (p || '').toString().trim(); })
       .slice(0, 3);
@@ -1736,8 +1820,15 @@ function _rechazarChipSugeridoCatalogo(clave) {
 }
 
 function _confirmarChipsSugeridosCatalogo() {
+  var catalogo = CATALOGO_HALLAZGOS || [];
   HALLAZGOS_PENDIENTES_SUGERIDOS.forEach(function(c) {
     if (HALLAZGOS_CONFIRMADOS.indexOf(c) < 0) HALLAZGOS_CONFIRMADOS.push(c);
+    // Sincroniza con el checklist de comportamientos Art.135: hoy son dos
+    // fuentes de verdad separadas y validarInformeIA solo acepta citas de
+    // .comp-ac, asi que confirmar un hallazgo del catalogo debe reflejarse
+    // ahi tambien o la conclusion que lo cite sera rechazada.
+    var h = _hallazgoPorClave(c, catalogo);
+    if (h) _marcarComportamientoPorCodigo(_numeralCatalogoACodigo(h.numeral_art135));
   });
   HALLAZGOS_PENDIENTES_SUGERIDOS = [];
   var box = document.getElementById('hallazgos-sugerencia-catalogo');
@@ -1803,17 +1894,55 @@ function _actualizarRespuestaPreguntaClarificacion(idx, valor) {
   _guardarHallazgosConfirmados();
 }
 
+// Chequeo de consistencia (defensa adicional, mismo patron que
+// validarInformeIA): un hallazgo A4 (obra sin licencia) confirmado mientras
+// la visita SI tiene licencia aportada es una contradiccion probable — solo
+// advierte, nunca bloquea ni desconfirma nada (el inspector puede tener
+// contexto que el campo estructurado no captura, ej. exceso sobre lo
+// aprobado).
+function _hallazgoInconsistente(h) {
+  if (!h || _numeralCatalogoACodigo(h.numeral_art135) !== 'A4') return false;
+  var sinLicEl = document.getElementById('sinLic');
+  return sinLicEl ? !sinLicEl.checked : false;
+}
+
+// Etiqueta cualitativa de confianza, NO un porcentaje inventado: cuenta
+// cuantas señales independientes coinciden (fuerza del respaldo textual +
+// señal estructurada licencia/POT), y baja a "Baja" si hay contradiccion.
+// Mismo principio que "Alta"/"Aproximada" ya usado para precision de
+// ubicacion — una señal honesta de cuantas fuentes concuerdan, no una
+// probabilidad calibrada.
+function _confianzaHallazgo(h, textoNormalizado, senales) {
+  if (!h) return 'Baja';
+  if (_hallazgoInconsistente(h)) return 'Baja';
+  var palabras = _palabrasDistintivasHallazgo(h.hallazgo);
+  var coincidencias = palabras.filter(function(p) { return textoNormalizado.indexOf(p) >= 0; }).length;
+  var codigo = _numeralCatalogoACodigo(h.numeral_art135);
+  var senalEstructural = (senales.sinLicencia && codigo === 'A4') || (senales.sueloProtegido && codigo === 'A1');
+  var puntos = (coincidencias >= 2 ? 2 : (coincidencias >= 1 ? 1 : 0)) + (senalEstructural ? 1 : 0);
+  if (puntos >= 3) return 'Alta';
+  if (puntos >= 1) return 'Media';
+  return 'Baja';
+}
+
 function _renderChipsConfirmadosCatalogo() {
   var box = document.getElementById('hallazgos-confirmados-catalogo');
   if (!box) return;
   if (!HALLAZGOS_CONFIRMADOS.length) { box.innerHTML = ''; return; }
   cargarCatalogoHallazgos().then(function(catalogo) {
+    var textoNormalizado = _normalizarParaMatch(gv('obs'));
+    var senales = _senalesEstructuradas();
     var chips = HALLAZGOS_CONFIRMADOS.map(function(clave) {
       var h = _hallazgoPorClave(clave, catalogo);
       var label = (h ? h.hallazgo : clave).toString().replace(/</g, '&lt;');
-      return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--verde-dark);color:#fff;'
+      var inconsistente = _hallazgoInconsistente(h);
+      var confianza = _confianzaHallazgo(h, textoNormalizado, senales);
+      var bg = inconsistente ? 'var(--naranja, #b45309)' : 'var(--verde-dark)';
+      var titulo = inconsistente ? ' title="Hay licencia aportada en esta visita — confirme que este hallazgo aplica igual"' : '';
+      return '<span' + titulo + ' style="display:inline-flex;align-items:center;gap:6px;background:' + bg + ';color:#fff;'
         + 'border-radius:14px;padding:4px 10px;font-size:12px;margin:0 6px 6px 0">'
-        + label
+        + (inconsistente ? '⚠ ' : '') + label
+        + ' <span style="opacity:.8;font-size:10px">· ' + confianza + '</span>'
         + ' <button type="button" onclick="_quitarHallazgoConfirmadoCatalogo(\'' + clave.replace(/'/g, "\\'") + '\')" '
         + 'style="border:none;background:none;cursor:pointer;color:#fff;font-weight:bold">×</button></span>';
     }).join('');
@@ -2117,11 +2246,21 @@ function buildRes() {
   // dejo de leer los checkboxes .hallazgo — este resumen tambien debe
   // reflejarlos, no solo el bloque legado de arriba.
   if (HALLAZGOS_CONFIRMADOS.length) {
-    var labelsHallazgosCatalogo = HALLAZGOS_CONFIRMADOS.map(function(clave) {
+    // Trazabilidad ligera: junto a cada hallazgo, el fragmento de
+    // observaciones que lo respalda (mismo dato que ya calcula
+    // _hallazgoTieneRespaldoTextual para filtrar sugerencias — aqui se
+    // conserva y se muestra en vez de descartarse, para que el inspector
+    // pueda auditar de un vistazo por que se sugirio cada uno).
+    var textoObsOriginal = gv('obs');
+    var itemsHallazgosCatalogo = HALLAZGOS_CONFIRMADOS.map(function(clave) {
       var hc = _hallazgoPorClave(clave, CATALOGO_HALLAZGOS || []);
-      return hc ? hc.hallazgo : clave;
-    });
-    h += bloque('Hallazgos del catalogo (' + labelsHallazgosCatalogo.length + ')', chips(labelsHallazgosCatalogo));
+      var label = escapeHtml(hc ? hc.hallazgo : clave);
+      var fragmento = _fragmentoRespaldoHallazgo(hc, textoObsOriginal);
+      return '<div style="margin-top:6px;font-size:12px">' + label
+        + (fragmento ? '<div style="color:var(--texto-3);font-size:11px;font-style:italic">"' + escapeHtml(fragmento) + '"</div>' : '')
+        + '</div>';
+    }).join('');
+    h += bloque('Hallazgos del catalogo (' + HALLAZGOS_CONFIRMADOS.length + ')', itemsHallazgosCatalogo);
   }
 
   // ── Comportamientos Art. 135 ──────────────────────────────

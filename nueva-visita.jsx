@@ -1369,7 +1369,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       if (raw) {
         const obj = JSON.parse(raw);
         if (obj && obj._d) {
-          setD(function(prev) { return Object.assign({}, prev, obj._d); });
+          // Los borradores escritos antes del fix de `_dServidor` todavía
+          // contienen `ultimaModConocida`; restaurarlo pisaría el timestamp
+          // fresco de BD y provocaría un conflicto falso al guardar. Se
+          // descarta aquí para que los borradores viejos no sigan fallando.
+          const _dRestaurado = Object.assign({}, obj._d);
+          delete _dRestaurado.ultimaModConocida;
+          setD(function(prev) { return Object.assign({}, prev, _dRestaurado); });
           if (typeof obj._barrioOtro === 'string') setBarrioOtro(obj._barrioOtro);
           // Restaurar clientId para que un reload tras encolar offline siga
           // produciendo el mismo id y AS deduplique al reintentar.
@@ -1394,8 +1400,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         // ids de carpeta, links de acta/informe). Esos vienen de BD y se
         // re-derivan al reabrir; persistirlos en otra pestaña podría pisar
         // los del flujo legítimo si dos dispositivos editan la misma fila.
+        // `ultimaModConocida` (AP2) es el timestamp que BD tenía al abrir la
+        // visita. Persistirlo en el borrador hacía que al reabrir se enviara
+        // un timestamp viejo y el backend rechazara el guardado con un
+        // conflicto falso ("Otra persona guardó cambios...") sin que nadie
+        // más hubiera tocado la fila. Siempre debe venir fresco de BD.
         const _dServidor = ['linkDrive', 'idCarpetaVisita', 'idCarpetaFotos',
-                            'linkXlsxActa', 'linkPdfActa'];
+                            'linkXlsxActa', 'linkPdfActa', 'ultimaModConocida'];
         const _dSafe = {};
         Object.keys(d).forEach(function(k){
           if (_dServidor.indexOf(k) < 0) _dSafe[k] = d[k];
@@ -3246,7 +3257,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             window.abrirInformeF43({
               fila: filaEditando,
               idCarpeta: d.idCarpetaVisita,
-              radicado: d.radicado,
+              // Oficio: el radicado no vive en el state, se deriva de la orden
+              // (mismo criterio que _construirPayload y _construirDatosF46).
+              // Sin esta derivación, abrirInformeF43 recibe '' y aborta con
+              // "faltan params obligatorios" en toda visita de oficio.
+              radicado: d.esOficio ? ('OFICIO-' + d.orden) : d.radicado,
               fechaVisita: d.fechaVisita,
               direccion: d.direccion,
               barrio: d.barrio,

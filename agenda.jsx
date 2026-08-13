@@ -142,7 +142,7 @@ function AgendaScreen({ usuario }) {
 function ItemsLista({ items, busyFila, onCompletar, onDesasignar }) {
   if (!items.length) {
     return (
-      <div className="card" style={{ textAlign: 'center', color: 'var(--texto-suave)', padding: 24, fontSize: 13 }}>
+      <div className="card agenda-empty">
         Sin visitas asignadas en esta jornada.
       </div>
     );

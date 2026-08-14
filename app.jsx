@@ -640,5 +640,38 @@ function BottomTab({ pantalla, setPantalla, k, label, Icono }) {
   );
 }
 
+// ── Error Boundary: red de seguridad ante errores no capturados en render ──
+// Sin esto, un throw en cualquier componente deja la pantalla en blanco sin
+// forma de recuperarse salvo recargar manualmente a ciegas.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary]', error, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="pantalla activa" style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', minHeight: '100vh', padding: 24, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Algo salió mal</div>
+          <div style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 16, maxWidth: 320 }}>
+            La aplicación encontró un error inesperado. Recarga la página; si persiste, avisa al soporte.
+          </div>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Recargar</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Montar
-ReactDOM.createRoot(document.getElementById('root')).render(<AppV6 />);
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><AppV6 /></ErrorBoundary>);

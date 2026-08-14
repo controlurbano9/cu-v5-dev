@@ -38,7 +38,14 @@ function parsearFecha(valor) {
   if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
   var s = String(valor).trim().split(' · ')[0].trim();
   var m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
-  if (m1) return new Date(+m1[3], +m1[2] - 1, +m1[1]);
+  if (m1) {
+    var dd = +m1[1], mm = +m1[2], aa = +m1[3];
+    var dt1 = new Date(aa, mm - 1, dd);
+    // new Date() normaliza desbordes (31/02 → 3 de marzo) en vez de fallar;
+    // si el resultado no coincide con lo pedido, la fecha no era real.
+    if (dt1.getFullYear() !== aa || dt1.getMonth() !== mm - 1 || dt1.getDate() !== dd) return null;
+    return dt1;
+  }
   var m2 = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m2) return new Date(+m2[1], +m2[2] - 1, +m2[3]);
   var d = new Date(s);

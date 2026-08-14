@@ -519,6 +519,7 @@ function _Seccion({ titulo, color, children }) {
 }
 
 function _Campo({ label, children, hint, fullWidth }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: el linter espera mayúscula inicial, `_Campo` es la convención de este archivo (CLAUDE.md)
   const autoId = React.useId();
   const esUnicoElemento = React.Children.count(children) === 1 && React.isValidElement(children);
   const inputId = esUnicoElemento ? (children.props.id || autoId) : null;
@@ -596,6 +597,7 @@ function _Radio({ value, onChange, opciones }) {
 function _ChipsMulti({ opciones, value, onChange, separador, otroLabel }) {
   const sep = separador || ' · ';
   // Parsear SIN trim para preservar espacios durante la escritura del campo "Otro"
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_ChipsMulti`, convención guion bajo del archivo
   const partes = useMemoNV(() => {
     if (!value) return [];
     return value.split(sep).filter(Boolean);
@@ -661,6 +663,7 @@ function _ChipsMulti({ opciones, value, onChange, separador, otroLabel }) {
 // ── Chips contravención (multi-select por grupos de literal) ──
 function _ChipsContravencion({ value, onChange }) {
   const sep = ' | ';
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_ChipsContravencion`, convención guion bajo del archivo
   const seleccionados = useMemoNV(() => {
     if (!value) return [];
     return value.split(sep).map(s => s.trim()).filter(Boolean);
@@ -788,11 +791,15 @@ function _BtnAccion({ children, onClick, busy, ...rest }) {
 // Mapa Google Maps con pin arrastrable para corregir coordenadas.
 // Sin coordenadas muestra vista general de Bello; con coords, zoom 18 + pin.
 function _MapaGPS({ lat, lon, onMove }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_MapaGPS`, convención guion bajo del archivo (3 refs seguidas)
   const mapRef = React.useRef(null);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const gMapRef = React.useRef(null);
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const markerRef = React.useRef(null);
   const tieneCoords = lat != null && lon != null;
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffectNV(() => {
     if (!mapRef.current || typeof google === 'undefined' || !google.maps) return;
     const pos = tieneCoords
@@ -832,6 +839,7 @@ function _MapaGPS({ lat, lon, onMove }) {
 
   // Limpieza de listeners al desmontar (mapa/marker persisten toda la vida
   // del componente, se crean una sola vez arriba — solo falta esto al final).
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_MapaGPS`
   useEffectNV(() => {
     return () => {
       if (markerRef.current) google.maps.event.clearInstanceListeners(markerRef.current);
@@ -855,6 +863,7 @@ function _MapaGPS({ lat, lon, onMove }) {
 // Tarjeta de ficha catastral con datos completos. Click → onSeleccionar.
 // Reutilizable entre Nueva visita y Consulta de norma.
 function _TarjetaFichaCatastral({ r, onSeleccionar, expandida }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_TarjetaFichaCatastral`, convención guion bajo del archivo
   const [abierta, setAbierta] = useStateNV(!!expandida);
   const titular = r.propietario || '—';
   return (
@@ -920,11 +929,13 @@ window._TarjetaFichaCatastral = _TarjetaFichaCatastral;
 // Lista filtrable de fichas catastrales. Reutilizada en Nueva visita y Norma.
 // Si hay >10 fichas, muestra input para filtrar por ficha, dirección o titular.
 function _ListaFichasCatastrales({ fichas, onSeleccionar, maxAlto }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_ListaFichasCatastrales`, convención guion bajo del archivo
   const [filtro, setFiltro] = useStateNV('');
   // Ordenar por prioridad descendente:
   //   1) fichas con matrícula inmobiliaria (más útiles para el inspector)
   //   2) predios municipales (Municipio de Bello)
   //   3) orden original (estable)
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_ListaFichasCatastrales`
   const fichasOrdenadas = React.useMemo(() => {
     const lista = (fichas || []).map((r, i) => ({ r, i }));
     lista.sort((a, b) => {
@@ -1396,10 +1407,26 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const _lastSavedRef  = React.useRef('');     // JSON del último estado persistido OK
   const _restauradoRef = React.useRef(false);
   const _prevDraftKeyRef = React.useRef(null); // clave bajo la que se hizo el último setItem
+  // QW25: refs para que el useEffect del autoguardado remoto no dependa de
+  // estos flags — cambian seguido (cada guardado manual/acta/RF) y antes
+  // reiniciaban el setInterval de 60s en cada toggle.
+  const _guardandoRef      = React.useRef(guardando);
+  const _generandoActaRef  = React.useRef(generandoActa);
+  const _generandoRFRef    = React.useRef(generandoRF);
   React.useEffect(function() {
     _dRef.current     = d;
     _bOtroRef.current = barrioOtro;
-  }, [d, barrioOtro]);
+    _guardandoRef.current     = guardando;
+    _generandoActaRef.current = generandoActa;
+    _generandoRFRef.current   = generandoRF;
+  }, [d, barrioOtro, guardando, generandoActa, generandoRF]);
+
+  // Compartido entre beforeunload y el botón "Volver" (QW3) — misma
+  // definición de "sucio" en los dos sitios.
+  function _hayCambiosSinGuardar() {
+    const snap = JSON.stringify({ d: _dRef.current, b: _bOtroRef.current });
+    return snap !== _lastSavedRef.current;
+  }
 
   const [ultimoGuardadoMs, setUltimoGuardadoMs] = useStateNV(null);
 
@@ -1475,7 +1502,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     if (fase !== 'formulario') return;
     if (!filaEditando) return;
     const id = setInterval(async function() {
-      if (guardando || generandoActa || generandoRF) return;
+      if (_guardandoRef.current || _generandoActaRef.current || _generandoRFRef.current) return;
       const snap = JSON.stringify({ d: _dRef.current, b: _bOtroRef.current });
       if (snap === _lastSavedRef.current) return; // sin cambios
       try {
@@ -1493,14 +1520,13 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       }
     }, 60000);
     return function() { clearInterval(id); };
-  }, [fase, filaEditando, estadoVisita, datosIniciales, guardando, generandoActa, generandoRF]);
+  }, [fase, filaEditando, estadoVisita, datosIniciales]);
 
   // (4) beforeunload — advertir si hay cambios pendientes.
   React.useEffect(function() {
     function _bu(e) {
       if (fase !== 'formulario') return;
-      const snap = JSON.stringify({ d: _dRef.current, b: _bOtroRef.current });
-      if (snap === _lastSavedRef.current) return; // limpio
+      if (!_hayCambiosSinGuardar()) return; // limpio
       e.preventDefault();
       e.returnValue = '';
       return '';
@@ -2353,6 +2379,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       );
       return;
     }
+    const ok = await appConfirm(
+      'Se reemplazará el acta F-GGO-46 ya generada por una nueva versión.',
+      { titulo: 'Regenerar acta', btnOk: 'Regenerar' }
+    );
+    if (!ok) return;
     await _ejecutarGenerarActa(true);
   }
 
@@ -2366,6 +2397,15 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       if (link) {
         setCampo('linkXlsxActa', link);
         if (r.linkPdf) setCampo('linkPdfActa', r.linkPdf);
+        // Persistir en BD (columnas LINK_XLSX_ACTA/LINK_PDF_ACTA) para que el
+        // botón "Acta" siga apareciendo al reabrir la visita. Best-effort: si
+        // falla, el acta ya está en Drive y el link quedó en el state local.
+        gasPost({
+          accion: 'actualizarLinks',
+          fila: filaEditando,
+          linkXlsxActa: link,
+          linkPdfActa: r.linkPdf || d.linkPdfActa || '',
+        }).catch(e => console.warn('[actualizarLinks] no se pudo persistir en BD:', e.message));
         await appAlert(
           (regenerar
             ? 'Acta regenerada correctamente.'
@@ -2486,6 +2526,17 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
 
   const tieneInfoSticky = d.direccion || d.radicado || d.esOficio;
 
+  async function _confirmarVolver() {
+    if (_hayCambiosSinGuardar()) {
+      const ok = await appConfirm(
+        'Hay cambios sin guardar. Si vuelves ahora se perderán.',
+        { titulo: 'Salir sin guardar', btnOk: 'Salir sin guardar' }
+      );
+      if (!ok) return;
+    }
+    onSalir();
+  }
+
   return (
     <div className="pantalla activa pad-bottom">
       {/* Header unificado (NO sticky) — título + Volver + info radicado/dirección/N° visita */}
@@ -2499,7 +2550,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         }}>
           <div className="page-title" style={{ margin: 0 }}>{tituloPantalla}</div>
           {onSalir && (
-            <button onClick={onSalir} style={{
+            <button onClick={_confirmarVolver} style={{
               background: 'var(--gris-bg)', border: '1px solid var(--borde)', borderRadius: 8,
               padding: '6px 14px', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer',
             }}>&#8592; Volver</button>

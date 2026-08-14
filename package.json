@@ -5,9 +5,12 @@
   "description": "Control Urbano V6 — bundle con esbuild",
   "scripts": {
     "build": "node build.js",
-    "test": "node --test tests/utils.test.js"
+    "test": "node --test tests/utils.test.js",
+    "lint": "eslint ."
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "eslint": "^10.8.1",
+    "eslint-plugin-react-hooks": "^7.1.1"
   }
 }

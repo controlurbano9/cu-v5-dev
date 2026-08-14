@@ -163,7 +163,7 @@ async function listarUsuariosAdmin() {
 }
 
 async function toggleActivo(fila, nuevoEstado) {
-  const r = await gasGet({ accion: 'toggleActivo', fila, estado: nuevoEstado });
+  const r = await gasPost({ accion: 'toggleActivo', fila, estado: nuevoEstado });
   // Activar/desactivar cambia la lista pública de inspectores: invalidamos.
   invalidarCache('inspectores');
   return r;
@@ -172,7 +172,7 @@ async function toggleActivo(fila, nuevoEstado) {
 async function resetPin(fila, pin) {
   const pinHash = await hashPin(pin);
   // No invalida visitas ni inspectores — el cambio de PIN no afecta sus listas.
-  return gasGet({ accion: 'resetPin', fila, hash: pinHash });
+  return gasPost({ accion: 'resetPin', fila, hash: pinHash });
 }
 
 async function registrarLog(usuario, texto) {

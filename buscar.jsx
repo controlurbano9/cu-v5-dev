@@ -86,7 +86,7 @@ function BuscarScreen({ usuario, onContinuar }) {
   const adminAsignar = useCallbackB(async (fila, inspector) => {
     setBusyFila(fila);
     try {
-      await gasGet({
+      await gasPost({
         accion: 'asignarRadicado', fila, inspector,
         fechaAsignacion: hoyDDMMAAAA(),
       });
@@ -103,7 +103,7 @@ function BuscarScreen({ usuario, onContinuar }) {
   const adminAsignarNuevaVisita = useCallbackB(async (filaOrigen, inspector) => {
     setBusyFila(filaOrigen);
     try {
-      const r = await gasGet({
+      const r = await gasPost({
         accion: 'crearNuevaVisitaAsignada',
         fila: filaOrigen, inspector,
       });
@@ -125,7 +125,7 @@ function BuscarScreen({ usuario, onContinuar }) {
     if (!ok) return;
     setBusyFila(fila);
     try {
-      await gasGet({ accion: 'desasignarRadicado', fila });
+      await gasPost({ accion: 'desasignarRadicado', fila });
       invalidarCache('visitas');
       await cargar(true);
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
@@ -181,7 +181,7 @@ function BuscarScreen({ usuario, onContinuar }) {
     setBusyFila(fila);
     try {
       const dias = fechaAsig ? diasDesde(fechaAsig) : '';
-      await gasGet({
+      await gasPost({
         accion: 'completarRegistro', fila,
         dias: dias || '',
         fecha: hoyDDMMAAAA(),

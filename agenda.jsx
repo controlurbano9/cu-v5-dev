@@ -43,13 +43,47 @@ function AgendaScreen({ usuario }) {
   }
 
   async function completar(item) {
+    // Paridad con buscar.jsx: SUSPENSION=SI + orden de policía + sin oficio
+    // generado aún → ofrecer generarlo antes de completar.
+    if (item.requiereVigilancia) {
+      const generar = await appConfirm(
+        'Esta visita tiene orden de suspensión preventiva y aún no se ha generado el oficio de Vigilancia Policía.\n\n¿Generar el oficio antes de completar?',
+        { titulo: 'Solicitud de vigilancia pendiente', btnOk: 'Generar oficio', btnCancel: 'Completar sin oficio' }
+      );
+      if (generar) {
+        setBusyFila(item.fila);
+        try {
+          const idCarpeta = extraerIdCarpetaDrive(item.linkDrive || '');
+          if (!idCarpeta) {
+            await appAlert('La visita no tiene carpeta de Drive asociada.', { titulo: 'Sin carpeta' });
+            setBusyFila(null);
+            return;
+          }
+          await generarSolicitudVigilancia({
+            fila: item.fila,
+            idCarpetaVisita: idCarpeta,
+            radicado:      item.radicado || '',
+            fechaVisita:   item.fechaVisita || '',
+            nOrdenPolicia: item.ordenPolicia || '',
+            direccion:     item.direccion || '',
+            barrio:        item.barrio || '',
+          });
+        } catch (e) {
+          await appAlert('Error generando oficio: ' + e.message + '\n\nLa visita NO se marcó como completada.', { titulo: 'Error' });
+          setBusyFila(null);
+          return;
+        }
+        setBusyFila(null);
+      }
+    }
+
     const ok = await appConfirm('¿Marcar como COMPLETADO?', {
       titulo: 'Completar visita', btnOk: 'Completar',
     });
     if (!ok) return;
     setBusyFila(item.fila);
     try {
-      await gasGet({
+      await gasPost({
         accion: 'completarRegistro',
         fila: item.fila,
         dias: _calcularDias(item.fechaAsignacion),
@@ -69,7 +103,7 @@ function AgendaScreen({ usuario }) {
     if (!ok) return;
     setBusyFila(item.fila);
     try {
-      await gasGet({ accion: 'desasignarRadicado', fila: item.fila });
+      await gasPost({ accion: 'desasignarRadicado', fila: item.fila });
       invalidarCache('visitas');
       await cargar();
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
@@ -120,15 +154,15 @@ function AgendaScreen({ usuario }) {
         <>
           <div className="agenda-tabs">
             <button className={'agenda-tab' + (tab === 'manana' ? ' activo' : '')} onClick={() => setTab('manana')}>
-              Mañana {data.manana && `(${data.manana.length})`}
+              Mañana {data.jornadas && `(${data.jornadas.manana.visitas.length})`}
             </button>
             <button className={'agenda-tab' + (tab === 'tarde' ? ' activo' : '')} onClick={() => setTab('tarde')}>
-              Tarde {data.tarde && `(${data.tarde.length})`}
+              Tarde {data.jornadas && `(${data.jornadas.tarde.visitas.length})`}
             </button>
           </div>
 
           <ItemsLista
-            items={tab === 'manana' ? (data.manana || []) : (data.tarde || [])}
+            items={tab === 'manana' ? (data.jornadas?.manana.visitas || []) : (data.jornadas?.tarde.visitas || [])}
             busyFila={busyFila}
             onCompletar={completar}
             onDesasignar={desasignar}

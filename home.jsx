@@ -6,6 +6,9 @@
 // ═══════════════════════════════════════════════════════════════
 const { useState: useStateH, useEffect: useEffectH, useMemo: useMemoH } = React;
 
+// Término legal de respuesta a derechos de petición (PQR), Ley 1755/2015 (CPACA): 15 días hábiles.
+const PQR_PLAZO_DIAS_HABILES = 15;
+
 function HomeScreen({ usuario, onNueva, onContinuar }) {
   const [datos, setDatos] = useStateH([]);
   const [cargando, setCargando] = useStateH(true);
@@ -74,18 +77,43 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
 
     datos.forEach(f => {
       const e = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-      if (e !== 'INICIADO') return;
 
-      // Filtro por rol: inspector solo ve las suyas
-      // Regla diligenciador: en INICIADO, solo el primero en VISITADOR(ES)
-      // recibe las alertas. No tiene sentido alertar al co-asignado de
-      // tareas que él no diligenció — su responsable es el otro.
+      // Filtro por rol (regla diligenciador, ver CLAUDE.md):
+      //  PENDIENTE/ASIGNADO → cualquier co-asignado ve la alerta.
+      //  INICIADO/COMPLETADO → solo el primero en VISITADOR(ES).
       if (!esAdmin) {
         const vis = visitadoresBD(f).toUpperCase();
         if (!vis.includes(miNombre)) return;
-        const principal = primerVisitador(vis);
-        if (principal !== miNombre) return;
+        if (e === 'INICIADO' || e === 'COMPLETADO') {
+          const principal = primerVisitador(vis);
+          if (principal !== miNombre) return;
+        }
       }
+
+      // Alerta roja: PQR cerca de vencer o vencida (término legal 15 días
+      // hábiles desde FECHA RADICADO). Aplica en cualquier estado salvo
+      // COMPLETADO — ya se respondió.
+      const esPQR = String(f['ATENCION PQR'] || '').trim().toUpperCase() === 'SI';
+      if (esPQR && e !== 'COMPLETADO') {
+        const dRad = parsearFecha(f['FECHA RADICADO'] || '');
+        if (dRad) {
+          const diasTranscurridos = -diasHabilesHasta(dRad); // fecha pasada → negativo; invertir a conteo positivo
+          const diasRestantes = PQR_PLAZO_DIAS_HABILES - diasTranscurridos;
+          if (diasRestantes <= 3) {
+            const vencida = diasRestantes <= 0;
+            const n = Math.abs(diasRestantes);
+            rojas.push({
+              f: f,
+              mensaje: vencida
+                ? 'PQR vencida hace ' + n + ' día' + (n === 1 ? '' : 's') + ' hábil' + (n === 1 ? '' : 'es') + ' (plazo legal 15 días)'
+                : 'PQR vence en ' + n + ' día' + (n === 1 ? '' : 's') + ' hábil' + (n === 1 ? '' : 'es') + ' (plazo legal)',
+              diasH: diasRestantes,
+            });
+          }
+        }
+      }
+
+      if (e !== 'INICIADO') return;
 
       // Alerta roja: audiencia/citación en ≤3 días hábiles
       const fechaCit = f['FECHA CITACION'] || '';

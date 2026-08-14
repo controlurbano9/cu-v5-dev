@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- QW32 (auditoría 2026-07): CSP básica — restringe scripts/estilos/conexiones a los
+     CDNs realmente usados (docx.js/jsdelivr, Google Maps Static API, Drive thumbnails,
+     Google Fonts, webhook Apps Script). 'unsafe-inline' en script-src es necesario por
+     el <script> inline con la lógica del generador (no está modularizado). -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com;
+  img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://drive.google.com;
+  connect-src 'self' https://script.google.com;
+  frame-src 'self';
+  object-src 'none';
+  base-uri 'self';
+">
 <title>Control Urbano · Generador F-GGO-43</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3070,24 +3085,35 @@ async function renderDocx(tglobal) {
   var tarjetasFoto = Array.from(document.querySelectorAll('#fotos-list > div[id^="foto-"]'));
   var fotosBin = [];
   if (tarjetasFoto.length > 0) {
-    var pulls = tarjetasFoto.map(function(tj) {
-      var fidEl  = document.getElementById('fid-'  + tj.id);
-      var descEl = document.getElementById('desc-' + tj.id);
-      var fid    = fidEl  ? fidEl.value  : '';
-      var desc   = descEl ? descEl.value : '';
-      if (!fid) return Promise.resolve(null);
-      return fetch(WH + '?' + _qsConSesion({ accion: 'obtenerFotoBase64', fileId: fid }).toString())
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          if (!d.ok || !d.base64) return null;
+    // Throttle a 3 descargas simultaneas — mismo MAX_CONC que describirFotosConIA()
+    // de este archivo y el worker de abrirModalFotos() en nueva-visita.jsx.
+    // Antes disparaba un fetch por foto sin límite (Promise.all directo).
+    var resPulls = new Array(tarjetasFoto.length).fill(null);
+    var MAX_CONC_DESCARGA = 3;
+    var nextDescarga = 0;
+    async function workerDescarga() {
+      while (true) {
+        var idx = nextDescarga++;
+        if (idx >= tarjetasFoto.length) return;
+        var tj     = tarjetasFoto[idx];
+        var fidEl  = document.getElementById('fid-'  + tj.id);
+        var descEl = document.getElementById('desc-' + tj.id);
+        var fid    = fidEl  ? fidEl.value  : '';
+        var desc   = descEl ? descEl.value : '';
+        if (!fid) continue;
+        try {
+          var r = await fetch(WH + '?' + _qsConSesion({ accion: 'obtenerFotoBase64', fileId: fid }).toString());
+          var d = await r.json();
+          if (!d.ok || !d.base64) continue;
           var bytes = _b64ToBytes(d.base64);
-          return _dimsFromBytes(bytes, d.mime).then(function(dims) {
-            return { bytes: bytes, desc: desc, w: dims.w, h: dims.h };
-          });
-        })
-        .catch(function() { return null; });
-    });
-    var resPulls = await Promise.all(pulls);
+          var dims  = await _dimsFromBytes(bytes, d.mime);
+          resPulls[idx] = { bytes: bytes, desc: desc, w: dims.w, h: dims.h };
+        } catch (e) { /* foto descartada, no aborta el resto */ }
+      }
+    }
+    var workersDescarga = [];
+    for (var wd = 0; wd < MAX_CONC_DESCARGA; wd++) workersDescarga.push(workerDescarga());
+    await Promise.all(workersDescarga);
     fotosBin = resPulls.filter(function(x) { return x !== null; });
   }
   var fotoChildren = [];

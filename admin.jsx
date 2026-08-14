@@ -261,6 +261,7 @@ function TabResetPin() {
   const [usuarios, setUsuarios] = useStateA([]);
   const [sel, setSel]   = useStateA('');
   const [pin, setPin]   = useStateA('');
+  const [pin2, setPin2] = useStateA('');
   const [msg, setMsg]   = useStateA(null);
   const [busy, setBusy] = useStateA(false);
   const [error, setError] = useStateA('');
@@ -274,13 +275,19 @@ function TabResetPin() {
     setMsg(null);
     if (!sel) { setMsg({ t: 'error', m: 'Selecciona un usuario' }); return; }
     if (!/^\d{4}$/.test(pin)) { setMsg({ t: 'error', m: 'PIN debe ser 4 dígitos' }); return; }
+    if (pin !== pin2) { setMsg({ t: 'error', m: 'Los dos PIN no coinciden' }); return; }
+    const u = usuarios.find(x => x.fila === parseInt(sel, 10));
+    const ok = await appConfirm(`¿Resetear el PIN de ${u?.nombre}?`, {
+      titulo: 'Resetear PIN', btnOk: 'Resetear',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await resetPin(parseInt(sel, 10), pin);
-      const u = usuarios.find(x => x.fila === parseInt(sel, 10));
       registrarLog(SESSION_V6.leer()?.usuario || '', `PIN reseteado para: ${u?.nombre}`);
       setMsg({ t: 'ok', m: 'PIN actualizado correctamente' });
       setPin('');
+      setPin2('');
     } catch (e) { setMsg({ t: 'error', m: e.message }); }
     setBusy(false);
   }
@@ -299,6 +306,13 @@ function TabResetPin() {
       <label htmlFor="admin-reset-pin-nuevo" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Nuevo PIN (4 dígitos)</label>
       <input id="admin-reset-pin-nuevo" type="password" value={pin} maxLength={4} inputMode="numeric"
         onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+        style={{
+          width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
+          background: 'var(--superficie)', fontFamily: 'var(--font-mono)', fontSize: 16, marginBottom: 12,
+        }} />
+      <label htmlFor="admin-reset-pin-confirmar" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Confirmar PIN</label>
+      <input id="admin-reset-pin-confirmar" type="password" value={pin2} maxLength={4} inputMode="numeric"
+        onChange={e => setPin2(e.target.value.replace(/\D/g, ''))}
         style={{
           width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
           background: 'var(--superficie)', fontFamily: 'var(--font-mono)', fontSize: 16, marginBottom: 12,

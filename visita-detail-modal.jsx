@@ -219,6 +219,7 @@ function VisitaDetailUI({ f, onCerrar }) {
 }
 
 function _DebugRawVD({ f, solo_admin }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_DebugRawVD`, convención guion bajo del archivo
   const [open, setOpen] = useStateVD(false);
   if (!f) return null;
   // Si está marcado solo_admin (default), verificar sesión ADMIN
@@ -266,6 +267,7 @@ function _DebugRawVD({ f, solo_admin }) {
 
 // ── Subcomponentes ──────────────────────────────────────────────
 function _SeccionVD({ titulo, children }) {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- falso positivo: función `_SeccionVD`, convención guion bajo del archivo
   const [open, setOpen] = useStateVD(true);
   return (
     <div style={{ marginBottom: 14, border: '1px solid var(--borde, rgba(31,27,22,0.08))', borderRadius: 10, overflow: 'hidden' }}>

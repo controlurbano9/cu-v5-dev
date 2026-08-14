@@ -8,10 +8,6 @@
 const { useState: useStateG, useEffect: useEffectG } = React;
 
 function AgendaScreen({ usuario }) {
-  if (usuario.rol !== 'ADMIN') {
-    return <div className="card" style={{ margin: 16 }}>Acceso restringido (solo ADMIN).</div>;
-  }
-
   const [data, setData]         = useStateG(null);
   const [tab, setTab]           = useStateG('manana');
   const [cargando, setCargando] = useStateG(true);
@@ -19,6 +15,10 @@ function AgendaScreen({ usuario }) {
   const [busyFila, setBusyFila] = useStateG(null);
 
   useEffectG(() => { cargar(); }, []);
+
+  if (usuario.rol !== 'ADMIN') {
+    return <div className="card" style={{ margin: 16 }}>Acceso restringido (solo ADMIN).</div>;
+  }
 
   async function cargar() {
     setCargando(true); setError('');

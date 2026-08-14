@@ -167,6 +167,8 @@ function ConsultaNormaScreen() {
 
     mapRef.current = map;
     return () => {
+      google.maps.event.clearInstanceListeners(map);
+      if (markerRef.current) google.maps.event.clearInstanceListeners(markerRef.current);
       mapRef.current = null;
       markerRef.current = null;
     };
@@ -338,11 +340,12 @@ function ConsultaNormaScreen() {
 
       {/* Campo unificado: dirección o coordenadas */}
       <div className="card" style={{ marginBottom: 12 }}>
-        <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
+        <label htmlFor="cn-direccion-coordenadas" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>
           Dirección o coordenadas
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
+            id="cn-direccion-coordenadas"
             value={consulta}
             onChange={e => setConsulta(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') buscar(); }}
@@ -369,7 +372,9 @@ function ConsultaNormaScreen() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           opacity: busyGPS ? 0.7 : 1,
         }}>
-          {busyGPS ? '⏳ Capturando ubicación…' : '📍 Capturar mis coordenadas'}
+          {busyGPS
+            ? <><Icon.Clock size={16} /> Capturando ubicación…</>
+            : <><Icon.Pin size={16} /> Capturar mis coordenadas</>}
         </button>
         {/* Precisión solo se muestra tras una captura exitosa */}
         {!busyGPS && gpsAccCN != null && React.createElement('div', {
@@ -414,7 +419,7 @@ function ConsultaNormaScreen() {
           color: 'var(--brand-ink)', fontSize: 13, fontWeight: 600,
           display: 'flex', alignItems: 'flex-start', gap: 8,
         }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+          <Icon.Alert size={18} />
           <div>Predio del <strong>Municipio de Bello</strong></div>
         </div>
       )}

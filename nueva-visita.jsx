@@ -19,7 +19,10 @@ function _hoyDDMMYYYY_nv() {
   return String(d.getDate()).padStart(2, '0') + '/' +
          String(d.getMonth() + 1).padStart(2, '0') + '/' + d.getFullYear();
 }
-function _hoyISO() { return new Date().toISOString().split('T')[0]; }
+function _hoyISO() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
 function _isoAFecha(iso) {
   if (!iso) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -96,17 +99,22 @@ function _formatearOrden(consecutivo, anio) {
   return _ordenPrefijo(anio) + String(n).padStart(3, '0');
 }
 function _extraerConsecutivoOrden(ordenCompleta) {
-  // Extrae el consecutivo numérico de "YYYY-09-XXX" u otro formato
+  // Extrae el consecutivo numérico de "YYYY-09-XXX" u otro formato.
+  // QW14: "-0?9-" tolera formatos legados sin el cero del mes ("YYYY-9-XXX") —
+  // antes esos casos no matcheaban y el fallback devolvía la orden completa,
+  // que luego parseInt() reinterpretaba como si el año fuera el consecutivo.
   if (!ordenCompleta) return '';
-  const m = /(\d{4})-09-(\d+)/.exec(ordenCompleta);
+  const m = /(\d{4})-0?9-(\d+)/.exec(ordenCompleta);
   if (m) return String(parseInt(m[2], 10)); // sin ceros a la izquierda para el input
-  // Fallback: devolver tal cual si no coincide con el patrón
-  return ordenCompleta;
+  // Fallback: formato no reconocido — '' en vez de la orden completa, para
+  // no propagar un valor no numérico a _formatearOrden()/parseInt() más adelante.
+  return '';
 }
 function _extraerAnioOrden(ordenCompleta) {
   // Extrae el año "YYYY" de una orden tipo "YYYY-09-XXX". '' si no aplica.
+  // QW14: mismo ajuste "-0?9-" que _extraerConsecutivoOrden.
   if (!ordenCompleta) return '';
-  const m = /(\d{4})-09-\d+/.exec(ordenCompleta);
+  const m = /(\d{4})-0?9-\d+/.exec(ordenCompleta);
   return m ? m[1] : '';
 }
 
@@ -164,6 +172,25 @@ BARRIOS_POR_COMUNA.forEach(g => {
 // Variante sin tildes para tolerar barrios provenientes del GeoJSON con/sin acentos
 const _BARRIO_A_COMUNA_NORM = {};
 function _quitarTildes(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+// Llama a describirFotoDesdeId y reintenta con backoff (4s, 8s) si el backend
+// marca rateLimited:true (429 de Gemini) — mismo comportamiento que su
+// contraparte en informe/index.html (mantener sincronizados). Sin reintento
+// para otros tipos de fallo: esos no se arreglan esperando.
+async function _describirFotoConReintento(fotoId) {
+  for (let intento = 0; ; intento++) {
+    let resp;
+    try { resp = await describirFotoDesdeId(fotoId); }
+    catch (e) { resp = { ok: false, error: e.message }; }
+    if (resp.ok) return resp.descripcion || 'Sin descripcion';
+    if (resp.rateLimited && intento < 2) {
+      await new Promise(r => setTimeout(r, 4000 * (intento + 1)));
+      continue;
+    }
+    return 'Sin descripcion';
+  }
+}
+
 Object.keys(_BARRIO_A_COMUNA).forEach(k => {
   _BARRIO_A_COMUNA_NORM[_quitarTildes(k).toUpperCase()] = _BARRIO_A_COMUNA[k];
 });
@@ -492,10 +519,16 @@ function _Seccion({ titulo, color, children }) {
 }
 
 function _Campo({ label, children, hint, fullWidth }) {
+  const autoId = React.useId();
+  const esUnicoElemento = React.Children.count(children) === 1 && React.isValidElement(children);
+  const inputId = esUnicoElemento ? (children.props.id || autoId) : null;
+  const child = esUnicoElemento && !children.props.id
+    ? React.cloneElement(children, { id: autoId })
+    : children;
   return (
     <div className={'input-grupo' + (fullWidth ? ' full-width' : '')}>
-      <label className="input-label">{label}</label>
-      {children}
+      <label className="input-label" htmlFor={inputId || undefined}>{label}</label>
+      {child}
       {hint && <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 4 }}>{hint}</div>}
     </div>
   );
@@ -526,7 +559,7 @@ function _Input({ value, onChange, placeholder, type, mono, ...rest }) {
   );
 }
 
-function _TextArea({ value, onChange, placeholder, rows }) {
+function _TextArea({ value, onChange, placeholder, rows, ...rest }) {
   return (
     <textarea
       className="input-campo"
@@ -534,6 +567,7 @@ function _TextArea({ value, onChange, placeholder, rows }) {
       value={value || ''}
       placeholder={placeholder || ''}
       onChange={e => onChange(e.target.value)}
+      {...rest}
     />
   );
 }
@@ -796,6 +830,15 @@ function _MapaGPS({ lat, lon, onMove }) {
     }
   }, [lat, lon]);
 
+  // Limpieza de listeners al desmontar (mapa/marker persisten toda la vida
+  // del componente, se crean una sola vez arriba — solo falta esto al final).
+  useEffectNV(() => {
+    return () => {
+      if (markerRef.current) google.maps.event.clearInstanceListeners(markerRef.current);
+      if (gMapRef.current) google.maps.event.clearInstanceListeners(gMapRef.current);
+    };
+  }, []);
+
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--texto-suave)', marginBottom: 4 }}>
@@ -926,7 +969,7 @@ function _ListaFichasCatastrales({ fichas, onSeleccionar, maxAlto }) {
           </div>
         ) : (
           fichasFiltradas.map((r, i) => (
-            <_TarjetaFichaCatastral key={i} r={r}
+            <_TarjetaFichaCatastral key={r.ficha != null ? String(r.ficha) : i} r={r}
               onSeleccionar={onSeleccionar ? () => onSeleccionar(r) : null} />
           ))
         )}
@@ -1126,7 +1169,7 @@ function ModalInicioVisita({ onResult, onCancelar }) {
             {/* Radicado NO encontrado */}
             {!resultado.encontrado && (
               <>
-                <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 8 }}>🔍</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><Icon.Search size={36} /></div>
                 <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 6 }}>
                   Radicado no encontrado
                 </div>
@@ -1160,8 +1203,8 @@ function ModalInicioVisita({ onResult, onCancelar }) {
 
               return (
                 <>
-                  <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 8 }}>
-                    {esCompletada ? '✅' : esIniciada ? '🔄' : '📋'}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                    {esCompletada ? <Icon.Check size={36} /> : esIniciada ? <Icon.Refresh size={36} /> : '📋'}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', marginBottom: 4 }}>
                     Radicado {radicado}
@@ -1257,6 +1300,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
   const [busyGeo, setBusyGeo]   = useStateNV(false);
   const [gpsAccuracy, setGpsAccuracy] = useStateNV(null); // precisión en metros
   const geoWatchRef = React.useRef(null); // id del watchPosition activo
+  const mejorPosGeoRef = React.useRef(null); // {lat, lon, acc} de la última lectura del watch activo
   const [busyMejora, setBusyMe] = useStateNV(false);
   const [sugerenciaIA, setSugerenciaIA] = useStateNV(''); // texto mejorado pendiente de aceptar
   const [dictando, setDictando] = useStateNV(false);    // grabación por voz activa
@@ -1590,7 +1634,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       }
     })();
     return () => { cancelado = true; };
-  }, [fase, filaEditando, d.linkDrive, d.comuna, d.direccion, d.fechaVisita]);
+  }, [fase, filaEditando, d.linkDrive, d.comuna, d.direccion, d.fechaVisita, estadoVisita, datosIniciales]);
 
   // Recuperar idCarpetaFotos al reabrir una visita ya guardada.
   // La BD solo persiste LINK_DRIVE (carpeta visita); la subcarpeta de Fotos
@@ -1931,13 +1975,21 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
     // Si ya hay un watch corriendo, detenerlo y aceptar lo que haya
     if (geoWatchRef.current != null) {
       // El usuario tocó "✓ Usar esta ubicación" — aceptar coordenadas actuales
+      // (antes solo detenía el watch sin disparar POT/catastro; el auto-accept
+      // a ≤8m y el timeout de 30s sí lo hacían, dejando este camino inconsistente)
+      const mejor = mejorPosGeoRef.current;
       _detenerGeoWatch();
-      setBusyGeo(false);
+      if (mejor && mejor.lat != null) {
+        _aceptarCoordenadas(mejor.lat, mejor.lon, mejor.acc);
+      } else {
+        setBusyGeo(false);
+      }
       return;
     }
     setBusyGeo(true);
     setGpsAccuracy(null);
     var mejorPos = { lat: null, lon: null, acc: Infinity };
+    mejorPosGeoRef.current = null;
     var timeoutId = setTimeout(function() {
       // Timeout 30s: aceptar la mejor lectura o fallar
       if (mejorPos.lat != null) {
@@ -1956,6 +2008,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         // Solo actualizar si esta lectura es mejor que la anterior
         if (acc < mejorPos.acc) {
           mejorPos = { lat: lat, lon: lon, acc: acc };
+          mejorPosGeoRef.current = mejorPos;
           setGpsAccuracy(Math.round(acc));
           // Mostrar coordenadas en tiempo real (sin disparar POT/catastro aún)
           setCampo('lat', lat);
@@ -2035,6 +2088,17 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         } catch (eDrive) {
           // No bloquear el guardado por error en Drive.
           console.warn('crearCarpeta:', eDrive);
+          // QW16: mismo tipo de alerta explícita que ya existe para el camino
+          // offline (r.encolado más abajo) — antes este caso fallaba en
+          // silencio y el inspector solo lo notaba al intentar generar el
+          // acta sin carpeta.
+          await appAlert(
+            'La visita se guardó, pero no se pudo crear la carpeta de Drive ' +
+            '(' + (eDrive && eDrive.message ? eDrive.message : 'error de conexión') + ').\n\n' +
+            'Vuelve a abrir la visita y toca "Actualizar" para reintentar la ' +
+            'creación de la carpeta antes de generar acta o subir fotos.',
+            { titulo: 'Carpeta Drive no creada' }
+          );
         }
       }
 
@@ -2351,7 +2415,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const sesion = _modalFotosSesionRef.current;
       setModalFotos(lista);
       setCargandoFotos(false);
-      // Throttle: hasta 3 descripciones simultaneas (Gemini rate-limit friendly)
+      // Throttle: hasta 3 descripciones simultaneas (Gemini rate-limit friendly).
+      // Mismo comportamiento que describirFotosConIA() en informe/index.html
+      // (mantener sincronizados) — incluye reintento con backoff si el backend
+      // reporta rateLimited:true (429), en vez de darse por vencido de una.
       const MAX_CONC = 3;
       let next = 0;
       async function worker() {
@@ -2359,11 +2426,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
           const idx = next++;
           if (idx >= lista.length) return;
           const fotoId = lista[idx].id;
-          let descripcion = 'Sin descripcion';
-          try {
-            const resp = await describirFotoDesdeId(fotoId);
-            descripcion = resp.descripcion || 'Sin descripcion';
-          } catch (_) { /* dejar default */ }
+          const descripcion = await _describirFotoConReintento(fotoId);
           // Si el modal se cerró o se reabrió con OTRA lista, descartar este resultado.
           if (_modalFotosSesionRef.current !== sesion) return;
           setModalFotos(function(prev) {
@@ -2398,16 +2461,16 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       const link = r.linkDoc;
       if (link) {
         await appAlert(
-          (r.yaExistia ? 'El registro fotografico ya existia en la carpeta.' : 'Registro fotografico generado.') +
-          '\n\nSe abrira en una pestana nueva.',
-          { titulo: 'Registro fotografico listo' }
+          (r.yaExistia ? 'El registro fotográfico ya existía en la carpeta.' : 'Registro fotográfico generado.') +
+          '\n\nSe abrirá en una pestaña nueva.',
+          { titulo: 'Registro fotográfico listo' }
         );
         window.open(link, '_blank', 'noopener');
       } else {
-        await appAlert('Se genero pero no recibi link. Revisa Drive.', { titulo: 'Registro generado' });
+        await appAlert('Se generó pero no recibí link. Revisa Drive.', { titulo: 'Registro generado' });
       }
     } catch (e) {
-      await appAlert('Error: ' + e.message, { titulo: 'Generar registro fotografico' });
+      await appAlert('Error: ' + e.message, { titulo: 'Generar registro fotográfico' });
     }
     setGRF(false);
   }
@@ -2580,8 +2643,10 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 ? (gpsAccuracy != null
                     ? React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
                         React.createElement(Icon.Check, { size: 14 }), 'Usar esta ubicación')
-                    : '⏳ Buscando señal…')
-                : '📍 Capturar mi ubicación'}
+                    : React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+                        React.createElement(Icon.Clock, { size: 14 }), 'Buscando señal…'))
+                : React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 } },
+                    React.createElement(Icon.Pin, { size: 14 }), 'Capturar mi ubicación')}
             </_BtnAccion>
             {busyGeo && React.createElement('button', {
               onClick: function() { _detenerGeoWatch(); setBusyGeo(false); setGpsAccuracy(null); },
@@ -2601,11 +2666,11 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {/* 3. PERSONA QUE ATIENDE ──────────────────────────── */}
       <_Seccion titulo="Persona que atiende" color="azul">
         <div style={{ gridColumn: '1 / -1', marginBottom: 4 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: d.noAtiende ? 'var(--rojo, #dc2626)' : 'var(--texto-2)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: d.noAtiende ? 'var(--rojo)' : 'var(--texto-2)' }}>
             <input type="checkbox"
               checked={d.noAtiende}
               onChange={e => setCampo('noAtiende', e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: 'var(--rojo, #dc2626)', cursor: 'pointer' }}
+              style={{ width: 16, height: 16, accentColor: 'var(--rojo)', cursor: 'pointer' }}
             />
             No se atiende / No suministra datos
           </label>
@@ -2837,8 +2902,8 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
         )}
       </_Seccion>
 
-      {/* 7B. CONCLUSIONES ────────────────────────────────── */}
-      <_Seccion titulo="Conclusiones" color="cafe">
+      {/* 7B. TIPIFICACIÓN Y MEDIDAS ──────────────────────── */}
+      <_Seccion titulo="Tipificación y medidas" color="cafe">
         <_Campo label="Tipo de contravención (Art. 135 Ley 1801/2016)" fullWidth>
           {/* Advertencia: si el predio es público o está en área protegida,
               sugerir el comportamiento correcto antes de que el inspector
@@ -2850,7 +2915,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
               color: 'var(--cafe)', fontSize: 13,
             }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <span style={{ fontSize: 20, lineHeight: 1, flexShrink: 0 }}>⚠️</span>
+                <span style={{ flexShrink: 0 }}><Icon.Alert size={20} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, marginBottom: 6 }}>
                     Tipificación sugerida
@@ -3044,7 +3109,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                 color: 'var(--brand-ink)', fontSize: 13, fontWeight: 600,
                 display: 'flex', alignItems: 'flex-start', gap: 8,
               }}>
-                <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+                <Icon.Alert size={18} />
                 <div>Predio del <strong>Municipio de Bello</strong></div>
               </div>
             )}
@@ -3141,7 +3206,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
                   cursor: generandoActa ? 'not-allowed' : 'pointer',
                   opacity: generandoActa ? 0.6 : 1, flex: 1,
                 }}>
-                {generandoActa ? '...' : '🔄 Regenerar'}
+                {generandoActa ? '...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon.Refresh size={14} /> Regenerar</span>}
               </button>
             </div>
           ) : (
@@ -3314,7 +3379,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
       {filaEditando && (
         <button onClick={abrirModalFotos} disabled={generandoRF || cargandoFotos}
           className="btn-principal" style={{ fontSize: 15, marginTop: 14 }}>
-          {cargandoFotos ? 'Cargando fotos...' : generandoRF ? 'Generando...' : 'Generar registro fotografico'}
+          {cargandoFotos ? 'Cargando fotos...' : generandoRF ? 'Generando...' : 'Generar registro fotográfico'}
         </button>
       )}
 
@@ -3330,7 +3395,7 @@ function NuevaVisitaScreen({ usuario, filaInicial, datosIniciales, onSalir }) {
             maxWidth: 600, margin: 'auto',
           }}>
             <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--brand-accent)', marginBottom: 4 }}>
-              Registro fotografico
+              Registro fotográfico
             </div>
             <div style={{ fontSize: 12, color: 'var(--texto-suave)', marginBottom: 16 }}>
               Arrastra desde el icono ≡ para reordenar. La línea indica donde se insertará la foto.
@@ -3671,11 +3736,11 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
 
   return (
     <div className="form-seccion" style={{ marginTop: 14 }}>
-      <span className="form-seccion-titulo">Registro fotografico</span>
+      <span className="form-seccion-titulo">Registro fotográfico</span>
       <div style={{ marginTop: 12 }}>
         {linkDrive && (
           <div style={{ marginBottom: 12 }}>
-            <a href={linkDrive} target="_blank" rel="noopener" style={{
+            <a href={linkDrive} target="_blank" rel="noopener noreferrer" style={{
               fontSize: 12, color: 'var(--brand-accent)', textDecoration: 'none',
             }}>Abrir carpeta Drive de la visita</a>
           </div>
@@ -3698,7 +3763,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
               {fotos.length} foto(s) subida(s)
             </div>
             {fotos.map((f, i) => (
-              <div key={i} style={{
+              <div key={f.link || (f.nombre + '_' + i)} style={{
                 padding: '8px 12px',
                 background: f.pendiente ? 'var(--amarillo-bg)' : 'var(--gris-bg)',
                 border: f.pendiente ? '1px dashed var(--amarillo)' : 'none',

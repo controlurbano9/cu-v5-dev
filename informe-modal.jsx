@@ -157,13 +157,7 @@ function _toQuery(obj) {
   return qs.toString();
 }
 
-// Extrae el ID de carpeta desde una URL de Drive del estilo:
-//   https://drive.google.com/drive/folders/<ID>?...
-function extraerIdCarpetaDrive(url) {
-  if (!url) return '';
-  const m = String(url).match(/folders\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : '';
-}
+// extraerIdCarpetaDrive() vive en utils.js (compartida con buscar.jsx).
 
 // API global. Estrategia:
 //   - Si hay ModalHost montado y el viewport es desktop → modal.
@@ -193,4 +187,3 @@ window.abrirInformeF43 = function(params) {
 };
 
 window.InformeModalHost = InformeModalHost;
-window.extraerIdCarpetaDrive = extraerIdCarpetaDrive;

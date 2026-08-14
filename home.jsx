@@ -43,10 +43,10 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       const e = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
       // Filtro por rol — admin ve todo, inspector aplica regla diligenciador.
       if (!esAdmin) {
-        const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
+        const vis = visitadoresBD(f).toUpperCase();
         if (!vis.includes(miNombre)) return;
         if (e === 'INICIADO' || e === 'COMPLETADO') {
-          const principal = vis.split(/\s*[\/,]\s*/)[0].trim();
+          const principal = primerVisitador(vis);
           if (principal !== miNombre) return;
         }
       }
@@ -81,9 +81,9 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       // recibe las alertas. No tiene sentido alertar al co-asignado de
       // tareas que él no diligenció — su responsable es el otro.
       if (!esAdmin) {
-        const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
+        const vis = visitadoresBD(f).toUpperCase();
         if (!vis.includes(miNombre)) return;
-        const principal = vis.split(/\s*[\/,]\s*/)[0].trim();
+        const principal = primerVisitador(vis);
         if (principal !== miNombre) return;
       }
 
@@ -133,7 +133,7 @@ function HomeScreen({ usuario, onNueva, onContinuar }) {
       const e = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
       if (e !== 'ASIGNADO' && e !== 'PENDIENTE') return false;
       // Solo mis asignaciones (no las de otros)
-      const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
+      const vis = visitadoresBD(f).toUpperCase();
       if (!vis.includes(miNombre)) return false;
       // Filtrar por fecha de asignación = hoy
       const dAsig = parsearFecha(f['FECHA ASIGNACION VISITA'] || '');
@@ -321,8 +321,8 @@ function AlertaCard({ alerta, tipo, onContinuar }) {
               </span>
               {f['BARRIO/VEREDA'] && <span aria-hidden="true">·</span>}
               {f['BARRIO/VEREDA'] && <span>{f['BARRIO/VEREDA']}</span>}
-              {f['VISITADOR(ES)'] && <span aria-hidden="true">·</span>}
-              {f['VISITADOR(ES)'] && <span>{(f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim()}</span>}
+              {visitadoresBD(f) && <span aria-hidden="true">·</span>}
+              {visitadoresBD(f) && <span>{primerVisitador(visitadoresBD(f))}</span>}
             </div>
           </div>
           <button type="button" onClick={() => onContinuar(f._idx, f)} style={{

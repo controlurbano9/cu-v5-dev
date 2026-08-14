@@ -823,7 +823,7 @@ body.v2-mode .v2-autosave{display:inline-flex}
 </div>
 <div id="p5" class="hidden">
   <h1 class="ptitle">Generar informe</h1>
-  <p class="psub">Cargue el registro fotografico, revise el resumen y genere el informe F-GGO-43</p>
+  <p class="psub">Cargue el registro fotográfico, revise el resumen y genere el informe F-GGO-43</p>
 
   <!-- Imagen de localización (sección LOCALIZACIÓN del informe) -->
   <div class="card" id="card-localizacion" data-momento="3">
@@ -852,9 +852,9 @@ body.v2-mode .v2-autosave{display:inline-flex}
   </div>
 
   <div class="card" id="card-fotos" data-momento="3">
-    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div><div><div class="ct">Registro fotografico</div><div class="cst">Fotos de la subcarpeta <b>Fotos</b> de la visita</div></div></div>
+    <div class="ch"><div class="ci"><svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div><div><div class="ct">Registro fotográfico</div><div class="cst">Fotos de la subcarpeta <b>Fotos</b> de la visita</div></div></div>
     <div class="nota" id="fotos-info" style="margin-bottom:12px">
-      Las fotografias se leen automaticamente desde la carpeta Drive de la visita asociada (subcarpeta <b>Fotos</b>). Se incluyen en el informe y dan contexto a la IA.
+      Las fotografías se leen automáticamente desde la carpeta Drive de la visita asociada (subcarpeta <b>Fotos</b>). Se incluyen en el informe y dan contexto a la IA.
       <div id="fotos-aviso-sin-ctx" class="hidden" style="margin-top:6px;color:var(--rojo)"><b>Aviso:</b> abra el generador desde una visita en V6 para cargar fotos.</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
@@ -1089,8 +1089,19 @@ function actualizarIndicadorAutosaveV2() {
 // ── Modal unificado de emision: recibo → generando → error → éxito ──
 // Mismo contenedor para las 4 fases (spec funcional, pantallas 7-10):
 // nunca hay salto de layout entre una fase y la siguiente.
+// Evita perder una generacion de informe en curso (llamada a IA o subida a
+// Drive) si el inspector cierra o navega fuera por error — sin esto no hay
+// forma de retomarla, hay que pagar de nuevo la llamada a la IA.
+var _emisionEnCurso = false;
+window.addEventListener('beforeunload', function(e) {
+  if (!_emisionEnCurso) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 function mostrarModalEmision(estado, datos) {
   datos = datos || {};
+  _emisionEnCurso = (estado === 'generando');
   var modal = document.getElementById('modal-emision');
   var caja  = document.getElementById('modal-emision-caja');
   if (!modal || !caja) return;
@@ -2342,8 +2353,8 @@ function detectarAclaracionesInforme(ctx) {
     if (!d.dest)     avisos.push('No se registraron las destinaciones aprobadas.');
   }
   if (!(d.areas || '').trim())                avisos.push('El area en contravencion esta vacia.');
-  if (ctx.nFotos === 0)                        avisos.push('No hay fotografias cargadas — el informe saldra sin registro fotografico. Vuelva al momento 3 y pulse "Cargar fotos de la visita".');
-  else if (ctx.nFotos > ctx.fotoDescs.length)  avisos.push('Hay fotografias sin descripcion.');
+  if (ctx.nFotos === 0)                        avisos.push('No hay fotografías cargadas — el informe saldrá sin registro fotográfico. Vuelva al momento 3 y pulse "Cargar fotos de la visita".');
+  else if (ctx.nFotos > ctx.fotoDescs.length)  avisos.push('Hay fotografías sin descripción.');
   if ((d.obs || '').trim().length < 120)       avisos.push('Las observaciones de campo son muy breves — revise si falta detalle.');
   return avisos;
 }
@@ -2376,6 +2387,13 @@ async function construirPromptF43(ctx) {
   var hsNota = hallazgosInfo.length
     ? hallazgosInfo.map(function(h) {
         return '- ' + h.hallazgo
+          // requiere_area vivia sin uso en el catalogo (columna leida por
+          // nadie). Aca al menos le da a la IA la instruccion de cuantificar
+          // cuando el hallazgo lo amerita, tomando la cifra de DATOS y nunca
+          // inventandola si no viene.
+          + (String(h.requiere_area || '').trim().toUpperCase() === 'SI'
+              ? '\n  Este hallazgo amerita cuantificar el area afectada: tomala del campo de areas en contravencion de DATOS y exprésala en la conclusion. Si DATOS no la trae, describe la afectacion sin cifras — nunca estimes un area.'
+              : '')
           + '\n  Sugerencia de conclusion (adaptar al caso, no copiar literal): ' + (h.conclusion_sugerida || 'sin sugerencia disponible')
           + '\n  Sugerencia de recomendacion (adaptar al caso, no copiar literal; solo verbos permitidos de la regla 5): ' + (h.recomendacion_sugerida || 'sin sugerencia disponible')
           + '\n  Contexto normativo interno (NUNCA citar en el texto — solo para redactar con precision tecnica): ' + _ocultarCodigosArt135(h.fundamento_normativo);
@@ -2405,10 +2423,21 @@ async function construirPromptF43(ctx) {
     + '0. REGLA DE ORO: todo hecho afirmado debe tener respaldo directo en DATOS, HALLAZGOS DEL CATALOGO CONFIRMADOS, '
     + 'ACLARACIONES DEL INSPECTOR (si las hay), COMPORTAMIENTOS ART.135 ya listados o DESCRIPCION DE FOTOGRAFIAS. Si un dato no esta expresamente en esas '
     + 'fuentes, se omite por completo — no completar con inferencias, conocimiento general ni probabilidades.\n'
-    + '1. ANTECEDENTES: usa unicamente fecha, direccion y objeto de la visita presentes en DATOS. Nunca inventes '
+    + '1. ANTECEDENTES: es el ORIGEN de la actuacion, NO un resumen del informe. Incluye unicamente: fecha de la '
+    + 'visita, direccion y barrio, y el motivo o acto que la origina (radicado de PQR, oficio, '
+    + 'orden de policia o diligencia decretada) tal como aparezca en DATOS. PROHIBIDO nombrar aqui a quien realizo '
+    + 'la visita o su cargo: eso ya consta en la firma al final del informe y repetirlo sobra. PROHIBIDO repetir aqui los datos de la '
+    + 'licencia (numero de resolucion, curaduria, fecha de ejecutoria, modalidad, area aprobada, pisos, sistema '
+    + 'estructural): ya van completos en el cuadro RESUMEN DE LO APROBADO POR CURADURIA que sigue, y duplicarlos '
+    + 'sobra. Basta decir que el objeto fue verificar el cumplimiento de la licencia, sin detallarla. PROHIBIDO '
+    + 'tambien adelantar hallazgos, estado de la obra o conclusiones — eso va en OBSERVACIONES. Nunca inventes '
     + 'un motivo, denuncia, radicado o solicitud que no aparezca explicitamente en DATOS — si ese dato no viene, '
-    + 'omite la frase de motivo por completo, no la sustituyas por una suposicion.\n'
-    + '2. OBSERVACIONES: describe solo lo fisicamente verificable en el predio (materiales, dimensiones, estado, '
+    + 'omite la frase de motivo por completo, no la sustituyas por una suposicion. Maximo 4 lineas.\n'
+    + '2. OBSERVACIONES: ESTRUCTURA OBLIGATORIA — entrega el texto en VARIOS parrafos separados por \\n, uno por '
+    + 'nivel, zona o tema (ej. un parrafo por piso, uno para la cubierta, uno para el espacio publico). PROHIBIDO '
+    + 'entregar todo en un unico parrafo largo: un bloque corrido de mas de 5 lineas es ilegible y se lee mal como '
+    + 'prueba tecnica. Cada parrafo debe poder leerse solo. En cuanto al contenido: describe solo lo fisicamente '
+    + 'verificable en el predio (materiales, dimensiones, estado, '
     + 'ubicacion relativa). Prohibido usar terminos juridicos o de intencion ("invasion", "infraccion", '
     + '"desconocimiento", "ilegal") o afirmar lo que no se puede constatar en una visita puntual. No expliques el '
     + 'motivo o significado tecnico de una clasificacion, poligono o campo POT (clasificacion, polig_uso, '
@@ -2478,15 +2507,34 @@ async function construirPromptF43(ctx) {
 // fuera de lo que el inspector ya autorizo. El prompt reduce el riesgo de
 // que la IA se equivoque; esto lo atrapa si igual se equivoca.
 var PALABRAS_PROHIBIDAS_INFORME = [
-  'constituye', 'demuestra', 'acredita', 'confirma', 'prueba',
+  'constituye', 'demuestra', 'acredita',
   'evidencia plenamente', 'se encuentra plenamente establecido',
   'desconocimiento total', 'carece de estructura aprobada'
+];
+// 'confirma' y 'prueba' salieron de la lista de arriba (2026-08-07). Por si
+// solas son inferencias de HECHO legitimas ("no se hallaron las escaleras, lo
+// que confirma que la obra esta en curso") y bloqueaban informes validos: 2 de
+// 2 primeros intentos ese dia, con el inspector viendo solo "regenere". Como
+// ademas se comparaban por substring, atrapaban 'confirmar', 'confirmacion' y
+// 'pruebas', que aparecen en recomendaciones perfectamente correctas.
+// Lo que el arquitecto NO puede hacer es dar por probada la CALIFICACION
+// JURIDICA, asi que el verbo se ata a su objeto y se evalua como regex con
+// limite de palabra. 'constituye'/'demuestra'/'acredita' siguen sueltas
+// porque no aparecen en frases inocentes.
+var CERTEZA_SOBRE_CALIFICACION_INFORME = [
+  /\b(?:confirma|confirman|prueba|prueban)\s+(?:la|el|las|los|una|un)?\s*(?:infraccion|infracciones|incumplimiento|incumplimientos|contravencion|contravenciones|violacion|ilegalidad)\b/
 ];
 var FRASES_NORMATIVA_VAGA_INFORME = [
   'conforme a la normativa', 'segun la legislacion vigente', 'de acuerdo con el pot'
 ];
+// 'sancion' va por RAIZ a proposito: cubre sancionar/sancion/sanciones/
+// sancionatorias, que es como se colaban en la practica ("considerar la
+// remision del caso para que se apliquen las medidas sancionatorias" pasaba
+// el filtro literal anterior). Los demas siguen literales por una razon:
+// 'declarar' NO puede ir por raiz porque "declarado de interes cultural" es
+// una descripcion legitima, no una recomendacion de acto administrativo.
 var VERBOS_PROHIBIDOS_RECOMENDACION = [
-  'ordenar', 'sancionar', 'imponer', 'iniciar procedimiento', 'declarar', 'resolver'
+  'ordenar', 'sancion', 'imponer', 'iniciar procedimiento', 'declarar', 'resolver'
 ];
 var TEXTO_PLANTILLA_FILTRADO_INFORME = ['(incluir', '(eliminar en caso'];
 
@@ -2589,6 +2637,13 @@ function validarInformeIA(json, ctx) {
       problemas.push('Usa una palabra de certeza no permitida: "' + p + '".');
     }
   });
+  CERTEZA_SOBRE_CALIFICACION_INFORME.forEach(function(rx) {
+    var m = rx.exec(todoNorm);
+    if (m) {
+      problemas.push('Da por probada una calificacion juridica ("' + m[0] + '") — describa el hecho observado; '
+        + 'calificar si hay infraccion corresponde al Inspector, no a esta seccion tecnica.');
+    }
+  });
   FRASES_NORMATIVA_VAGA_INFORME.forEach(function(f) {
     if (todoNorm.indexOf(_quitarTildesInforme(f)) >= 0) {
       problemas.push('Cita la norma de forma generica: "' + f + '" (debe citar la norma especifica o nada).');
@@ -2599,6 +2654,15 @@ function validarInformeIA(json, ctx) {
       problemas.push('Quedo texto de plantilla sin reemplazar: "' + t + '...".');
     }
   });
+  // Marcador del catalogo sin sustituir (ej. "[AREA]"): conclusion_sugerida
+  // viaja al prompt como orientacion, y si la IA la copia tal cual el
+  // corchete termina en el Doc final. TEXTO_PLANTILLA_FILTRADO_INFORME no lo
+  // atrapa porque solo busca parentesis. Se mira todoTexto y no todoNorm
+  // porque el marcador va en mayusculas y todoNorm ya esta en minuscula.
+  var marcadorSuelto = todoTexto.match(/\[[A-ZÁÉÍÓÚÑ_][A-ZÁÉÍÓÚÑ_ ]*\]/);
+  if (marcadorSuelto) {
+    problemas.push('Quedo un marcador sin sustituir: "' + marcadorSuelto[0] + '".');
+  }
   if (/\bnumeral\b/.test(todoNorm)) {
     problemas.push('Menciona un "numeral" del Art. 135 — se cita por literal y numero (ej. "A1", "C9"), nunca por "numeral".');
   }
@@ -2624,7 +2688,10 @@ function validarInformeIA(json, ctx) {
     VERBOS_PROHIBIDOS_RECOMENDACION.forEach(function(v) {
       if (norm.indexOf(v) >= 0) problemas.push('Recomendacion ' + (i + 1) + ' usa un verbo que no corresponde al arquitecto: "' + v + '".');
     });
-    if (norm.indexOf('remitir') >= 0 && norm.indexOf('autoridad competente') >= 0) {
+    // 'remisi' cubre remision/remisiones, que esquivaban el indexOf de
+    // 'remitir'. Sigue siendo condicional a "autoridad competente": remitir
+    // nombrando una entidad con competencia distinta si esta permitido.
+    if (/remit|remisi/.test(norm) && norm.indexOf('autoridad competente') >= 0) {
       problemas.push('Recomendacion ' + (i + 1) + ' remite "a la autoridad competente" de forma generica — debe nombrar una entidad con competencia distinta (ambiental, movilidad, curaduria, etc.), nunca de vuelta al mismo Inspector que ya tiene el caso.');
     }
   });
@@ -3426,6 +3493,28 @@ async function cargarFotosDeVisita() {
 //  Recorre las tarjetas actuales (en el orden visual del DOM) y dispara
 //  describirFotoDesdeId en serie. Solo escribe descripciones vacias para no
 //  pisar las que el inspector haya editado a mano.
+// Llama a describirFotoDesdeId (vía webhook) y reintenta con backoff (4s, 8s)
+// si el backend marca rateLimited:true (429 de Gemini) — mismo comportamiento
+// que su contraparte en nueva-visita.jsx (mantener sincronizados). Sin
+// reintento para otros tipos de fallo: esos no se arreglan esperando.
+async function _describirFotoConReintentoWH(fileId) {
+  for (var intento = 0; ; intento++) {
+    var d;
+    try {
+      var r = await fetch(WH + '?' + _qsConSesion({ accion: 'describirFotoDesdeId', fileId: fileId }).toString());
+      d = await r.json();
+    } catch (e) {
+      d = { ok: false, error: e.message };
+    }
+    if (d.ok) return d;
+    if (d.rateLimited && intento < 2) {
+      await new Promise(function(res) { setTimeout(res, 4000 * (intento + 1)); });
+      continue;
+    }
+    return d;
+  }
+}
+
 async function describirFotosConIA() {
   var btn    = document.getElementById('btn-describir-fotos');
   var status = document.getElementById('fotos-status');
@@ -3436,29 +3525,62 @@ async function describirFotosConIA() {
     return;
   }
   btn.disabled = true;
-  var ok = 0, total = tarjetas.length;
+  var total = tarjetas.length, ok = 0, fallos = 0, motivo = '', hechos = 0;
+  var pendientes = [];
   for (var i = 0; i < tarjetas.length; i++) {
     var tid    = tarjetas[i].id;
     var descEl = document.getElementById('desc-' + tid);
     var fidEl  = document.getElementById('fid-' + tid);
     if (!fidEl || !fidEl.value) continue;
     if (descEl && descEl.value.trim()) continue; // no pisar lo escrito por el inspector
-    status.style.color = 'var(--texto-suave)';
-    status.textContent = 'Analizando ' + (i + 1) + '/' + total + '...';
-    try {
-      var r = await fetch(WH + '?' + _qsConSesion({ accion: 'describirFotoDesdeId', fileId: fidEl.value }).toString());
-      var d = await r.json();
-      if (d.ok && d.descripcion && descEl) {
-        descEl.value = d.descripcion;
-        descEl.dispatchEvent(new Event('change'));
+    pendientes.push({ pos: i, descEl: descEl, fileId: fidEl.value });
+  }
+  status.style.color = 'var(--texto-suave)';
+  status.textContent = 'Analizando 0/' + pendientes.length + '...';
+
+  // Throttle: hasta 3 descripciones simultaneas (Gemini rate-limit friendly).
+  // Mismo comportamiento que el worker de abrirModalFotos() en nueva-visita.jsx.
+  var MAX_CONC = 3;
+  var next = 0;
+  async function worker() {
+    while (true) {
+      var idx = next++;
+      if (idx >= pendientes.length) return;
+      var item = pendientes[idx];
+      var d = await _describirFotoConReintentoWH(item.fileId);
+      hechos++;
+      if (d.ok && d.descripcion) {
+        item.descEl.value = d.descripcion;
+        item.descEl.dispatchEvent(new Event('change'));
         ok++;
+      } else {
+        // El backend ya no devuelve ok:true con descripcion vacia (ver el
+        // contrato en describirFotoDesdeId). Aqui se cuenta el fallo y se
+        // guarda el primer motivo para mostrarlo: antes esto se descartaba
+        // en silencio y el inspector veia "0 descripciones" en verde.
+        fallos++;
+        if (!motivo) motivo = d.error || 'el servicio de vision no devolvio descripcion';
+        console.warn('describir foto ' + (item.pos + 1) + ':', d.error || d.debug || 'sin detalle');
       }
-    } catch (e) {
-      console.warn('describir foto fallo:', e.message);
+      status.textContent = 'Analizando ' + hechos + '/' + pendientes.length + '...';
     }
   }
-  status.textContent = ok + ' descripciones generadas. Puede editarlas.';
-  status.style.color = 'var(--verde-dark)';
+  var workers = [];
+  for (var w = 0; w < MAX_CONC; w++) workers.push(worker());
+  await Promise.all(workers);
+
+  if (fallos && !ok) {
+    status.textContent = 'No se pudo describir ninguna de las ' + total + ' fotos: ' + motivo
+      + '. Puede escribir las descripciones a mano.';
+    status.style.color = 'var(--rojo)';
+  } else if (fallos) {
+    status.textContent = ok + ' de ' + total + ' descripciones generadas — ' + fallos
+      + ' fallaron (' + motivo + '). Puede completarlas a mano.';
+    status.style.color = 'var(--amarillo)';
+  } else {
+    status.textContent = ok + ' descripciones generadas. Puede editarlas.';
+    status.style.color = 'var(--verde-dark)';
+  }
   btn.disabled = false;
 }
 

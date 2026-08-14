@@ -121,9 +121,9 @@ function VisitaDetailUI({ f, onCerrar }) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {linkDrive    && <_LinkBtnVD href={linkDrive}     Icono={Icon.Folder} label="Carpeta Drive" />}
                 {linkPdf      && <_LinkBtnVD href={linkPdf}       Icono={Icon.File}   label="Acta (PDF)" />}
-                {!linkPdf && linkXlsx && <_LinkBtnVD href={linkXlsx} emoji="📊" label="Acta (Sheet)" />}
+                {!linkPdf && linkXlsx && <_LinkBtnVD href={linkXlsx} Icono={Icon.File} label="Acta (Sheet)" />}
                 {linkInforme  && <_LinkBtnVD href={linkInforme}   Icono={Icon.Edit}   label="Informe F-43" />}
-                {linkVigilancia && <_LinkBtnVD href={linkVigilancia} emoji="🚓" label="Vigilancia Policía" />}
+                {linkVigilancia && <_LinkBtnVD href={linkVigilancia} Icono={Icon.Alert} label="Vigilancia Policía" />}
               </div>
             </_SeccionVD>
           )}
@@ -321,7 +321,7 @@ function _CampoLargoVD({ v }) {
   );
 }
 
-function _LinkBtnVD({ href, emoji, Icono, label }) {
+function _LinkBtnVD({ href, Icono, label }) {
   return (
     <a href={href} target="_blank" rel="noopener noreferrer" style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -330,7 +330,7 @@ function _LinkBtnVD({ href, emoji, Icono, label }) {
       border: '1px solid rgba(138,63,38,0.15)', fontSize: 12, fontWeight: 600,
       textDecoration: 'none', cursor: 'pointer',
     }}>
-      {Icono ? <Icono size={14} /> : <span>{emoji}</span>} {label} ↗
+      <Icono size={14} /> {label} ↗
     </a>
   );
 }

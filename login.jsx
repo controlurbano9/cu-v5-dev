@@ -1,18 +1,18 @@
 // ═══════════════════════════════════════════════════════════════
 // v6/login.jsx — Pantalla de login con webhook real
 // ═══════════════════════════════════════════════════════════════
-const { useState, useEffect } = React;
+const { useState: useStateLG, useEffect: useEffectLG } = React;
 
 function LoginScreen({ onLogin }) {
-  const [inspectores, setInspectores] = useState([]);
-  const [cargandoLista, setCargandoLista] = useState(true);
-  const [nombre, setNombre] = useState('');
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
-  const [verificando, setVerificando] = useState(false);
+  const [inspectores, setInspectores] = useStateLG([]);
+  const [cargandoLista, setCargandoLista] = useStateLG(true);
+  const [nombre, setNombre] = useStateLG('');
+  const [pin, setPin] = useStateLG('');
+  const [error, setError] = useStateLG('');
+  const [verificando, setVerificando] = useStateLG(false);
 
   // Cargar inspectores activos al montar
-  useEffect(() => {
+  useEffectLG(() => {
     listarInspectoresActivos()
       .then(list => {
         setInspectores(list);

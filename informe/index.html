@@ -3030,41 +3030,10 @@ function buildSeccionArt135() {
   ];
 }
 
-// ── Intro de conclusiones — compartida entre renderDocx() (docx.js) y
-// generarInformeF43ViaPlantilla() (plantilla oficial), extraída para no
-// duplicar la misma frase en los dos caminos de generación.
-function _construirConclusionIntro(d) {
-  return d.sin_licencia
-    ? 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, se concluye:'
-    : 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, y del analisis de los planos aprobados mediante '+d.num_res+' expedida por '+d.curaduria+', se concluye:';
-}
-
-async function renderDocx(tglobal) {
-  var d = tglobal._d;
-  var sl = d.sin_licencia;
-  var PAG_W = 12240, PAG_H = 15840;
-  var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
-  var CONT = PAG_W - MAR_L - MAR_R;
-  var header = buildEncabezado();
-  var footer = new D.Footer({children:[
-    new D.Paragraph({
-      spacing:{after:0},
-      children:[
-        mkR('Codigo : F-GGO-43', {sz:18}),
-        mkR('     Version: 01', {sz:18}),
-        mkR('     Fecha de aprobacion: 2026/03/10', {sz:18}),
-        mkR('     Pagina ', {sz:18}),
-        new D.TextRun({children:[D.PageNumber.CURRENT], font:FONT, size:18}),
-        mkR(' de ', {sz:18}),
-        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:18})
-      ]
-    })
-  ]});
-  var licTable = buildSeccionLicencia(d);
-  var artBlock = buildSeccionArt135();
-  // — Registro fotográfico: descarga las fotos via webhook (Drive no expone
-  //   CORS para fetch directo) y las incrusta como ImageRun, manteniendo
-  //   el orden visual del DOM (querySelectorAll respeta el orden de inserción).
+// ── Registro fotográfico — Refactor #5 (auditoria 2026-07) ─────────────────
+// Descarga las fotos via webhook (Drive no expone CORS para fetch directo)
+// y las incrusta como ImageRun en docx.js, manteniendo el orden visual del DOM.
+async function buildSeccionFotos() {
   function _b64ToBytes(b64) {
     var bin = atob(b64);
     var arr = new Uint8Array(bin.length);
@@ -3087,7 +3056,6 @@ async function renderDocx(tglobal) {
   if (tarjetasFoto.length > 0) {
     // Throttle a 3 descargas simultaneas — mismo MAX_CONC que describirFotosConIA()
     // de este archivo y el worker de abrirModalFotos() en nueva-visita.jsx.
-    // Antes disparaba un fetch por foto sin límite (Promise.all directo).
     var resPulls = new Array(tarjetasFoto.length).fill(null);
     var MAX_CONC_DESCARGA = 3;
     var nextDescarga = 0;
@@ -3154,12 +3122,66 @@ async function renderDocx(tglobal) {
       children:fotoChildren
     })]})]
   });
+  return fotoTable;
+}
+
+// ── Seccion: conclusiones — Refactor #5 (auditoria 2026-07) ────────────────
+// Construye el bloque CONCLUSIONES con POT, intro fija y items numerados.
+function buildSeccionConclusiones(d, tglobal) {
   var potTable = buildSeccionPOT(d);
+  var concItems = tglobal.conclusiones_items.map(function(c){return pNum(c);});
+  var conclusIntro = _construirConclusionIntro(d);
+  return [
+    pTitle('CONCLUSIONES.'),
+    p('Acorde con lo establecido en el Plan de Ordenamiento Territorial Acuerdo 033 de 2009, la ubicacion del predio posee la siguiente normatividad:'),
+    potTable,
+    p(''),
+    p(conclusIntro)
+  ].concat(concItems);
+}
+
+// ── Seccion: recomendaciones — Refactor #5 (auditoria 2026-07) ───────────────
+// Construye el bloque RECOMENDACIONES con titulo e items numerados.
+function buildSeccionRecomendaciones(tglobal) {
+  var recItems = tglobal.recomendaciones_items.map(function(r){return pNum(r);});
+  return [p(''), pTitle('RECOMENDACIONES')].concat(recItems);
+}
+
+// ── Intro de conclusiones — compartida entre renderDocx() (docx.js) y
+// generarInformeF43ViaPlantilla() (plantilla oficial), extraída para no
+// duplicar la misma frase en los dos caminos de generación.
+function _construirConclusionIntro(d) {
+  return d.sin_licencia
+    ? 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, se concluye:'
+    : 'Como resultado de la inspeccion ocular realizada el '+fmtFecha(d.fecha_visita)+' al predio ubicado en '+d.direccion+', barrio '+d.barrio+', Comuna '+d.comuna+' del municipio de Bello, y del analisis de los planos aprobados mediante '+d.num_res+' expedida por '+d.curaduria+', se concluye:';
+}
+
+async function renderDocx(tglobal) {
+  var d = tglobal._d;
+  var sl = d.sin_licencia;
+  var PAG_W = 12240, PAG_H = 15840;
+  var MAR_T = 2835, MAR_R = 1701, MAR_B = 1418, MAR_L = 1701;
+  var CONT = PAG_W - MAR_L - MAR_R;
+  var header = buildEncabezado();
+  var footer = new D.Footer({children:[
+    new D.Paragraph({
+      spacing:{after:0},
+      children:[
+        mkR('Codigo : F-GGO-43', {sz:18}),
+        mkR('     Version: 01', {sz:18}),
+        mkR('     Fecha de aprobacion: 2026/03/10', {sz:18}),
+        mkR('     Pagina ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.CURRENT], font:FONT, size:18}),
+        mkR(' de ', {sz:18}),
+        new D.TextRun({children:[D.PageNumber.TOTAL_PAGES], font:FONT, size:18})
+      ]
+    })
+  ]});
+  var licTable = buildSeccionLicencia(d);
+  var artBlock = buildSeccionArt135();
+  var fotoTable = await buildSeccionFotos();
   var antecParrs = tglobal.antecedentes.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
   var obsParrs   = tglobal.observaciones.split('\n').filter(function(l){return l.trim();}).map(function(l){return p(l);});
-  var concItems  = tglobal.conclusiones_items.map(function(c){return pNum(c);});
-  var recItems   = tglobal.recomendaciones_items.map(function(r){return pNum(r);});
-  var conclusIntro = _construirConclusionIntro(d);
   var licBlock = sl
     ? [p('(No se aporto documentacion urbanistica que ampare las obras o intervenciones presentes en el inmueble inspeccionado.)', {it:true})]
     : [licTable];
@@ -3240,19 +3262,10 @@ async function renderDocx(tglobal) {
   .concat([
     p(''), p(''), p(''),
     fotoTable,
-    p(''),
-    pTitle('CONCLUSIONES.'),
-    p('Acorde con lo establecido en el Plan de Ordenamiento Territorial Acuerdo 033 de 2009, la ubicacion del predio posee la siguiente normatividad:'),
-    potTable,
-    p(''),
-    p(conclusIntro)
+    p('')
   ])
-  .concat(concItems)
-  .concat([
-    p(''),
-    pTitle('RECOMENDACIONES')
-  ])
-  .concat(recItems)
+  .concat(buildSeccionConclusiones(d, tglobal))
+  .concat(buildSeccionRecomendaciones(tglobal))
   .concat([
     p(''), p(''),
     p('Atentamente,'),

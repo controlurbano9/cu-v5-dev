@@ -4,7 +4,7 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v89';
+const CACHE_NAME = 'cu-v6-cache-v90';
 
 // URL del webhook unificado de Apps Script — única fuente: env.js
 // (auditoría 2026-07, hallazgo Arch#6/MP1: antes vivía copiada 3 veces).

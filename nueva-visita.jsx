@@ -3768,6 +3768,7 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
               link:   r.link,
               descripcion: r.descripcion || '',
               pendiente: !!r.encolado,  // sin red: foto pendiente de subir a Drive
+              localId: r.localId || null,   // permite parchear el link cuando sincronice offline
             }]);
           });
         } catch (err) {
@@ -3784,6 +3785,23 @@ function SeccionFotos({ idCarpetaFotos, fila, linkDrive }) {
     subirTodos();
     return function() { cancelado = true; };
   }, [cola.length, subiendo]);
+
+  // Escuchar sincronización offline de fotos individuales
+  React.useEffect(function() {
+    if (typeof offlineOnItemSynced !== 'function') return;
+    var unsub = offlineOnItemSynced(function(evt) {
+      if (evt.tipo !== 'subirFoto') return;
+      if (!evt.resultado || !evt.resultado.link) return;
+      setFotos(function(prev) {
+        return prev.map(function(f) {
+          return f.localId === evt.id
+            ? Object.assign({}, f, { link: evt.resultado.link, pendiente: false, nombre: evt.resultado.nombre || f.nombre })
+            : f;
+        });
+      });
+    });
+    return unsub;
+  }, []);
 
   return (
     <div className="form-seccion" style={{ marginTop: 14 }}>

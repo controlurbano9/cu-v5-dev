@@ -6,12 +6,13 @@
 // (evento 'online' o flush manual) se reintentan en orden.
 //
 // API global (window):
-//   offlineEnqueue(item)  → Promise<id>
-//   offlineListar()       → Promise<Array>
-//   offlineEliminar(id)   → Promise<void>
-//   offlineCount()        → Promise<number>
-//   offlineFlush()        → Promise<{exito, fallo}>
-//   offlineOnChange(fn)   → unsubscribe
+//   offlineEnqueue(item)      → Promise<id>
+//   offlineListar()           → Promise<Array>
+//   offlineEliminar(id)      → Promise<void>
+//   offlineCount()            → Promise<number>
+//   offlineFlush()            → Promise<{exito, fallo}>
+//   offlineOnChange(fn)       → unsubscribe
+//   offlineOnItemSynced(fn)   → unsubscribe (evento por-item al sincronizar)
 //
 // Estructura de item:
 //   {
@@ -70,6 +71,18 @@
   function offlineOnChange(fn) {
     _listeners.add(fn);
     return function() { _listeners.delete(fn); };
+  }
+
+  // ── Listeners para notificar cuando un item individual se sincroniza ──
+  const _itemListeners = new Set();
+  function _emitirItemSincronizado(item, resultado) {
+    _itemListeners.forEach(function(fn) {
+      try { fn({ id: item.id, tipo: item.tipo, resultado: resultado }); } catch (e) {}
+    });
+  }
+  function offlineOnItemSynced(fn) {
+    _itemListeners.add(fn);
+    return function() { _itemListeners.delete(fn); };
   }
 
   // ── Operaciones CRUD ──
@@ -167,7 +180,8 @@
             continue;
           }
           try {
-            await _ejecutarItem(item);
+            const resultado = await _ejecutarItem(item);
+            _emitirItemSincronizado(item, resultado);
             await offlineEliminar(item.id);
             exito++;
             console.log('[offline-queue] sincronizado #' + item.id);
@@ -259,6 +273,7 @@
     offlineCount: offlineCount,
     offlineFlush: offlineFlush,
     offlineOnChange: offlineOnChange,
+    offlineOnItemSynced: offlineOnItemSynced,
     _offlineEsErrorDeRed: _esErrorDeRed,
   });
 })();

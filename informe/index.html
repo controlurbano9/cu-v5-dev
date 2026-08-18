@@ -3354,23 +3354,37 @@ var CHK_GROUPS = [
   { sel: '.hallazgo',   key: 'hallazgos'     },
   { sel: '.comp-ac',    key: 'comp_ac'       }
 ];
+// ── ID efímero de sesión para informes sin visita asociada ─────────────
+// Evita que dos informes standalone abiertos en momentos distintos (sin
+// fila/V6_CTX.fila) compartan la misma clave de localStorage y se pisen
+// los datos entre sí — mismo problema que _newEphemeralDraftId() resolvió
+// en nueva-visita.jsx.
+function _idEfimeroInforme() {
+  var KEY = 'fggo43_ephemeral_session_id';
+  var id = sessionStorage.getItem(KEY);
+  if (!id) {
+    id = 'eph_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
 // Clave de localStorage: por-visita si hay fila en URL, global si no.
 // Esto permite que cada visita tenga sus propios checkboxes (comportamientos
 // Art. 135, hallazgos, modalidades) persistidos independientemente.
 function _storageKey() {
   var p = new URLSearchParams(window.location.search);
   var fila = p.get('fila');
-  return fila ? ('fggo43_datos_' + fila) : 'fggo43_datos';
+  return 'fggo43_datos_' + (fila || _idEfimeroInforme());
 }
 // ── Persistencia del borrador IA (momento 5) — sobrevive un refresh ─────
 // Reutiliza V6_CTX.fila (ya poblado por prefillDesdeURL() antes de
 // activarV2()) en vez de re-parsear URLSearchParams como _storageKey().
 function _storageKeyBorrador() {
-  return V6_CTX.fila ? ('fggo43_borrador_ia_' + V6_CTX.fila) : 'fggo43_borrador_ia';
+  return 'fggo43_borrador_ia_' + (V6_CTX.fila || _idEfimeroInforme());
 }
 function guardarBorradorIA() {
   try {
-    if (borradorIA) localStorage.setItem(_storageKeyBorrador(), JSON.stringify(borradorIA));
+    if (borradorIA) localStorage.setItem(_storageKeyBorrador(), JSON.stringify(Object.assign({_ts: Date.now()}, borradorIA)));
     else localStorage.removeItem(_storageKeyBorrador());
   } catch(e) {}
 }
@@ -3388,7 +3402,7 @@ function limpiarBorradorIA() {
   if (box) box.classList.add('hidden');
 }
 function guardar() {
-  var data = {};
+  var data = { _ts: Date.now() };
   CAMPOS.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) data[id] = el.value;
@@ -4033,6 +4047,26 @@ function _hoyLocal() {
 // ── Init ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 (function() {
   var hoy = _hoyLocal();
+  // ── Purga de borradores de informe antiguos (I6, auditoria 2026-07) ────
+  // Mismo patron que app.jsx usa para los borradores de nueva-visita: borra
+  // cualquier entrada con mas de 7 dias. Requiere que guardar()/
+  // guardarBorradorIA() escriban _ts (ver mas abajo).
+  (function _purgarInformesAntiguos() {
+    try {
+      var limite = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      var aBorrar = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || (k.indexOf('fggo43_datos_') !== 0 && k.indexOf('fggo43_borrador_ia_') !== 0)) continue;
+        try {
+          var obj = JSON.parse(localStorage.getItem(k) || '{}');
+          if (!obj || typeof obj._ts !== 'number' || obj._ts < limite) aBorrar.push(k);
+        } catch (e) { aBorrar.push(k); }
+      }
+      aBorrar.forEach(function(k) { try { localStorage.removeItem(k); } catch (e) {} });
+      if (aBorrar.length) console.log('[fggo43] purgados ' + aBorrar.length + ' borradores antiguos');
+    } catch (e) { /* localStorage no disponible: silencio */ }
+  })();
   // Restaurar HALLAZGOS_CONFIRMADOS antes de cargar()/prefillDesdeURL() —
   // esas dos disparan _programarSugerenciaHallazgosAuto() al final, y si
   // _ultimaObsAnalizadaCatalogo ya coincide con el texto restaurado no

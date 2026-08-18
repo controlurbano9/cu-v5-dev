@@ -34,40 +34,16 @@ function LoginScreen({ onLogin }) {
     if (!nombre) { setError('Selecciona tu nombre'); return; }
     if (!pin || pin.length !== 4) { setError('El PIN debe tener 4 dígitos'); return; }
 
-    // Bloqueo por intentos fallidos (mismas keys que app.js)
-    const keyInt  = 'cu_intentos_'    + nombre.toUpperCase();
-    const keyBloq = 'cu_bloqueado_'   + nombre.toUpperCase();
-    const bloqHasta = parseInt(localStorage.getItem(keyBloq) || '0', 10);
-    if (bloqHasta && Date.now() < bloqHasta) {
-      const min = Math.ceil((bloqHasta - Date.now()) / 60000);
-      setError(`Usuario bloqueado. Intenta en ${min} min.`);
-      return;
-    }
-
     setVerificando(true);
-    try {
-      const usuario = await login(nombre, pin);
-      if (usuario) {
-        localStorage.removeItem(keyInt);
-        localStorage.removeItem(keyBloq);
-        localStorage.setItem('cu_ultimo_usuario', usuario.usuario);
-        SESSION_V6.guardar(usuario);
-        registrarLog(usuario.usuario, 'Login V6');
-        onLogin(usuario);
-      } else {
-        const intentos = parseInt(localStorage.getItem(keyInt) || '0', 10) + 1;
-        localStorage.setItem(keyInt, intentos.toString());
-        if (intentos >= 3) {
-          localStorage.setItem(keyBloq, (Date.now() + 15 * 60 * 1000).toString());
-          localStorage.removeItem(keyInt);
-          setError('Demasiados intentos. Usuario bloqueado 15 minutos.');
-        } else {
-          setError(`PIN incorrecto. Intentos restantes: ${3 - intentos}`);
-        }
-        setPin('');
-      }
-    } catch (e) {
-      setError('Error de conexión. Intenta de nuevo.');
+    const { ok, error: errorMsg, ...usuario } = await login(nombre, pin);
+    if (ok) {
+      localStorage.setItem('cu_ultimo_usuario', usuario.usuario);
+      SESSION_V6.guardar(usuario);
+      registrarLog(usuario.usuario, 'Login V6');
+      onLogin(usuario);
+    } else {
+      setError(errorMsg);
+      setPin('');
     }
     setVerificando(false);
   }

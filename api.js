@@ -126,15 +126,16 @@ async function login(nombre, pin) {
   const pinHash = await hashPin(pin);
   try {
     const d = await gasPost({ accion: 'login', nombre, hash: pinHash });
-    if (!d || !d.ok) return null;
+    if (!d || !d.ok) return { ok: false, error: (d && d.error) || 'Error de conexión' };
     return {
+      ok:      true,
       usuario: d.usuario,
       cargo:   d.cargo || 'Inspector',
       rol:     (d.rol || 'INSPECTOR').toUpperCase(),
       hash:    pinHash,  // se conserva para reusar en llamadas admin
     };
   } catch (e) {
-    return null;
+    return { ok: false, error: 'Error de conexión. Intenta de nuevo.' };
   }
 }
 

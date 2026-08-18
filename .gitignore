@@ -7,3 +7,7 @@ bundle.jsx
 
 # Sourcemaps de build --dev — artefacto local, nunca al repo de produccion
 *.map
+
+# Config local del webhook — nunca al repo (contiene la URL activa; en local suele
+# ser la de PRUEBA). Plantilla: env.example.js
+env.js

@@ -6,6 +6,13 @@
 //   - Devuelve siempre { ok, ... } o lanza Error
 // ═══════════════════════════════════════════════════════════════
 
+// env.js no cargo: avisar antes de caer al fallback (investigacion 2026-08-18).
+// El fallback es load-bearing en produccion (Pages no sirve env.js) — NO eliminar,
+// solo volverlo visible para que una prueba local nunca vaya a produccion en silencio.
+if (typeof CU_WEBHOOK_URL === 'undefined') {
+  console.warn('[api.js] CU_WEBHOOK_URL indefinida (env.js no cargo). Usando URL de PRODUCCION como fallback.');
+}
+
 const CFG = {
   webhook: (typeof CU_WEBHOOK_URL !== 'undefined' ? CU_WEBHOOK_URL : 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec'),
   hoja:    'BD VISITAS',

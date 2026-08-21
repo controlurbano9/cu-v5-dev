@@ -11,3 +11,6 @@ bundle.jsx
 # Config local del webhook — nunca al repo (contiene la URL activa; en local suele
 # ser la de PRUEBA). Plantilla: env.example.js
 env.js
+
+# Caché intermedia del skill /graphify (AST/semántica) — regenerable, no es el grafo
+graphify-out/

@@ -13,7 +13,7 @@
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   font-src 'self' https://fonts.gstatic.com;
   img-src 'self' data: blob: https://*.googleapis.com https://*.gstatic.com https://drive.google.com;
-  connect-src 'self' https://script.google.com;
+  connect-src 'self' https://script.google.com https://script.googleusercontent.com;
   frame-src 'self';
   object-src 'none';
   base-uri 'self';
@@ -1874,6 +1874,11 @@ function _storageKeyHallazgosCatalogo() {
 function _guardarHallazgosConfirmados() {
   try {
     localStorage.setItem(_storageKeyHallazgosCatalogo(), JSON.stringify({
+      // _ts OBLIGATORIO: la purga I6 (boot) borra toda clave fggo43_datos_*
+      // cuyo objeto no tenga _ts numerico — sin esto, cada recarga de pagina
+      // perdia los hallazgos confirmados ANTES de _restaurarHallazgosConfirmados()
+      // (reproducido al pasar de V1 a ?ui=v2, que recarga completa).
+      _ts: Date.now(),
       confirmados: HALLAZGOS_CONFIRMADOS,
       ultimaObsAnalizada: _ultimaObsAnalizadaCatalogo,
       preguntas: PREGUNTAS_CLARIFICACION
@@ -2122,6 +2127,16 @@ async function confirmarYGenerarInforme() {
   };
   if (!tFinal.conclusiones_items.length) {
     mostrarErrorRevisionIA(['Incluye al menos una conclusion.']);
+    return;
+  }
+  // Cierre grave re-verificado tras la edicion humana: el momento 5 permite
+  // desmarcar/editar items, pero con un hallazgo Critico confirmado la frase
+  // de cierre es obligatoria (fija pre-aprobada, nunca redactada por la IA)
+  // y no puede excluirse ni editarse. validarInformeIA() no la comprueba
+  // porque solo valida patrones de texto — esta es la unica barrera post-edicion.
+  var catalogoRevision = await cargarCatalogoHallazgos();
+  if (_requiereCierreGrave(catalogoRevision) && tFinal.conclusiones_items.indexOf(CIERRE_GRAVE_TEXTO) < 0) {
+    mostrarErrorRevisionIA(['Hay un hallazgo critico confirmado: la conclusion de cierre grave es obligatoria y no puede excluirse ni editarse.']);
     return;
   }
   var validacion = validarInformeIA(tFinal, ctx);
@@ -2386,7 +2401,7 @@ function detectarAclaracionesInforme(ctx) {
 async function construirPromptF43(ctx) {
   var d = ctx.d, fotoDescs = ctx.fotoDescs, sinLic = ctx.sinLic;
   var licNota = sinLic
-    ? 'No se aporto documentacion urbanistica. En antecedentes indicar solo que "no fue aportada/exhibida licencia" — nunca afirmar que la obra "no tiene licencia" (eso no se puede verificar en una sola visita).'
+    ? 'No se aporto documentacion urbanistica. En antecedentes indicar exactamente que "no fue aportada ni exhibida documentacion urbanistica que acredite licencia de construccion" — la ausencia de exhibicion deja la carga de acreditarla en quien construye. Nunca afirmar que la obra "no tiene licencia" (hecho negativo absoluto, no verificable en una sola visita) ni escribir "no fue posible verificar" (sugeriria que la licencia existe y solo falto comprobarla).'
     : 'Se aporto licencia. Contrastar en observaciones lo aprobado (segun DATOS) vs. lo hallado en campo, sin calificar si eso constituye infraccion.';
   // Reemplaza el hsNota legado (9 checkboxes .hallazgo) por los hallazgos del
   // catalogo backend que el inspector confirmo (sugerirHallazgosDesdeObs() +
@@ -2489,7 +2504,7 @@ async function construirPromptF43(ctx) {
     + 'licenciamiento); recomienda la restitucion/demolicion directa. No repitas el area en contravencion aqui.\n'
     + '6. Lenguaje: prohibido "constituye", "demuestra", "acredita", "confirma", "prueba", "evidencia plenamente", '
     + '"se encuentra plenamente establecido", "desconocimiento total", "carece de estructura aprobada" — usa '
-    + '"se observo", "se evidencio", "se identifico", "durante la visita", "no fue posible verificar". Sin puntos '
+    + '"se observo", "se evidencio", "se identifico", "durante la visita". Nunca escribas "no fue posible verificar" — describe el hecho observado, no lo que falto comprobar (con sin-licencia sugeriria que la licencia existe). Sin puntos '
     + 'suspensivos ni coloquialismos.\n'
     + '7. VERIFICACION INTERNA (no la incluyas en la respuesta, es un paso silencioso antes de responder): '
     + 'revisa que ningun comportamiento citado este fuera de la lista dada, que ninguna norma citada este fuera '

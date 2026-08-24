@@ -38,7 +38,14 @@ function parsearFecha(valor) {
   if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
   var s = String(valor).trim().split(' · ')[0].trim();
   var m1 = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
-  if (m1) return new Date(+m1[3], +m1[2] - 1, +m1[1]);
+  if (m1) {
+    var dd = +m1[1], mm = +m1[2], aa = +m1[3];
+    var dt1 = new Date(aa, mm - 1, dd);
+    // new Date() normaliza desbordes (31/02 → 3 de marzo) en vez de fallar;
+    // si el resultado no coincide con lo pedido, la fecha no era real.
+    if (dt1.getFullYear() !== aa || dt1.getMonth() !== mm - 1 || dt1.getDate() !== dd) return null;
+    return dt1;
+  }
   var m2 = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m2) return new Date(+m2[1], +m2[2] - 1, +m2[3]);
   var d = new Date(s);
@@ -191,12 +198,50 @@ function hoyDDMMAAAA() {
   return _padFecha(d.getDate(), d.getMonth() + 1, d.getFullYear());
 }
 
-// Exportar al scope global
-Object.assign(window, {
+// ── VISITADOR(ES): lectura tolerante a mayúsculas + separador unificado ──
+// Encabezado case-insensitive (evita fallo silencioso si alguien retitula
+// la columna en el Sheet, ej. "Visitador(es)"); conserva el fallback
+// posicional [17] para respuestas que no traen el nombre de columna.
+function visitadoresBD(fila) {
+  if (!fila) return '';
+  if (fila['VISITADOR(ES)'] != null && fila['VISITADOR(ES)'] !== '') return String(fila['VISITADOR(ES)']);
+  var clave = Object.keys(fila).find(function(k) { return k.toUpperCase() === 'VISITADOR(ES)'; });
+  if (clave && fila[clave] != null && fila[clave] !== '') return String(fila[clave]);
+  return String(fila[17] || '');
+}
+
+// Primer visitador (= diligenciador) de una lista separada por "/" o ","
+function primerVisitador(visitadores) {
+  return String(visitadores || '').split(/\s*[\/,]\s*/)[0].trim();
+}
+
+// Extrae el ID de carpeta Drive desde un link "https://drive.google.com/.../folders/<id>..."
+// Antes duplicada de forma idéntica en informe-modal.jsx y buscar.jsx: al concatenar
+// el bundle, la segunda declaración pisaba silenciosamente a la primera (mismo scope global).
+function extraerIdCarpetaDrive(link) {
+  if (!link) return '';
+  var m = String(link).match(/folders\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+// Exportar al scope global (navegador) o CommonJS (Node, tests)
+var _cuUtilsExports = {
   formatearFecha: formatearFecha,
   parsearFecha: parsearFecha,
   esDiaHabil: esDiaHabil,
   diasHabilesHasta: diasHabilesHasta,
   diasDesde: diasDesde,
   hoyDDMMAAAA: hoyDDMMAAAA,
-});
+  visitadoresBD: visitadoresBD,
+  primerVisitador: primerVisitador,
+  extraerIdCarpetaDrive: extraerIdCarpetaDrive,
+  // expuestas para pruebas unitarias (auditoría 2026-07, QA#3/MP7)
+  _festivosColombia: _festivosColombia,
+  _calcularPascua: _calcularPascua,
+  _alLunes: _alLunes,
+};
+if (typeof window !== 'undefined') {
+  Object.assign(window, _cuUtilsExports);
+} else if (typeof module !== 'undefined' && module.exports) {
+  module.exports = _cuUtilsExports;
+}

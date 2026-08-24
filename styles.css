@@ -32,17 +32,20 @@
   --surface-3:  #DED5C8;
 
   /* ── Brand + semánticos (5 colores funcionales) ─────────── */
-  --brand:      #C96442;   /* terracotta · acción / pendiente */
+  /* QW4 (auditoría 2026-07): --brand y --amber oscurecidos en L (mismo H/S)
+     para cumplir AA 4.5:1 sobre --surface (botón primario) y su -bg (badge).
+     Antes #C96442/#B8873A medían 3.78/2.85 — ver INFORME_EJECUTIVO_PASS3.md. */
+  --brand:      #AC5031;   /* terracotta · acción / pendiente */
   --brand-ink:  #8A3F26;   /* ladrillo · hover / danger */
   --brand-bg:   #FBE9E0;   /* terracotta tinte fondo */
-  --brand-glow: rgba(201,100,66,0.18);
+  --brand-glow: rgba(172,80,49,0.18);
 
   --info:       #4A6B7C;   /* azul polvoriento · iniciado / info */
   --info-bg:    #E0E8EC;
   --green:      #6B7A3A;   /* olivo · completado / éxito */
   --green-bg:   #EFF1E1;
   --green-ink:  #565E2E;
-  --amber:      #B8873A;   /* ocre · asignado / atención */
+  --amber:      #8D682D;   /* ocre · asignado / atención */
   --amber-bg:   #FAF1DD;
   --red:        #B43A2E;   /* ladrillo · error / suspensión */
   --red-bg:     #F8E4DF;
@@ -104,7 +107,8 @@
   --slate-700:    #3F362B;
   --slate-600:    var(--ink-3);
   --slate-500:    var(--ink-4);
-  --slate-400:    #A99A85;
+  /* QW4: oscurecido (mismo H/S) para AA 4.5:1 en .nav-btn/.bottom-tab inactivo — antes #A99A85 medía 2.44:1 sobre --surface */
+  --slate-400:    #81715B;
   --slate-300:    #C9C0B5;
   --slate-200:    var(--surface-3);
   --slate-100:    var(--surface-2);
@@ -251,10 +255,12 @@ body {
   transition: background .15s, color .15s, border-color .15s;
   white-space: nowrap;
 }
-.btn-logout:hover {
-  background: var(--brand-bg);
-  color: var(--brand);
-  border-color: var(--brand);
+@media (hover: hover) and (pointer: fine) {
+  .btn-logout:hover {
+    background: var(--brand-bg);
+    color: var(--brand);
+    border-color: var(--brand);
+  }
 }
 .btn-logout:active { transform: scale(0.96); }
 
@@ -318,7 +324,9 @@ body {
   transition: background .15s, transform .1s;
   letter-spacing: -0.1px;
 }
-.btn-login:hover { background: var(--brand-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-login:hover { background: var(--brand-ink); }
+}
 .btn-login:active { transform: scale(0.97); }
 .login-nota {
   color: rgba(245,241,235,0.32);
@@ -380,16 +388,24 @@ body {
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 .btn-primary    { background: var(--brand);    color: var(--surface); box-shadow: 0 4px 12px var(--brand-glow); }
-.btn-primary:hover { background: var(--brand-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover { background: var(--brand-ink); }
+}
 
 .btn-secondary  { background: var(--surface);  color: var(--brand);   border-color: var(--brand); }
-.btn-secondary:hover { background: var(--brand-bg); color: var(--brand-ink); border-color: var(--brand-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-secondary:hover { background: var(--brand-bg); color: var(--brand-ink); border-color: var(--brand-ink); }
+}
 
 .btn-ghost      { background: transparent;     color: var(--ink-2);   border-color: var(--line-2); }
-.btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+}
 
 .btn-danger     { background: var(--brand-ink); color: var(--surface); }
-.btn-danger:hover { background: #6F311E; }
+@media (hover: hover) and (pointer: fine) {
+  .btn-danger:hover { background: #6F311E; }
+}
 
 .btn-sm { padding: 7px 12px; font-size: 12.5px; border-radius: var(--r-sm); gap: 6px; }
 .btn-lg { padding: 14px 20px; font-size: 15px; }
@@ -421,7 +437,9 @@ body {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: color .15s, background .15s;
 }
-.seg-btn:hover:not(.activo):not(.active) { color: var(--ink-2); }
+@media (hover: hover) and (pointer: fine) {
+  .seg-btn:hover:not(.activo):not(.active) { color: var(--ink-2); }
+}
 .seg-btn.activo,
 .seg-btn.active {
   background: var(--surface);
@@ -598,8 +616,10 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--ink-3);
   -webkit-user-select: none;
 }
-.radio-opcion:hover:not(.sel):not(.sel-verde):not(.sel-cafe):not(.sel-rojo) {
-  background: var(--surface-2);
+@media (hover: hover) and (pointer: fine) {
+  .radio-opcion:hover:not(.sel):not(.sel-verde):not(.sel-cafe):not(.sel-rojo) {
+    background: var(--surface-2);
+  }
 }
 .radio-opcion.sel,
 .radio-opcion.sel-verde,
@@ -632,9 +652,11 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   display: inline-flex; align-items: center; gap: 5px;
   -webkit-user-select: none;
 }
-.chip:hover, .chip-inf:hover, .chip-vis:hover {
-  background: var(--surface-2);
-  color: var(--ink-2);
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover, .chip-inf:hover, .chip-vis:hover {
+    background: var(--surface-2);
+    color: var(--ink-2);
+  }
 }
 .chip.activo,
 .chip-inf.activo,
@@ -673,7 +695,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   letter-spacing: -0.1px;
   box-shadow: 0 4px 12px var(--brand-glow);
 }
-.btn-principal:hover { background: var(--brand-ink); }
+@media (hover: hover) and (pointer: fine) {
+  .btn-principal:hover { background: var(--brand-ink); }
+}
 .btn-principal:active { transform: scale(0.98); }
 .btn-principal:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
@@ -687,13 +711,15 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   border-color: var(--brand);
   box-shadow: none;
 }
-.btn-principal.secundario:hover,
-.btn-principal.azul:hover,
-.btn-principal.cafe:hover,
-.btn-principal.verde:hover {
-  background: var(--brand-bg);
-  color: var(--brand-ink);
-  border-color: var(--brand-ink);
+@media (hover: hover) and (pointer: fine) {
+  .btn-principal.secundario:hover,
+  .btn-principal.azul:hover,
+  .btn-principal.cafe:hover,
+  .btn-principal.verde:hover {
+    background: var(--brand-bg);
+    color: var(--brand-ink);
+    border-color: var(--brand-ink);
+  }
 }
 
 /* Destructivo */
@@ -702,7 +728,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--surface);
   box-shadow: none;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-principal.rojo:hover { background: #6F311E; }
+}
 
 /* Neutro */
 .btn-principal.gris {
@@ -711,9 +739,11 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   border-color: var(--line-2);
   box-shadow: none;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-principal.gris:hover {
   background: var(--surface-2);
   color: var(--ink);
+}
 }
 
 /* ── .btn-sm (pills pequeños) ────────────────────────────── */
@@ -731,7 +761,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   line-height: 1.2;
 }
 .btn-sm:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
 .btn-sm:hover { background: var(--surface-2); }
+}
 
 /* Variantes legacy de .btn-sm — ahora con roles funcionales */
 .btn-sm.brand,
@@ -741,9 +773,11 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--surface);
   border-color: var(--brand);
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-sm.brand:hover,
 .btn-sm.azul:hover,
 .btn-sm.cafe:hover { background: var(--brand-ink); border-color: var(--brand-ink); }
+}
 
 .btn-sm.verde {
   background: var(--green-bg);
@@ -755,7 +789,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--ink-2);
   border-color: var(--line-2);
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-sm.gris:hover { background: var(--surface-2); }
+}
 .btn-sm.rojo {
   background: var(--red-bg);
   color: var(--red);
@@ -777,7 +813,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--surface);
   transition: transform .15s, background .15s;
 }
+@media (hover: hover) and (pointer: fine) {
 .fab:hover, .fab-nueva:hover { background: var(--brand-ink); }
+}
 .fab:active, .fab-nueva:active { transform: scale(0.93); }
 
 /* ── Filtros estado (legacy) → btn estilo unificado ─────── */
@@ -797,7 +835,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   display: inline-flex; align-items: center; gap: 5px;
   letter-spacing: 0.05em;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-filtro:hover { background: var(--surface-2); }
+}
 .btn-filtro:active { transform: scale(0.96); }
 .btn-filtro.activo-pendiente,
 .btn-filtro.activo-iniciado,
@@ -820,7 +860,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   transition: background .15s, color .15s;
   display: none; align-items: center; gap: 4px;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-limpiar:hover { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+}
 .btn-limpiar.visible { display: inline-flex; }
 .filtros-comunas { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
 .filtros-comunas .btn-filtro { padding: 5px 10px; font-size: 11px; }
@@ -849,7 +891,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
+@media (hover: hover) and (pointer: fine) {
 .home-tab:hover:not(.activo) { color: var(--ink-2); }
+}
 .home-tab-count {
   font-size: 10.5px; font-weight: 700;
   background: var(--brand-bg);
@@ -885,7 +929,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--ink);
   box-shadow: var(--shadow-sm);
 }
+@media (hover: hover) and (pointer: fine) {
 .agenda-tab:hover:not(.activo) { color: var(--ink-2); }
+}
 
 /* ── Badge legacy (.badge.badge-*) → look unificado ────── */
 .badge-pendiente, .badge-asignado, .badge-iniciado,
@@ -1139,6 +1185,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   font-family: inherit; outline: none;
   color: var(--ink); background: var(--surface);
 }
+.voz-transcripcion:focus {
+  box-shadow: inset 0 0 0 2px var(--brand-glow);
+}
 
 /* ── Formulario: secciones ──────────────────────────────── */
 .form-seccion {
@@ -1245,10 +1294,13 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   text-align: left;
   transition: background .15s;
 }
-.acordeon-header:hover,
+@media (hover: hover) and (pointer: fine) {
+.acordeon-header:hover {
+  background: var(--surface-2);
+}
+}
 .acordeon-header:focus {
   outline: none;
-  background: var(--surface-2);
 }
 .acordeon-numero {
   width: 26px; height: 26px;
@@ -1271,7 +1323,7 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
 .form-seccion.acordeon-item[data-completo="true"] .acordeon-numero-texto { display: none; }
 .acordeon-titulo {
   font-family: var(--font-serif);
-  font-size: 16px; font-weight: 600;
+  font-size: 17px; font-weight: 600;
   color: var(--ink); flex: 1;
   letter-spacing: -0.2px; line-height: 1.25;
 }
@@ -1311,7 +1363,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   font-family: inherit;
   transition: background .15s, transform .1s;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-continuar:hover { background: var(--brand-ink); }
+}
 .btn-continuar:active { transform: scale(0.97); }
 
 /* ── Sticky bars (formulario) ─────────────────────────── */
@@ -1516,7 +1570,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   border-radius: 4px;
   transition: background .15s, color .15s;
 }
+@media (hover: hover) and (pointer: fine) {
 .btn-quitar:hover { background: var(--red-bg); color: var(--red); }
+}
 
 /* ── Modal sheet ────────────────────────────────────────── */
 .modal-overlay {
@@ -1538,7 +1594,7 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   font-size: 17px; font-weight: 600;
   margin-bottom: 14px;
   color: var(--ink);
-  letter-spacing: -0.2px;
+  letter-spacing: -0.2px; line-height: 1.25;
 }
 .modal-sheet-lista { overflow-y: auto; flex: 1; }
 .sugerencia-item {
@@ -1575,7 +1631,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   color: var(--surface);
   border-color: var(--brand);
 }
+@media (hover: hover) and (pointer: fine) {
 .inspector-chip:hover:not(.sel) { background: var(--surface-2); }
+}
 
 .agenda-confirmar-bar {
   display: flex; gap: 8px;
@@ -1606,9 +1664,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
 }
 .agenda-hoy-titulo {
   font-family: var(--font-serif);
-  font-size: 14px; font-weight: 600;
+  font-size: 17px; font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.1px;
+  letter-spacing: -0.2px; line-height: 1.25;
 }
 .agenda-hoy-item {
   display: flex; align-items: center; gap: 12px;
@@ -1618,7 +1676,9 @@ textarea.input-campo { resize: vertical; min-height: 80px; line-height: 1.5; }
   transition: background .15s;
 }
 .agenda-hoy-item:last-child { border-bottom: none; }
+@media (hover: hover) and (pointer: fine) {
 .agenda-hoy-item:hover { background: var(--surface-2); }
+}
 .agenda-hoy-dot {
   width: 8px; height: 8px;
   border-radius: 50%; flex-shrink: 0;
@@ -1835,9 +1895,11 @@ body.is-offline .header {
     transition: background .12s, color .12s;
     text-align: left; width: 100%;
   }
-  .sidebar-btn:hover {
-    background: var(--surface-2);
-    color: var(--ink);
+  @media (hover: hover) and (pointer: fine) {
+    .sidebar-btn:hover {
+      background: var(--surface-2);
+      color: var(--ink);
+    }
   }
   .sidebar-btn.activo {
     background: var(--brand-bg);
@@ -1899,9 +1961,16 @@ body.is-offline .header {
 
 
 /* ╔════════════════════════════════════════════════════════════╗
-   ║ 10) PRINT                                                  ║
+   ║ 10) ACCESIBILIDAD — MOVIMIENTO REDUCIDO                    ║
    ╚════════════════════════════════════════════════════════════╝ */
-@media print {
-  body { margin: 0; }
-  .no-print { display: none; }
+/* QW21 (auditoría 2026-07): respeta la preferencia del SO/navegador.
+   Reduce animaciones y transiciones a casi nada en vez de eliminarlas
+   del todo, para no romper transiciones que comunican estado (ej. abrir/cerrar). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -214,6 +214,16 @@ function OfflineColaBadge() {
       { titulo: 'Eliminar items atascados', btnOk: 'Eliminar', btnCancel: 'Cancelar' }
     );
     if (!ok) return;
+    // Respaldo antes de borrar: el dato no vuelve una vez eliminado de la cola.
+    try {
+      const blob = new Blob([JSON.stringify(atasc, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cu-cola-atascados-' + Date.now() + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (_) {}
     for (const it of atasc) {
       try { await offlineEliminar(it.id); } catch (_) {}
     }
@@ -266,10 +276,13 @@ function OfflineColaBadge() {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                     <span style={{
-                      flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      color: stuck ? 'var(--rojo)' : 'inherit', fontWeight: stuck ? 600 : 400,
+                      flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 3,
+                      overflow: 'hidden', color: stuck ? 'var(--rojo)' : 'inherit', fontWeight: stuck ? 600 : 400,
                     }}>
-                      {stuck ? '⚠ ' : ''}{it.descripcion || it.tipo}
+                      {stuck && <span style={{ flexShrink: 0, display: 'inline-flex' }}><Icon.Alert size={12} /></span>}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {it.descripcion || it.tipo}
+                      </span>
                     </span>
                     {it.intentos > 0 && (
                       <span style={{ color: stuck ? 'var(--rojo)' : 'var(--cafe)', fontSize: 10 }}>
@@ -627,5 +640,38 @@ function BottomTab({ pantalla, setPantalla, k, label, Icono }) {
   );
 }
 
+// ── Error Boundary: red de seguridad ante errores no capturados en render ──
+// Sin esto, un throw en cualquier componente deja la pantalla en blanco sin
+// forma de recuperarse salvo recargar manualmente a ciegas.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[ErrorBoundary]', error, info.componentStack);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="pantalla activa" style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', minHeight: '100vh', padding: 24, textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Algo salió mal</div>
+          <div style={{ fontSize: 13, color: 'var(--texto-suave)', marginBottom: 16, maxWidth: 320 }}>
+            La aplicación encontró un error inesperado. Recarga la página; si persiste, avisa al soporte.
+          </div>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Recargar</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Montar
-ReactDOM.createRoot(document.getElementById('root')).render(<AppV6 />);
+ReactDOM.createRoot(document.getElementById('root')).render(<ErrorBoundary><AppV6 /></ErrorBoundary>);

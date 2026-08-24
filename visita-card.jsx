@@ -26,9 +26,9 @@ const TONOS_VISITA = {
   COMPLETADO: { cls: 'badge-verde',    label: 'Completada' },
 };
 
-// Diligenciador = primer nombre en VISITADOR(ES) separado por "/" o ","
+// Diligenciador = primer nombre en VISITADOR(ES); ver visitadoresBD/primerVisitador en utils.js
 function _primerVisitador(f) {
-  return (f['VISITADOR(ES)'] || '').split(/[\/,]/)[0].trim();
+  return primerVisitador(visitadoresBD(f));
 }
 
 // ═══════════════════════════════════════════════════════════════

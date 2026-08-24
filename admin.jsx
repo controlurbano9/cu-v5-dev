@@ -261,24 +261,33 @@ function TabResetPin() {
   const [usuarios, setUsuarios] = useStateA([]);
   const [sel, setSel]   = useStateA('');
   const [pin, setPin]   = useStateA('');
+  const [pin2, setPin2] = useStateA('');
   const [msg, setMsg]   = useStateA(null);
   const [busy, setBusy] = useStateA(false);
+  const [error, setError] = useStateA('');
 
   useEffectA(() => {
-    listarUsuariosAdmin().then(list => setUsuarios(list.filter(u => u.activo))).catch(()=>{});
+    listarUsuariosAdmin().then(list => setUsuarios(list.filter(u => u.activo)))
+      .catch(e => setError(e.message));
   }, []);
 
   async function ejecutar() {
     setMsg(null);
     if (!sel) { setMsg({ t: 'error', m: 'Selecciona un usuario' }); return; }
     if (!/^\d{4}$/.test(pin)) { setMsg({ t: 'error', m: 'PIN debe ser 4 dígitos' }); return; }
+    if (pin !== pin2) { setMsg({ t: 'error', m: 'Los dos PIN no coinciden' }); return; }
+    const u = usuarios.find(x => x.fila === parseInt(sel, 10));
+    const ok = await appConfirm(`¿Resetear el PIN de ${u?.nombre}?`, {
+      titulo: 'Resetear PIN', btnOk: 'Resetear',
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await resetPin(parseInt(sel, 10), pin);
-      const u = usuarios.find(x => x.fila === parseInt(sel, 10));
       registrarLog(SESSION_V6.leer()?.usuario || '', `PIN reseteado para: ${u?.nombre}`);
       setMsg({ t: 'ok', m: 'PIN actualizado correctamente' });
       setPin('');
+      setPin2('');
     } catch (e) { setMsg({ t: 'error', m: e.message }); }
     setBusy(false);
   }
@@ -286,17 +295,24 @@ function TabResetPin() {
   return (
     <div className="card">
       <div className="card-titulo" style={{ marginBottom: 12 }}>Resetear PIN</div>
-      <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Usuario</label>
-      <select value={sel} onChange={e => setSel(e.target.value)} style={{
+      <label htmlFor="admin-reset-pin-usuario" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Usuario</label>
+      <select id="admin-reset-pin-usuario" value={sel} onChange={e => setSel(e.target.value)} style={{
         width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
         background: 'var(--superficie)', fontFamily: 'inherit', fontSize: 14, marginBottom: 12,
       }}>
         <option value="">Selecciona...</option>
         {usuarios.map(u => <option key={u.fila} value={u.fila}>{u.nombre}</option>)}
       </select>
-      <label style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Nuevo PIN (4 dígitos)</label>
-      <input type="password" value={pin} maxLength={4} inputMode="numeric"
+      <label htmlFor="admin-reset-pin-nuevo" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Nuevo PIN (4 dígitos)</label>
+      <input id="admin-reset-pin-nuevo" type="password" value={pin} maxLength={4} inputMode="numeric"
         onChange={e => setPin(e.target.value.replace(/\D/g, ''))}
+        style={{
+          width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
+          background: 'var(--superficie)', fontFamily: 'var(--font-mono)', fontSize: 16, marginBottom: 12,
+        }} />
+      <label htmlFor="admin-reset-pin-confirmar" style={{ display: 'block', fontSize: 12, color: 'var(--texto-suave)', marginBottom: 4 }}>Confirmar PIN</label>
+      <input id="admin-reset-pin-confirmar" type="password" value={pin2} maxLength={4} inputMode="numeric"
+        onChange={e => setPin2(e.target.value.replace(/\D/g, ''))}
         style={{
           width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--borde)',
           background: 'var(--superficie)', fontFamily: 'var(--font-mono)', fontSize: 16, marginBottom: 12,
@@ -304,6 +320,7 @@ function TabResetPin() {
       <button onClick={ejecutar} disabled={busy} className="btn-principal secundario" style={{ marginTop: 4 }}>
         {busy ? 'Procesando...' : 'Actualizar PIN'}
       </button>
+      {error && <div style={{ color: 'var(--rojo)', fontSize: 13, marginTop: 8 }}>Error al cargar usuarios: {error}</div>}
       {msg && (
         <div style={{
           marginTop: 12, padding: 10, borderRadius: 8, fontSize: 13,
@@ -318,19 +335,21 @@ function TabResetPin() {
 function TabLog() {
   const [filas, setFilas] = useStateA([]);
   const [cargando, setCargando] = useStateA(true);
+  const [error, setError] = useStateA('');
   useEffectA(() => {
     leerLogAuditoria().then(v => {
       setFilas((v || []).slice(1).reverse().slice(0, 50));
       setCargando(false);
-    }).catch(() => setCargando(false));
+    }).catch(e => { setError(e.message); setCargando(false); });
   }, []);
 
   return (
     <div className="card">
       <div className="card-titulo" style={{ marginBottom: 12 }}>Auditoría · últimos 50</div>
       {cargando && <div style={{ color: 'var(--texto-suave)' }}>Cargando...</div>}
-      {!cargando && filas.length === 0 && <div style={{ color: 'var(--texto-suave)' }}>Sin registros.</div>}
-      {!cargando && filas.length > 0 && (
+      {error && <div style={{ color: 'var(--rojo)', fontSize: 13 }}>Error al cargar auditoría: {error}</div>}
+      {!cargando && !error && filas.length === 0 && <div style={{ color: 'var(--texto-suave)' }}>Sin registros.</div>}
+      {!cargando && !error && filas.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filas.map((f, i) => (
             <div key={i} style={{

@@ -4,3 +4,13 @@ node_modules/
 
 # Bundle viejo (concatenación pre-esbuild) — ya no se usa
 bundle.jsx
+
+# Sourcemaps de build --dev — artefacto local, nunca al repo de produccion
+*.map
+
+# Config local del webhook — nunca al repo (contiene la URL activa; en local suele
+# ser la de PRUEBA). Plantilla: env.example.js
+env.js
+
+# Caché intermedia del skill /graphify (AST/semántica) — regenerable, no es el grafo
+graphify-out/

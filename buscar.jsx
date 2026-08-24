@@ -7,7 +7,7 @@
 //   - Filtro rural ("Vda.")
 //   - Lista agrupada por radicado
 // ═══════════════════════════════════════════════════════════════
-const { useState: useStateB, useEffect: useEffectB, useMemo: useMemoB } = React;
+const { useState: useStateB, useEffect: useEffectB, useMemo: useMemoB, useCallback: useCallbackB } = React;
 
 // Title-case primeros 2 tokens del nombre en mayúsculas de USUARIOS.
 // "ALEJANDRO HERNANDEZ MUÑOZ" → "Alejandro Hernandez"
@@ -79,11 +79,32 @@ function BuscarScreen({ usuario, onContinuar }) {
     }).catch(() => {});
   }, [esAdmin]);
 
+  // forzar=true salta el caché (botón "Recargar"). Al primer mount reusa caché.
+  // Declarada ANTES de las acciones admin de abajo: sus useCallback dependen
+  // de `cargar` en el array de deps, y siendo const, referenciarla antes de
+  // su propia declaración revienta con "Cannot access before initialization".
+  const cargar = useCallbackB(async (forzar) => {
+    setCargando(true); setError('');
+    try {
+      const { datos: all } = await leerVisitas(forzar ? { forzar: true } : undefined);
+      const mios = esAdmin ? all : all.filter(f => {
+        const vis = visitadoresBD(f).toUpperCase();
+        const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
+        return vis.includes(usuario.usuario.toUpperCase()) || est === 'PENDIENTE' || est === 'COMPLETADO';
+      });
+      setDatos(mios);
+    } catch (e) { setError(e.message); }
+    setCargando(false);
+  }, [esAdmin, usuario]);
+
   // ── Acciones admin: asignar, desasignar, completar ──
-  async function adminAsignar(fila, inspector) {
+  // useCallback: GrupoRadicado/FilaVisita están memoizados con React.memo
+  // más abajo — sin esto, cada re-render de BuscarScreen (ej. un keystroke
+  // en otro filtro) les pasaba callbacks con identidad nueva y anulaba el memo.
+  const adminAsignar = useCallbackB(async (fila, inspector) => {
     setBusyFila(fila);
     try {
-      await gasGet({
+      await gasPost({
         accion: 'asignarRadicado', fila, inspector,
         fechaAsignacion: hoyDDMMAAAA(),
       });
@@ -92,15 +113,15 @@ function BuscarScreen({ usuario, onContinuar }) {
       await cargar(true);
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
     setBusyFila(null);
-  }
+  }, [cargar]);
 
   // Crea una fila nueva en BD clonando los datos fijos del radicado y
   // dejándola ASIGNADA al inspector elegido. Útil para asignar una segunda
   // visita a un radicado ya COMPLETADO.
-  async function adminAsignarNuevaVisita(filaOrigen, inspector) {
+  const adminAsignarNuevaVisita = useCallbackB(async (filaOrigen, inspector) => {
     setBusyFila(filaOrigen);
     try {
-      const r = await gasGet({
+      const r = await gasPost({
         accion: 'crearNuevaVisitaAsignada',
         fila: filaOrigen, inspector,
       });
@@ -112,9 +133,9 @@ function BuscarScreen({ usuario, onContinuar }) {
         { titulo: 'Nueva visita asignada' });
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
     setBusyFila(null);
-  }
+  }, [cargar]);
 
-  async function adminDesasignar(fila, rad) {
+  const adminDesasignar = useCallbackB(async (fila, rad) => {
     const ok = await appConfirm(
       '¿Quitar asignación de ' + (rad || 'este radicado') + '?\nVolverá a estado PENDIENTE.',
       { titulo: 'Desasignar', btnOk: 'Desasignar' }
@@ -122,14 +143,14 @@ function BuscarScreen({ usuario, onContinuar }) {
     if (!ok) return;
     setBusyFila(fila);
     try {
-      await gasGet({ accion: 'desasignarRadicado', fila });
+      await gasPost({ accion: 'desasignarRadicado', fila });
       invalidarCache('visitas');
       await cargar(true);
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
     setBusyFila(null);
-  }
+  }, [cargar]);
 
-  async function adminCompletar(fila, fechaAsig) {
+  const adminCompletar = useCallbackB(async (fila, fechaAsig) => {
     // Paridad V2: si la visita tiene orden de suspensión preventiva
     // (SUSPENSION=SI + N° ORDEN DE POLICIA) y NO tiene oficio de vigilancia
     // generado aún, ofrecer generarlo antes de completar.
@@ -178,7 +199,7 @@ function BuscarScreen({ usuario, onContinuar }) {
     setBusyFila(fila);
     try {
       const dias = fechaAsig ? diasDesde(fechaAsig) : '';
-      await gasGet({
+      await gasPost({
         accion: 'completarRegistro', fila,
         dias: dias || '',
         fecha: hoyDDMMAAAA(),
@@ -187,7 +208,7 @@ function BuscarScreen({ usuario, onContinuar }) {
       await cargar(true);
     } catch (e) { await appAlert('Error: ' + e.message, { titulo: 'Error' }); }
     setBusyFila(null);
-  }
+  }, [cargar, datos]);
 
   // Debounce 300ms: sincroniza qInput → q sin gatillar refiltros por keystroke.
   useEffectB(() => {
@@ -203,6 +224,7 @@ function BuscarScreen({ usuario, onContinuar }) {
   //    el informe a Drive y registra el link en BD. Refresca lista.
   useEffectB(() => {
     function onMsg(ev) {
+      if (ev.origin !== window.location.origin) return; // el iframe/pestaña hija es same-origin (informe/index.html)
       var m = ev && ev.data;
       if (m && m.tipo === 'informe-f43-subido' && m.link) {
         setDatos(prev => prev.map(r =>
@@ -215,21 +237,6 @@ function BuscarScreen({ usuario, onContinuar }) {
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, []);
-
-  // forzar=true salta el caché (botón "Recargar"). Al primer mount reusa caché.
-  async function cargar(forzar) {
-    setCargando(true); setError('');
-    try {
-      const { datos: all } = await leerVisitas(forzar ? { forzar: true } : undefined);
-      const mios = esAdmin ? all : all.filter(f => {
-        const vis = (f['VISITADOR(ES)'] || f[17] || '').toUpperCase();
-        const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-        return vis.includes(usuario.usuario.toUpperCase()) || est === 'PENDIENTE' || est === 'COMPLETADO';
-      });
-      setDatos(mios);
-    } catch (e) { setError(e.message); }
-    setCargando(false);
-  }
 
   // Comunas únicas presentes en los datos cargados
   const comunas = useMemoB(() => {
@@ -259,7 +266,7 @@ function BuscarScreen({ usuario, onContinuar }) {
         if (!filtroComunas.includes(c)) return false;
       }
       if (filtrosVisitador.length) {
-        const v = (f['VISITADOR(ES)'] || f[17] || '').toString().toUpperCase();
+        const v = visitadoresBD(f).toUpperCase();
         if (!filtrosVisitador.some(x => v.includes(x))) return false;
       }
       if (filtroRural) {
@@ -438,12 +445,7 @@ function BuscarScreen({ usuario, onContinuar }) {
   );
 }
 
-// Extrae el ID de carpeta Drive desde un link "https://drive.google.com/.../folders/<id>..."
-function extraerIdCarpetaDrive(link) {
-  if (!link) return '';
-  var m = link.match(/folders\/([a-zA-Z0-9_-]+)/);
-  return m ? m[1] : '';
-}
+// extraerIdCarpetaDrive() vive en utils.js (compartida con informe-modal.jsx).
 
 // Datos de prefill del generador F-GGO-43 a partir de una fila de BD.
 // Devuelve un dict; `urlInformeF43` lo serializa a query string.

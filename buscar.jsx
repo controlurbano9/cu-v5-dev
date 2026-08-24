@@ -79,6 +79,24 @@ function BuscarScreen({ usuario, onContinuar }) {
     }).catch(() => {});
   }, [esAdmin]);
 
+  // forzar=true salta el caché (botón "Recargar"). Al primer mount reusa caché.
+  // Declarada ANTES de las acciones admin de abajo: sus useCallback dependen
+  // de `cargar` en el array de deps, y siendo const, referenciarla antes de
+  // su propia declaración revienta con "Cannot access before initialization".
+  const cargar = useCallbackB(async (forzar) => {
+    setCargando(true); setError('');
+    try {
+      const { datos: all } = await leerVisitas(forzar ? { forzar: true } : undefined);
+      const mios = esAdmin ? all : all.filter(f => {
+        const vis = visitadoresBD(f).toUpperCase();
+        const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
+        return vis.includes(usuario.usuario.toUpperCase()) || est === 'PENDIENTE' || est === 'COMPLETADO';
+      });
+      setDatos(mios);
+    } catch (e) { setError(e.message); }
+    setCargando(false);
+  }, [esAdmin, usuario]);
+
   // ── Acciones admin: asignar, desasignar, completar ──
   // useCallback: GrupoRadicado/FilaVisita están memoizados con React.memo
   // más abajo — sin esto, cada re-render de BuscarScreen (ej. un keystroke
@@ -219,21 +237,6 @@ function BuscarScreen({ usuario, onContinuar }) {
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, []);
-
-  // forzar=true salta el caché (botón "Recargar"). Al primer mount reusa caché.
-  const cargar = useCallbackB(async (forzar) => {
-    setCargando(true); setError('');
-    try {
-      const { datos: all } = await leerVisitas(forzar ? { forzar: true } : undefined);
-      const mios = esAdmin ? all : all.filter(f => {
-        const vis = visitadoresBD(f).toUpperCase();
-        const est = normalizarEstado(f['ESTADO VISITA'] || f[13] || '');
-        return vis.includes(usuario.usuario.toUpperCase()) || est === 'PENDIENTE' || est === 'COMPLETADO';
-      });
-      setDatos(mios);
-    } catch (e) { setError(e.message); }
-    setCargando(false);
-  }, [esAdmin, usuario]);
 
   // Comunas únicas presentes en los datos cargados
   const comunas = useMemoB(() => {

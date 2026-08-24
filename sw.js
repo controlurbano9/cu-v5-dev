@@ -4,12 +4,19 @@
 // No cachea datos dinámicos (webhook AS).
 // ═══════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'cu-v6-cache-v93';
+const CACHE_NAME = 'cu-v6-cache-v94';
 
 // URL del webhook unificado de Apps Script — única fuente: env.js
 // (auditoría 2026-07, hallazgo Arch#6/MP1: antes vivía copiada 3 veces).
-importScripts('./env.js');
-const WEBHOOK_URL = CU_WEBHOOK_URL;
+// env.js está en .gitignore y NUNCA existe en GitHub Pages (producción) —
+// importScripts sin try/catch lanza en el 404 y revienta la evaluación
+// COMPLETA del Service Worker (el navegador se queda con el SW anterior,
+// sirviendo assets viejos desde caché para siempre). Mismo fallback que
+// ya existe en api.js.
+try { importScripts('./env.js'); } catch (e) { /* env.js no existe: usar fallback */ }
+const WEBHOOK_URL = (typeof CU_WEBHOOK_URL !== 'undefined')
+  ? CU_WEBHOOK_URL
+  : 'https://script.google.com/macros/s/AKfycbzKgiwc4AWAvNMMYWwU2Q0ir1V6R9GVbjQo7w2W4AowU9--0_IdJc6dSH8enBil54jr3w/exec';
 
 // IndexedDB compartida con offline-queue.js — mismo nombre/version/store.
 const IDB_NAME = 'cu_offline_v1';
